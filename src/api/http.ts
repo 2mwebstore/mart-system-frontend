@@ -83,3 +83,29 @@ export async function send<T>(method: 'post' | 'put' | 'delete', path: string, b
 export const post = <T>(path: string, body?: unknown, params?: Params, opts?: RequestOptions) => send<T>('post', path, body, params, opts)
 export const put = <T>(path: string, body?: unknown, params?: Params, opts?: RequestOptions) => send<T>('put', path, body, params, opts)
 export const del = <T = { deleted: boolean }>(path: string, params?: Params, opts?: RequestOptions) => send<T>('delete', path, undefined, params, opts)
+
+// Uploads a file as `multipart/form-data` under field "file" and returns the
+// envelope's data, camelCased like every other call — used for CSV imports.
+// Bypasses `send`'s JSON body encoding, which a File can't go through.
+export async function uploadFile<T>(path: string, file: File, opts?: RequestOptions): Promise<T> {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await apiClient.post<ApiEnvelope<unknown>>(path, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    ...(opts?.silent ? { silent: true } : {}),
+  } as AxiosRequestConfig)
+  return mapKeys(data.data, toCamel) as T
+}
+
+// Fetches a file endpoint (not the {success,data,error} envelope — the
+// backend streams the raw bytes) and saves it via the browser, the same
+// Blob + object-URL technique the inventory CSV export uses.
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const { data } = await apiClient.get<Blob>(path, { responseType: 'blob' })
+  const url = URL.createObjectURL(data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}

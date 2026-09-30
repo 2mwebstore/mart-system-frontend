@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Minus, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { Minus, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useShiftStore, type HeldSale } from '@/stores/shift'
@@ -17,7 +17,8 @@ import ReceiptModal from '@/components/pos/ReceiptModal.vue'
 import CashMovementModal from '@/components/pos/CashMovementModal.vue'
 import RecentSalesModal from '@/components/pos/RecentSalesModal.vue'
 import HeldSalesModal from '@/components/pos/HeldSalesModal.vue'
-import ProductPreviewModal from '@/components/pos/ProductPreviewModal.vue'
+import VariantPickerModal from '@/components/pos/VariantPickerModal.vue'
+import LineEditModal from '@/components/pos/LineEditModal.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
 import { localName, t } from '@/i18n'
 
@@ -49,15 +50,67 @@ const search = ref('')
 const categoryFilter = ref<number | 'all'>('all')
 const categoryOptions = computed(() => [{ id: 'all' as const, nameEn: t('common.all'), nameKm: t('common.all') }, ...categories.value])
 
+// hideWhenOutOfStock (per-product) removes a product from the POS grid
+// entirely once it's out of stock, rather than just greying its tile out.
+// settings.app.allowOutOfStockSale (store-wide, Settings > System) is the
+// opposite knob — it lets a sale go through anyway; see familyOutOfStock
+// below. SERVICE is exempt from both (never stocked, always sellable).
+function isHiddenFromPos(p: Product) {
+  return p.hideWhenOutOfStock && p.productType !== 'SERVICE' && p.qty <= 0
+}
+// Variant rows never get their own tile — they're reached through the
+// merged parent card's picker (see pickerFor below). Grouped once here so
+// the grid, search, stock badge and price-range display can all reuse it. A
+// variant that's hidden-when-out-of-stock is left out of the picker too.
+const variantsByParent = computed(() => {
+  const map = new Map<number, Product[]>()
+  for (const p of products.value) {
+    if (p.parentProductId === null || isHiddenFromPos(p)) continue
+    const list = map.get(p.parentProductId) ?? []
+    list.push(p)
+    map.set(p.parentProductId, list)
+  }
+  return map
+})
+function matchesQuery(p: Product, q: string) {
+  return `${p.nameEn} ${p.nameKm} ${p.sku} ${p.barcode ?? ''}`.toLowerCase().includes(q)
+}
 const filteredProducts = computed(() => {
   const q = search.value.trim().toLowerCase()
   return products.value.filter((p) => {
+    if (p.parentProductId !== null) return false
     if (!p.active) return false
     if (categoryFilter.value !== 'all' && p.categoryId !== categoryFilter.value) return false
-    if (q && !`${p.nameEn} ${p.nameKm} ${p.sku} ${p.barcode ?? ''}`.toLowerCase().includes(q)) return false
+    // A family card with every variant hidden has nothing left to pick —
+    // drop it too, same as a standalone hidden product.
+    if (p.variantCount > 0) {
+      if ((variantsByParent.value.get(p.id) ?? []).length === 0) return false
+    } else if (isHiddenFromPos(p)) {
+      return false
+    }
+    if (q) {
+      const variants = variantsByParent.value.get(p.id) ?? []
+      if (!matchesQuery(p, q) && !variants.some((v) => matchesQuery(v, q))) return false
+    }
     return true
   })
 })
+// A family card's own price/stock aren't shown once it has variants — each
+// variant has its own, and the card itself is never added to the cart
+// directly (see pickVariant below).
+function priceRangeLabel(variants: Product[]) {
+  const prices = variants.map((v) => v.priceCents)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  return min === max ? formatUSD(min) : `${formatUSD(min)}–${formatUSD(max)}`
+}
+function isOutOfStock(p: Product) {
+  if (settings.app.allowOutOfStockSale) return false
+  return p.productType !== 'SERVICE' && p.qty <= 0
+}
+function familyOutOfStock(variants: Product[]) {
+  return variants.every((v) => isOutOfStock(v))
+}
 
 // New items land at the top of the cart (see useCart.addProduct) — if the
 // cashier had scrolled the list down, scroll back up so the item they just
@@ -78,28 +131,38 @@ function onSearchEnter() {
   }
 }
 
-// --- Product image preview ---
-const previewProduct = ref<Product | null>(null)
-function addFromPreview(p: Product) {
-  addProduct(p)
-  previewProduct.value = null
+// --- Variant picker: a family card always opens this instead of adding
+// directly (the parent itself isn't sellable once it has variants — see
+// docs/DECISIONS.md). A non-variant card has no popup at all any more —
+// one click, straight into the cart. ---
+const pickerFor = ref<Product | null>(null)
+function openCard(p: Product) {
+  if (p.variantCount > 0) {
+    pickerFor.value = p
+  } else {
+    addProduct(p)
+  }
+}
+function pickVariant(v: Product) {
+  addProduct(v)
+  pickerFor.value = null
 }
 
 // --- Customer select ---
 const customerOptions = computed(() => customers.value.map((c) => ({ value: c.id, label: c.name, sub: `${c.tier} · ${c.phone}` })))
 
-// --- Discounts: per line and cart-level, each either % or $ ---
-const openLineDiscountFor = ref<number | null>(null)
-function toggleLineDiscount(productId: number) {
-  openLineDiscountFor.value = openLineDiscountFor.value === productId ? null : productId
-}
+// --- Per-line discount + note, edited together in one popup (one pencil icon) ---
 function lineDiscountLabel(line: { discountType: DiscountType; discountValue: number }) {
-  if (!line.discountValue) return t('pos.addDiscount')
+  if (!line.discountValue) return ''
   return line.discountType === 'percent' ? t('pos.percentOff', { v: line.discountValue }) : t('pos.amountOff', { v: formatUSD(Math.round(line.discountValue * 100)) })
 }
-function onLineDiscountValue(productId: number, type: DiscountType, e: Event) {
-  const value = Number((e.target as HTMLInputElement).value) || 0
-  cart.setLineDiscount(productId, type, value)
+const editingLineFor = ref<number | null>(null)
+const editingLine = computed(() => cart.lines.find((l) => l.productId === editingLineFor.value) ?? null)
+function saveLineEdit(v: { discountType: DiscountType; discountValue: number; note: string }) {
+  if (editingLineFor.value === null) return
+  cart.setLineDiscount(editingLineFor.value, v.discountType, v.discountValue)
+  cart.setLineNote(editingLineFor.value, v.note)
+  editingLineFor.value = null
 }
 
 // --- Modals ---
@@ -126,7 +189,7 @@ async function onPaid(payment: CreateSaleInput['payment']) {
       deviceKey: auth.deviceKey,
       idempotencyKey,
       customerId: cart.customerId.value,
-      items: cart.lines.map((l) => ({ productId: l.productId, qty: l.qty, discountCents: cart.lineDiscountCents(l) })),
+      items: cart.lines.map((l) => ({ productId: l.productId, qty: l.qty, discountCents: cart.lineDiscountCents(l), note: l.note })),
       discountCents: cart.cartDiscountCents.value,
       payment,
     })
@@ -160,6 +223,7 @@ function holdCurrentSale() {
       unitPriceCents: l.unitPriceCents,
       discountType: l.discountType,
       discountValue: l.discountValue,
+      note: l.note,
     })),
     discountType: cart.cartDiscountType.value,
     discountValue: cart.cartDiscountValue.value,
@@ -187,6 +251,7 @@ function onResumeHeld(held: HeldSale) {
     if (item.discountType && item.discountValue) {
       cart.setLineDiscount(item.productId, item.discountType, item.discountValue)
     }
+    if (item.note) cart.setLineNote(item.productId, item.note)
   }
   cart.cartDiscountType.value = held.discountType
   cart.cartDiscountValue.value = held.discountValue
@@ -246,44 +311,17 @@ function goToCloseShift() {
                 </button>
               </div>
               <p class="w-16 text-right font-mono text-sm shrink-0">{{ formatUSD(cart.lineNetCents(line)) }}</p>
+              <button type="button" class="p-1 text-muted hover:text-ink shrink-0" :aria-label="$t('pos.editLineAria')" @click="editingLineFor = line.productId">
+                <Pencil class="w-4 h-4" />
+              </button>
               <button type="button" class="p-1 text-muted hover:text-danger-strong shrink-0" :aria-label="$t('inventory.removeItem')" @click="cart.removeLine(line.productId)">
                 <X class="w-4 h-4" />
               </button>
             </div>
 
-            <div v-if="canDiscount" class="flex items-center justify-between pl-0.5">
-              <button type="button" class="text-xs text-primary-text hover:underline" @click="toggleLineDiscount(line.productId)">
-                {{ lineDiscountLabel(line) }}
-              </button>
-              <span v-if="cart.lineDiscountCents(line) > 0" class="text-xs text-muted">-{{ formatUSD(cart.lineDiscountCents(line)) }}</span>
-            </div>
-            <div v-if="canDiscount && openLineDiscountFor === line.productId" class="flex items-center gap-2">
-              <div class="flex rounded-control border border-line overflow-hidden text-xs shrink-0">
-                <button
-                  type="button"
-                  class="px-2 py-1"
-                  :class="line.discountType === 'percent' ? 'bg-primary text-primary-ink' : 'text-muted'"
-                  @click="cart.setLineDiscount(line.productId, 'percent', line.discountValue)"
-                >
-                  %
-                </button>
-                <button
-                  type="button"
-                  class="px-2 py-1"
-                  :class="line.discountType === 'amount' ? 'bg-primary text-primary-ink' : 'text-muted'"
-                  @click="cart.setLineDiscount(line.productId, 'amount', line.discountValue)"
-                >
-                  $
-                </button>
-              </div>
-              <input
-                type="number"
-                min="0"
-                class="input py-1 text-xs"
-                :value="line.discountValue"
-                @input="onLineDiscountValue(line.productId, line.discountType, $event)"
-              />
-              <button type="button" class="text-xs text-muted hover:text-ink shrink-0" @click="openLineDiscountFor = null">{{ $t('common.done') }}</button>
+            <div v-if="line.discountValue > 0 || line.note" class="flex items-center justify-between gap-2 pl-0.5 text-xs text-muted">
+              <span class="truncate">{{ line.note }}</span>
+              <span v-if="line.discountValue > 0" class="shrink-0">{{ lineDiscountLabel(line) }} (-{{ formatUSD(cart.lineDiscountCents(line)) }})</span>
             </div>
           </div>
         </div>
@@ -368,21 +406,21 @@ function goToCloseShift() {
             v-for="p in filteredProducts"
             :key="p.id"
             class="card p-3 flex flex-col gap-2"
-            :class="p.qty <= 0 ? 'opacity-50' : ''"
+            :class="(p.variantCount > 0 ? familyOutOfStock(variantsByParent.get(p.id) ?? []) : isOutOfStock(p)) ? 'opacity-50' : ''"
           >
-            <button
-              type="button"
-              class="w-full aspect-square rounded-control bg-primary-tint flex items-center justify-center overflow-hidden hover:ring-2 hover:ring-primary/40 transition"
-              :aria-label="$t('inventory.previewAria')"
-              @click="previewProduct = p"
-            >
-              <img v-if="p.imageUrl" :src="p.imageUrl" :alt="localName(p.nameEn, p.nameKm)" class="w-full h-full object-cover" />
-              <span v-else class="text-primary-tint-text font-heading text-2xl">{{ initialsOf(p.nameEn) }}</span>
-            </button>
-            <button type="button" class="text-left flex flex-col gap-0.5 hover:opacity-75 transition" @click="addProduct(p)">
-              <p class="text-sm font-medium leading-tight">{{ localName(p.nameEn, p.nameKm) }}</p>
-              <p class="text-xs text-muted font-mono">{{ p.sku }}</p>
-              <p class="font-mono font-medium">{{ formatUSD(p.priceCents) }}</p>
+            <button type="button" class="w-full flex flex-col gap-2 text-left hover:opacity-75 transition" @click="openCard(p)">
+              <span class="w-full aspect-square rounded-control bg-primary-tint flex items-center justify-center overflow-hidden">
+                <img v-if="p.imageUrl" :src="p.imageUrl" :alt="localName(p.nameEn, p.nameKm)" class="w-full h-full object-cover" />
+                <span v-else class="text-primary-tint-text font-heading text-2xl">{{ initialsOf(p.nameEn) }}</span>
+              </span>
+              <span class="flex flex-col gap-0.5">
+                <span class="text-sm font-medium leading-tight">{{ localName(p.nameEn, p.nameKm) }}</span>
+                <span class="text-xs text-muted font-mono">{{ p.sku }}</span>
+                <span class="font-mono font-medium">
+                  {{ p.variantCount > 0 ? priceRangeLabel(variantsByParent.get(p.id) ?? []) : formatUSD(p.priceCents) }}
+                </span>
+                <span v-if="p.variantCount > 0" class="text-xs text-muted">{{ $t('pos.variantsAvailable', { n: p.variantCount }, p.variantCount) }}</span>
+              </span>
             </button>
           </div>
           <p v-if="filteredProducts.length === 0" class="col-span-full text-center text-muted py-8">{{ $t('pos.noProducts') }}</p>
@@ -390,7 +428,23 @@ function goToCloseShift() {
       </div>
     </div>
 
-    <ProductPreviewModal v-if="previewProduct" :product="previewProduct" @close="previewProduct = null" @add="addFromPreview" />
+    <VariantPickerModal
+      v-if="pickerFor"
+      :product="pickerFor"
+      :variants="variantsByParent.get(pickerFor.id) ?? []"
+      @close="pickerFor = null"
+      @add="pickVariant"
+    />
+    <LineEditModal
+      v-if="editingLine"
+      :title="localName(editingLine.nameEn, editingLine.nameKm)"
+      :discount-type="editingLine.discountType"
+      :discount-value="editingLine.discountValue"
+      :note="editingLine.note"
+      :can-discount="canDiscount"
+      @close="editingLineFor = null"
+      @save="saveLineEdit"
+    />
     <PaymentModal v-if="showPayment" :total-cents="cart.totalCents.value" :submitting="submitting" @close="showPayment = false" @paid="onPaid" />
     <ReceiptModal v-if="completedSale" :sale="completedSale" @close="closeReceipt" />
     <CashMovementModal v-if="showCashMovement" @close="showCashMovement = false" />

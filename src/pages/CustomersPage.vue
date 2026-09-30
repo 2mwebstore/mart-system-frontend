@@ -80,7 +80,7 @@ async function deleteCustomer(id: number) {
 </script>
 
 <template>
-  <div class="p-8 space-y-6">
+  <div class="p-4 sm:p-8 space-y-6">
     <div class="flex items-center justify-between flex-wrap gap-3">
       <h1 class="font-heading text-2xl">{{ $t('customers.title') }}</h1>
       <button v-if="canManage" type="button" class="btn-primary flex items-center gap-2" @click="newCustomer">

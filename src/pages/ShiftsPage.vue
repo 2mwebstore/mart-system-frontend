@@ -214,7 +214,7 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
 </script>
 
 <template>
-  <div class="p-8 space-y-6">
+  <div class="p-4 sm:p-8 space-y-6">
     <div>
       <h1 class="font-heading text-2xl">{{ $t('shifts.title') }}</h1>
       <p class="text-muted text-sm">{{ branchName }}</p>

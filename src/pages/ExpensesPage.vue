@@ -89,7 +89,7 @@ async function remove(id: number) {
 </script>
 
 <template>
-  <div class="p-8 space-y-6">
+  <div class="p-4 sm:p-8 space-y-6">
     <div class="flex items-center justify-between flex-wrap gap-3">
       <h1 class="font-heading text-2xl">{{ $t('expenses.title') }}</h1>
       <button type="button" class="btn-primary flex items-center gap-2" @click="newExpense">

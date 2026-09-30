@@ -8,7 +8,7 @@ export const useSettingsStore = defineStore('settings', {
   state: () => ({
     rate: 4100,
     rateHistory: [] as ExchangeRateEntry[],
-    app: { receiptHeader: 'Com Mart', receiptFooter: '', loyaltyPointsPerUsd: 1 } as AppSettings,
+    app: { receiptHeader: 'Com Mart', receiptFooter: '', loyaltyPointsPerUsd: 1, allowOutOfStockSale: false } as AppSettings,
     loaded: false,
   }),
   actions: {

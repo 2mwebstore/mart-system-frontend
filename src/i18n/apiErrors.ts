@@ -20,6 +20,9 @@ const rules: Rule[] = [
   { re: /^branch_id must be a number\.$/, key: 'apiErrors.invalidBranch' },
   { re: /^This branch has sales and can't be deleted/, key: 'apiErrors.branchInUse' },
   { re: /^You can't disable your own account\.$/, key: 'apiErrors.cannotDisableSelf' },
+  { re: /^You can't delete your own account\.$/, key: 'apiErrors.cannotDeleteSelf' },
+  { re: /^This user has sales, shifts or other activity and can't be deleted\. Deactivate the account instead\.$/, key: 'apiErrors.userInUse' },
+  { re: /^Choose a CSV file to import\.$/, key: 'apiErrors.importFileRequired' },
   { re: /^A purchase order that has received stock can't be deleted/, key: 'apiErrors.poLockedDelete' },
   { re: /^A received purchase order can't be edited\.$/, key: 'apiErrors.poLockedEdit' },
   { re: /^This purchase order is already (\w+)\.$/, key: 'apiErrors.poNotReceivable', params: (m) => ({ status: label('poStatus', m[1]) }) },
@@ -27,8 +30,13 @@ const rules: Rule[] = [
   { re: /^The Owner role is locked and can't be changed\.$/, key: 'apiErrors.roleLockedChange' },
   { re: /^The Owner role is locked and can't be deleted\.$/, key: 'apiErrors.roleLockedDelete' },
   { re: /^Only a paid sale can be voided\.$/, key: 'apiErrors.saleNotVoidable' },
+  { re: /^Only a paid sale can be edited\.$/, key: 'apiErrors.saleNotEditable' },
   { re: /^This till already has an open shift\.$/, key: 'apiErrors.shiftAlreadyOpen' },
+  // More specific "can't be edited" first — the generic "closed shift" rule
+  // below would otherwise match it too (no $ anchor) with the wrong wording.
+  { re: /^This sale belongs to a closed shift and can't be edited\.$/, key: 'apiErrors.saleShiftClosedEdit' },
   { re: /^This sale belongs to a closed shift/, key: 'apiErrors.saleShiftClosed' },
+  { re: /^This sale now totals more than the cash received/, key: 'apiErrors.saleEditExceedsCash' },
   { re: /^This shift is already closed\.$/, key: 'apiErrors.shiftClosed' },
   { re: /^Open a shift on this till before selling\.$/, key: 'apiErrors.shiftRequired' },
   { re: /^This supplier has purchase orders and can't be deleted\.$/, key: 'apiErrors.supplierInUse' },

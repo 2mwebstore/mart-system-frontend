@@ -25,6 +25,7 @@ export const getProfitLoss = (q: RangeQuery) => get<ProfitLossReport>('/reports/
 export interface TransactionsQuery extends RangeQuery {
   cashierId?: number | null
   payment?: string | null
+  productId?: number | null
   q?: string
   page: number
   perPage: number

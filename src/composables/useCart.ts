@@ -14,6 +14,11 @@ export interface CartLine {
   // can discount on product or total" per the request that added this.
   discountType: DiscountType
   discountValue: number
+  // A free-text remark ("less sugar", "no ice") — cosmetic only, carried
+  // through to the receipt. Adding the same product again just bumps qty on
+  // this same line (unchanged merge behavior); the note isn't part of what
+  // makes two lines "the same product" — see docs/DECISIONS.md.
+  note: string
 }
 
 // Module-level singleton (not created fresh per call) — the POS screen's
@@ -57,6 +62,7 @@ export function useCart() {
         qty: 1,
         discountType: 'amount',
         discountValue: 0,
+        note: '',
       })
     }
   }
@@ -84,6 +90,11 @@ export function useCart() {
       line.discountType = type
       line.discountValue = Math.max(0, value)
     }
+  }
+
+  function setLineNote(productId: number, note: string) {
+    const line = lines.find((l) => l.productId === productId)
+    if (line) line.note = note
   }
 
   function clear() {
@@ -117,6 +128,7 @@ export function useCart() {
     decQty,
     removeLine,
     setLineDiscount,
+    setLineNote,
     lineGrossCents,
     lineDiscountCents,
     lineNetCents,

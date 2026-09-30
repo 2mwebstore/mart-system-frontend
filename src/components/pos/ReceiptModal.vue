@@ -25,9 +25,12 @@ function printReceipt() {
       </div>
 
       <div class="border-t border-line pt-2 space-y-1">
-        <div v-for="item in sale.items" :key="item.productId" class="flex justify-between">
-          <span>{{ item.qty }}× {{ localName(item.name, item.nameKm) }}</span>
-          <span>{{ formatUSD(item.unitPriceCents * item.qty) }}</span>
+        <div v-for="item in sale.items" :key="item.productId">
+          <div class="flex justify-between">
+            <span>{{ item.qty }}× {{ localName(item.name, item.nameKm) }}</span>
+            <span>{{ formatUSD(item.unitPriceCents * item.qty) }}</span>
+          </div>
+          <p v-if="item.note" class="text-xs text-muted pl-3 font-body">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
         </div>
       </div>
 

@@ -37,7 +37,7 @@ const shiftTone: Record<string, 'success' | 'neutral' | 'warning'> = { Open: 'su
 </script>
 
 <template>
-  <div class="p-8 space-y-6">
+  <div class="p-4 sm:p-8 space-y-6">
     <div class="flex items-center justify-between flex-wrap gap-3">
       <div>
         <h1 class="font-heading text-2xl">{{ t('staffReport.title') }}</h1>

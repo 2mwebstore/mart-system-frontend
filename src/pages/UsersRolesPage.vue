@@ -22,6 +22,7 @@ const toast = useToast()
 const auth = useAuthStore()
 const canManageUsers = auth.hasPermission('user.manage')
 const canManageRoles = auth.hasPermission('role.manage')
+const selfId = auth.user?.id ?? null
 
 const activeTab = ref('users')
 const tabs = computed(() => [
@@ -124,6 +125,18 @@ async function saveUser() {
   }
 }
 
+async function deleteUser() {
+  if (selectedUserId.value === null) return
+  try {
+    await peopleApi.deleteUser(selectedUserId.value)
+    toast.success(t('users.deleted'))
+    closePanel()
+    await Promise.all([usersList.reload(), loadRoles()])
+  } catch {
+    // the API client already toasted the reason (e.g. USER_IN_USE)
+  }
+}
+
 const issuedPin = ref<{ name: string; pin: string } | null>(null)
 async function resetPin() {
   const u = usersList.rows.find((x) => x.id === selectedUserId.value)
@@ -201,6 +214,31 @@ async function saveRole() {
   }
 }
 
+const showNewRoleModal = ref(false)
+const newRoleForm = reactive({ name: '', description: '' })
+function openNewRole() {
+  Object.assign(newRoleForm, { name: '', description: '' })
+  showNewRoleModal.value = true
+}
+async function createNewRole() {
+  if (!newRoleForm.name.trim()) return
+  try {
+    const created = await peopleApi.createRole({
+      name: newRoleForm.name.trim(),
+      description: newRoleForm.description.trim(),
+      permissions: [],
+      maxDiscountPercent: 0,
+      refundWithoutApprovalCents: 0,
+    })
+    await loadRoles()
+    selectedRoleId.value = created.id
+    showNewRoleModal.value = false
+    toast.success(t('users.roleCreated', { name: created.name }))
+  } catch {
+    // toasted by the API client (e.g. a duplicate name)
+  }
+}
+
 async function duplicateRole() {
   const role = selectedRole.value
   if (!role) return
@@ -235,7 +273,7 @@ async function deleteRole() {
 </script>
 
 <template>
-  <div class="p-8 space-y-6">
+  <div class="p-4 sm:p-8 space-y-6">
     <h1 class="font-heading text-2xl">{{ $t('users.title') }}</h1>
 
     <Tabs v-model="activeTab" :tabs="tabs" />
@@ -255,6 +293,7 @@ async function deleteRole() {
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left text-muted border-b border-line">
+              <th class="py-2 font-medium">{{ $t('col.id') }}</th>
               <th class="py-2 font-medium">{{ $t('col.name') }}</th>
               <th class="py-2 font-medium">{{ $t('col.role') }}</th>
               <th class="py-2 font-medium">{{ $t('col.branches') }}</th>
@@ -270,6 +309,7 @@ async function deleteRole() {
               :class="[selectedUserId === s.id ? 'bg-primary-tint-row' : '', canManageUsers ? 'cursor-pointer' : '']"
               @click="canManageUsers && openUser(s)"
             >
+              <td class="py-2 font-mono text-xs text-muted">#{{ s.id }}</td>
               <td class="py-2">
                 <div class="flex items-center gap-2">
                   <span class="w-7 h-7 rounded-full bg-primary-tint text-primary-tint-text text-xs flex items-center justify-center font-medium shrink-0">
@@ -287,7 +327,7 @@ async function deleteRole() {
               <td class="py-2 font-mono text-xs text-muted">{{ formatDateTime(s.lastActiveAt) }}</td>
             </tr>
             <tr v-if="!usersList.loading && usersList.rows.length === 0">
-              <td colspan="5" class="py-6 text-center text-muted">{{ $t('users.none') }}</td>
+              <td colspan="6" class="py-6 text-center text-muted">{{ $t('users.none') }}</td>
             </tr>
           </tbody>
         </table>
@@ -295,7 +335,10 @@ async function deleteRole() {
       </div>
 
       <div v-if="panelOpen" class="card space-y-4 h-fit">
-        <h2 class="font-heading text-base">{{ creating ? $t('users.new') : $t('users.edit') }}</h2>
+        <div class="flex items-center justify-between">
+          <h2 class="font-heading text-base">{{ creating ? $t('users.new') : $t('users.edit') }}</h2>
+          <span v-if="!creating && selectedUserId !== null" class="font-mono text-xs text-muted">#{{ selectedUserId }}</span>
+        </div>
         <div>
           <label class="block text-sm text-muted mb-1">{{ $t('users.fullName') }}</label>
           <input v-model="editForm.fullName" type="text" class="input" />
@@ -342,9 +385,18 @@ async function deleteRole() {
           <span>{{ $t('users.accountActive') }}</span>
           <input v-model="editForm.active" type="checkbox" class="rounded" />
         </label>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="closePanel">{{ $t('users.discard') }}</button>
-          <button type="button" class="btn-primary" :disabled="saving" @click="saveUser">{{ creating ? $t('users.create') : $t('common.save') }}</button>
+        <div class="flex justify-between items-center gap-2 pt-2">
+          <ConfirmDelete
+            v-if="!creating && selectedUserId !== null && selectedUserId !== selfId"
+            :item-label="$t('entity.user')"
+            :item-name="editForm.fullName"
+            size="md"
+            @confirm="deleteUser"
+          />
+          <div class="flex gap-2 ml-auto">
+            <button type="button" class="btn-secondary" @click="closePanel">{{ $t('users.discard') }}</button>
+            <button type="button" class="btn-primary" :disabled="saving" @click="saveUser">{{ creating ? $t('users.create') : $t('common.save') }}</button>
+          </div>
         </div>
       </div>
       <div v-else class="card h-fit text-sm text-muted">
@@ -354,31 +406,37 @@ async function deleteRole() {
 
     <!-- Roles tab -->
     <div v-else-if="selectedRole" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div class="card space-y-1 h-fit">
-        <button
-          v-for="r in roles"
-          :key="r.id"
-          type="button"
-          class="w-full text-left px-3 py-2 rounded-control transition"
-          :class="selectedRoleId === r.id ? 'bg-primary-tint text-primary-tint-text' : 'hover:bg-surface-subtle'"
-          @click="selectedRoleId = r.id"
-        >
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-medium">{{ label('role', r.name) }}</span>
-            <span class="text-xs text-muted">{{ $t('users.usersCount', { n: r.userCount }) }}</span>
-          </div>
-          <p class="text-xs text-muted mt-0.5">{{ roleDescription(r.name, r.description) }}</p>
+      <div class="space-y-3 h-fit">
+        <button v-if="canManageRoles" type="button" class="btn-primary w-full flex items-center justify-center gap-2" @click="openNewRole">
+          <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('users.newRole') }}
         </button>
+        <div class="card space-y-1">
+          <button
+            v-for="r in roles"
+            :key="r.id"
+            type="button"
+            class="w-full text-left px-3 py-2 rounded-control transition"
+            :class="selectedRoleId === r.id ? 'bg-primary-tint text-primary-tint-text' : 'hover:bg-surface-subtle'"
+            @click="selectedRoleId = r.id"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-medium">{{ label('role', r.name) }}</span>
+              <span class="text-xs text-muted">{{ $t('users.usersCount', { n: r.userCount }) }}</span>
+            </div>
+            <p class="text-xs text-muted mt-0.5">{{ roleDescription(r.name, r.description) }}</p>
+          </button>
+        </div>
       </div>
 
       <div class="lg:col-span-2 card space-y-5">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <h2 class="font-heading text-lg">{{ label('role', selectedRole.name) }}</h2>
+            <span class="font-mono text-xs text-muted">#{{ selectedRole.id }}</span>
             <StatusBadge v-if="selectedRole.isLocked" :label="$t('users.readOnly')" tone="neutral" />
             <StatusBadge v-else-if="hasUnsavedChanges" :label="$t('users.unsaved')" tone="warning" />
           </div>
-          <div v-if="canManageRoles" class="flex gap-2">
+          <div v-if="canManageRoles" class="flex flex-wrap gap-2">
             <button type="button" class="btn-secondary flex items-center gap-2" @click="duplicateRole">
               <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('users.duplicate') }}
             </button>
@@ -446,6 +504,24 @@ async function deleteRole() {
         <p class="font-mono text-4xl tracking-[0.4em]">{{ issuedPin.pin }}</p>
         <button type="button" class="btn-primary" @click="issuedPin = null">{{ $t('common.done') }}</button>
       </div>
+    </Modal>
+
+    <Modal v-if="showNewRoleModal" :title="$t('users.newRole')" @close="showNewRoleModal = false">
+      <form class="space-y-4" @submit.prevent="createNewRole">
+        <div>
+          <label class="block text-sm text-muted mb-1">{{ $t('users.newRoleName') }}</label>
+          <input v-model="newRoleForm.name" type="text" class="input" required autofocus />
+        </div>
+        <div>
+          <label class="block text-sm text-muted mb-1">{{ $t('users.newRoleDescription') }}</label>
+          <input v-model="newRoleForm.description" type="text" class="input" />
+        </div>
+        <p class="text-xs text-muted">{{ $t('users.newRoleHint') }}</p>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="btn-secondary" @click="showNewRoleModal = false">{{ $t('common.cancel') }}</button>
+          <button type="submit" class="btn-primary">{{ $t('settings.create') }}</button>
+        </div>
+      </form>
     </Modal>
   </div>
 </template>

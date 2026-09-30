@@ -66,6 +66,17 @@ router.beforeEach(async (to) => {
   // Exchange rate + app settings feed every priced screen; loaded once.
   await useSettingsStore().ensureLoaded()
 
+  // Every admin page other than Settings itself is branch-scoped — with no
+  // branches at all (most drastically: right after a production reset,
+  // which now wipes every branch), each one would otherwise 403 with the
+  // exact same generic message a real permission problem gives, since the
+  // request has nothing valid to send as branch_id. Send them straight to
+  // where they can fix that instead of letting them hit a confusing error
+  // on whatever page they land on first.
+  if (!to.meta.pos && auth.branches.length === 0 && to.name !== 'settings') {
+    return { name: 'settings', query: { tab: 'branches' } }
+  }
+
   if (!to.meta.pos) return true
 
   // A valid admin (password) session must never silently double as a till

@@ -48,8 +48,22 @@ export const useAuthStore = defineStore('auth', {
       this.user = session.user
       this.permissions = session.permissions
       this.branches = session.branches
-      if (!this.activeBranchId && session.branches.length > 0) {
-        this.setActiveBranch(session.branches[0].id)
+      // activeBranchId persists across logout/login on purpose (so the same
+      // admin coming back sees the same branch), but it's only ever trusted
+      // once here, against this fresh session's real branch list — a branch
+      // that was deleted (most drastically: every branch, by a production
+      // reset) would otherwise keep being sent on every request forever,
+      // 403ing against BranchScope with the same generic message a real
+      // permission problem gives, since the cached id is never re-checked
+      // against what the caller can actually access any other way.
+      const stillValid = this.activeBranchId !== null && session.branches.some((b) => b.id === this.activeBranchId)
+      if (!stillValid) {
+        if (session.branches.length > 0) {
+          this.setActiveBranch(session.branches[0].id)
+        } else {
+          this.activeBranchId = null
+          localStorage.removeItem(ACTIVE_BRANCH_KEY)
+        }
       }
     },
 

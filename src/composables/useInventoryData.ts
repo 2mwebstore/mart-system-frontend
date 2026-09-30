@@ -1,12 +1,16 @@
 import { computed, onMounted, reactive, ref, type Ref } from 'vue'
 import * as catalogApi from '@/api/catalog'
-import type { Category, Product, ProductInput, PurchaseOrder, PurchaseOrderInput, Supplier } from '@/types/domain'
+import type { Category, Product, ProductInput, ProductType, PurchaseOrder, PurchaseOrderInput, Supplier } from '@/types/domain'
 import { initialsOf } from '@/utils/format'
 import { useDebounced, usePagedList } from '@/composables/usePagedList'
 
-export type StockStatus = 'in_stock' | 'low' | 'out'
+// 'service' isn't a stock level — a SERVICE product is never stocked, so it
+// never runs low or out; this just tells the table/badge to show something
+// other than a made-up stock state for it.
+export type StockStatus = 'in_stock' | 'low' | 'out' | 'service'
 
-export function stockStatusOf(qty: number, reorderPoint: number): StockStatus {
+export function stockStatusOf(qty: number, reorderPoint: number, type: ProductType): StockStatus {
+  if (type === 'SERVICE') return 'service'
   if (qty <= 0) return 'out'
   if (qty <= reorderPoint) return 'low'
   return 'in_stock'
@@ -21,15 +25,26 @@ export function stockStatusOf(qty: number, reorderPoint: number): StockStatus {
 export function useInventoryData(branchId: Ref<number>) {
   const search = ref('')
   const categoryFilter = ref<number | 'all'>('all')
-  const statusFilter = ref<'all' | StockStatus>('all')
+  // Stock-level filter — meaningless for SERVICE rows, which never match
+  // any of the three, so this stays 'in_stock' | 'low' | 'out' (no
+  // 'service' option here; use typeFilter for that).
+  const statusFilter = ref<'all' | 'in_stock' | 'low' | 'out'>('all')
+  const typeFilter = ref<'all' | ProductType>('all')
   const debouncedSearch = useDebounced(search)
+  // Categories and Suppliers tabs each get their own search box, independent
+  // of the Products tab's.
+  const categorySearch = ref('')
+  const debouncedCategorySearch = useDebounced(categorySearch)
+  const supplierSearch = ref('')
+  const debouncedSupplierSearch = useDebounced(supplierSearch)
   // Stock moves filters. A null range means "all dates".
   type DateRange = { from: string; to: string } | null
   const moveType = ref<'all' | string>('all')
   const moveProduct = ref<'all' | number>('all')
   const moveRange = ref<DateRange>(null)
-  // Purchase-order filter (by created date).
+  // Purchase-order filters (by created date, and by supplier).
   const poRange = ref<DateRange>(null)
+  const poSupplierFilter = ref<number | 'all'>('all')
 
   // Whole lists used as pickers.
   const categories = ref<Category[]>([])
@@ -47,12 +62,21 @@ export function useInventoryData(branchId: Ref<number>) {
           q: debouncedSearch.value.trim(),
           categoryId: categoryFilter.value === 'all' ? null : categoryFilter.value,
           status: statusFilter.value === 'all' ? null : statusFilter.value,
+          type: typeFilter.value === 'all' ? null : typeFilter.value,
         }),
-      { deps: [branchId, debouncedSearch, categoryFilter, statusFilter] },
+      { deps: [branchId, debouncedSearch, categoryFilter, statusFilter, typeFilter] },
     ),
   )
-  const categoryList = reactive(usePagedList(({ page, perPage }) => catalogApi.pageCategories({ page, perPage })))
-  const supplierList = reactive(usePagedList(({ page, perPage }) => catalogApi.pageSuppliers({ page, perPage })))
+  const categoryList = reactive(
+    usePagedList(({ page, perPage }) => catalogApi.pageCategories({ page, perPage, q: debouncedCategorySearch.value.trim() }), {
+      deps: [debouncedCategorySearch],
+    }),
+  )
+  const supplierList = reactive(
+    usePagedList(({ page, perPage }) => catalogApi.pageSuppliers({ page, perPage, q: debouncedSupplierSearch.value.trim() }), {
+      deps: [debouncedSupplierSearch],
+    }),
+  )
   const moveList = reactive(
     usePagedList(
       ({ page, perPage }) =>
@@ -70,8 +94,14 @@ export function useInventoryData(branchId: Ref<number>) {
   const poList = reactive(
     usePagedList(
       ({ page, perPage }) =>
-        catalogApi.pagePurchaseOrders(branchId.value, { page, perPage, dateFrom: poRange.value?.from, dateTo: poRange.value?.to }),
-      { deps: [branchId, poRange] },
+        catalogApi.pagePurchaseOrders(branchId.value, {
+          page,
+          perPage,
+          dateFrom: poRange.value?.from,
+          dateTo: poRange.value?.to,
+          supplierId: poSupplierFilter.value === 'all' ? null : poSupplierFilter.value,
+        }),
+      { deps: [branchId, poRange, poSupplierFilter] },
     ),
   )
   const loading = computed(() => productList.loading)
@@ -99,6 +129,23 @@ export function useInventoryData(branchId: Ref<number>) {
     attempt(() => (id === null ? catalogApi.createCategory(data) : catalogApi.updateCategory(id, data)), [loadCategories, categoryList.reload])
   const removeCategory = (id: number) =>
     attempt(() => catalogApi.deleteCategory(id), [loadCategories, categoryList.reload, refreshProducts])
+  // Same shape as removeProducts below: one API call per id (silent — no
+  // per-row error toast), one refresh at the end, counts handed back so the
+  // caller can show a single summary toast.
+  async function removeCategories(ids: number[]): Promise<{ ok: number[]; failed: number[] }> {
+    const ok: number[] = []
+    const failed: number[] = []
+    for (const id of ids) {
+      try {
+        await catalogApi.deleteCategory(id, { silent: true })
+        ok.push(id)
+      } catch {
+        failed.push(id)
+      }
+    }
+    await Promise.all([loadCategories(), categoryList.reload(), refreshProducts()])
+    return { ok, failed }
+  }
 
   // --- Suppliers ---------------------------------------------------------------
   const saveSupplier = (data: catalogApi.SupplierInput, id: number | null) =>
@@ -114,6 +161,48 @@ export function useInventoryData(branchId: Ref<number>) {
     )
   const removeProduct = (id: number) =>
     attempt(() => catalogApi.deleteProduct(branchId.value, id), [refreshProducts, loadCategories, categoryList.reload, supplierList.reload])
+
+  // Deletes several products in one go — a single refresh at the end rather
+  // than one per row. Each call is silent (no per-row error toast, which
+  // would spam the screen on a big selection); the caller gets counts back
+  // and shows one summary toast instead.
+  async function removeProducts(ids: number[]): Promise<{ ok: number[]; failed: number[] }> {
+    const ok: number[] = []
+    const failed: number[] = []
+    for (const id of ids) {
+      try {
+        await catalogApi.deleteProduct(branchId.value, id, { silent: true })
+        ok.push(id)
+      } catch {
+        failed.push(id)
+      }
+    }
+    await Promise.all([refreshProducts(), loadCategories(), categoryList.reload(), supplierList.reload()])
+    return { ok, failed }
+  }
+
+  // --- CSV import ------------------------------------------------------------
+  // Returns the result (created count + per-row skip reasons) on success, or
+  // null on failure — the API client has already toasted the reason, same
+  // contract as `attempt` above, just carrying data back instead of a bool.
+  async function importCategoriesFile(file: File): Promise<catalogApi.ImportResult | null> {
+    try {
+      const res = await catalogApi.importCategories(file)
+      await Promise.all([loadCategories(), categoryList.reload()])
+      return res
+    } catch {
+      return null
+    }
+  }
+  async function importProductsFile(file: File): Promise<catalogApi.ImportResult | null> {
+    try {
+      const res = await catalogApi.importProducts(file)
+      await Promise.all([refreshProducts(), loadCategories(), categoryList.reload()])
+      return res
+    } catch {
+      return null
+    }
+  }
 
   // --- Purchase orders -------------------------------------------------------------
   const savePurchaseOrder = (data: PurchaseOrderInput, id: number | null) =>
@@ -137,7 +226,7 @@ export function useInventoryData(branchId: Ref<number>) {
       ...p,
       imageInitials: initialsOf(p.nameEn),
       marginPct: p.priceCents > 0 ? Math.round(((p.priceCents - p.costCents) / p.priceCents) * 100) : 0,
-      status: stockStatusOf(p.qty, p.reorderPoint),
+      status: stockStatusOf(p.qty, p.reorderPoint, p.productType),
     })),
   )
 
@@ -154,10 +243,14 @@ export function useInventoryData(branchId: Ref<number>) {
     search,
     categoryFilter,
     statusFilter,
+    typeFilter,
+    categorySearch,
+    supplierSearch,
     moveType,
     moveProduct,
     moveRange,
     poRange,
+    poSupplierFilter,
     rows,
     summary,
     productList,
@@ -165,10 +258,14 @@ export function useInventoryData(branchId: Ref<number>) {
     categoryList,
     saveCategory,
     removeCategory,
+    removeCategories,
     products,
     loadAllProducts,
     saveProduct,
     removeProduct,
+    removeProducts,
+    importCategoriesFile,
+    importProductsFile,
     suppliers,
     supplierList,
     saveSupplier,

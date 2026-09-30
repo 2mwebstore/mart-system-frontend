@@ -39,6 +39,10 @@ export interface AppSettings {
   receiptHeader: string
   receiptFooter: string
   loyaltyPointsPerUsd: number
+  // Store-wide (Settings > System, system.manage to change) — whether a
+  // sale can go through at 0/negative stock. Read-only here; written via
+  // updateStockPolicy, not updateAppSettings.
+  allowOutOfStockSale: boolean
 }
 
 export interface ExchangeRateEntry {
@@ -64,8 +68,19 @@ export interface Supplier {
   productCount?: number // filled by the list endpoint
 }
 
+// STANDARD is a physical item — stock-tracked, can run out. SERVICE is never
+// stocked at all (a fee, a delivery charge, an install job) — always
+// sellable, never shows a stock number or a low/out-of-stock badge.
+export const PRODUCT_TYPES = ['STANDARD', 'SERVICE'] as const
+export type ProductType = (typeof PRODUCT_TYPES)[number]
+
 export interface Product {
   id: number
+  parentProductId: number | null // set => this row is a variant of that product
+  parentNameEn: string | null
+  parentNameKm: string | null
+  variantName: string // e.g. "Red / Large" — blank unless parentProductId is set
+  variantCount: number // for a non-variant product: how many variants it has
   sku: string
   barcode: string | null
   nameEn: string
@@ -76,12 +91,14 @@ export interface Product {
   supplierId: number | null
   supplierName: string | null
   unit: string
+  productType: ProductType
   imageUrl: string
   active: boolean
   priceCents: number
   costCents: number
-  qty: number // on hand at the branch the list was requested for
+  qty: number // on hand at the branch the list was requested for — always 0 for a SERVICE product
   reorderPoint: number
+  hideWhenOutOfStock: boolean // STANDARD only: disappears from the POS grid once qty <= 0
 }
 
 export interface ProductInput {
@@ -89,13 +106,16 @@ export interface ProductInput {
   nameKm: string
   barcode: string
   categoryId: number | null
-  supplierId: number | null
   unit: string
+  productType: ProductType
   imageUrl: string
   active: boolean
   priceCents: number
   costCents: number
   reorderPoint: number
+  parentProductId?: number | null // set only when creating/editing a variant
+  variantName?: string
+  hideWhenOutOfStock: boolean
 }
 
 export interface StockMovement {
@@ -251,6 +271,7 @@ export interface SaleItem {
   qty: number
   unitPriceCents: number
   discountCents: number
+  note: string
   lineTotalCents: number
 }
 
@@ -285,7 +306,7 @@ export interface CreateSaleInput {
   deviceKey: string
   idempotencyKey: string
   customerId: number | null
-  items: { productId: number; qty: number; discountCents: number }[]
+  items: { productId: number; qty: number; discountCents: number; note: string }[]
   discountCents: number
   payment: { method: 'CASH' | 'KHQR' | 'CARD'; receivedUsdCents: number; receivedKhrRiel: number; reference: string }
 }
@@ -357,6 +378,7 @@ export interface TransactionsReport {
 }
 
 export interface ByProductRow {
+  productId: number
   sku: string
   name: string
   nameKm: string
@@ -368,6 +390,7 @@ export interface ByProductRow {
 }
 
 export interface ByCashierRow {
+  id: number
   name: string
   shifts: number
   salesCents: number
@@ -387,6 +410,7 @@ export interface PaymentMethodReportRow {
 
 export interface VoidRefundRow {
   id: number
+  saleId: number
   createdAt: string
   receiptNo: string
   type: 'VOID' | 'REFUND'
@@ -407,9 +431,71 @@ export interface ActivityLogRow {
   entityType: string
   entityId: number | null
   device: string
+  ip: string
 }
 
 export interface DateRangeParams {
   dateFrom: string
   dateTo: string
+}
+
+// ---- Alerts & backups --------------------------------------------------------
+
+// Keep in sync with backend/internal/services/notify_service.go's AllAlertTypes.
+export const ALERT_TYPES = [
+  'low_stock',
+  'shift_opened',
+  'shift_closed',
+  'sale_completed',
+  'void_refund',
+  'expense_added',
+  'po_received',
+  'backup_success',
+  'backup_failed',
+] as const
+export type AlertType = (typeof ALERT_TYPES)[number]
+
+export interface NotifySettings {
+  enabled: boolean
+  botToken: string
+  chatId: string
+  alertTypes: AlertType[]
+}
+
+export type BackupStatus = 'RUNNING' | 'SUCCESS' | 'FAILED'
+export type BackupTriggerType = 'SCHEDULED' | 'MANUAL'
+
+export interface BackupRow {
+  id: number
+  filename: string
+  sizeBytes: number
+  status: BackupStatus
+  triggerType: BackupTriggerType
+  triggeredBy?: string
+  error?: string
+  startedAt: string
+  finishedAt: string | null
+  downloadable: boolean
+}
+
+export interface BackupSettings {
+  autoEnabled: boolean
+  retentionDays: number
+}
+
+// ---- Document numbering ----------------------------------------------------
+
+export type DocType = 'SALE' | 'EXPENSE' | 'PURCHASE_ORDER'
+
+export interface NumberSequence {
+  docType: DocType
+  prefix: string
+  nextNumber: number
+  preview: string
+}
+
+// ---- Audit log retention ---------------------------------------------------
+
+export interface ActivityLogRetention {
+  retentionMonths: number
 }

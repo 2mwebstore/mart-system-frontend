@@ -39,6 +39,7 @@
     "save": "Save",
     "close": "Close",
     "closeDialog": "Close dialog",
+    "openMenu": "Open menu",
     "edit": "Edit",
     "delete": "Delete",
     "add": "Add",
@@ -97,7 +98,9 @@
     "till": "till",
     "paymentMethod": "payment method",
     "role": "role",
-    "user": "user"
+    "user": "user",
+    "backup": "backup",
+    "sale": "sale"
   },
   "confirmDelete": {
     "title": "Delete {label}?",
@@ -155,6 +158,9 @@
     "invalidBranch": "branch_id must be a number.",
     "branchInUse": "This branch has sales and can't be deleted — mark it inactive instead.",
     "cannotDisableSelf": "You can't disable your own account.",
+    "cannotDeleteSelf": "You can't delete your own account.",
+    "userInUse": "This user has sales, shifts or other activity and can't be deleted. Deactivate the account instead.",
+    "importFileRequired": "Choose a CSV file to import.",
     "poLockedDelete": "A purchase order that has received stock can't be deleted — cancel it instead.",
     "poLockedEdit": "A received purchase order can't be edited.",
     "poNotReceivable": "This purchase order is already {status}.",
@@ -164,6 +170,9 @@
     "saleNotVoidable": "Only a paid sale can be voided.",
     "shiftAlreadyOpen": "This till already has an open shift.",
     "saleShiftClosed": "This sale belongs to a closed shift and can't be voided.",
+    "saleNotEditable": "Only a paid sale can be edited.",
+    "saleShiftClosedEdit": "This sale belongs to a closed shift and can't be edited.",
+    "saleEditExceedsCash": "This sale now totals more than the cash received — void it and ring up a new sale instead.",
     "shiftClosed": "This shift is already closed.",
     "shiftRequired": "Open a shift on this till before selling.",
     "supplierInUse": "This supplier has purchase orders and can't be deleted.",
@@ -271,6 +280,10 @@
     "PARTIAL": "Partial",
     "RECEIVED": "Received",
     "CANCELLED": "Cancelled"
+  },
+  "productType": {
+    "STANDARD": "Standard",
+    "SERVICE": "Service"
   },
   "moveType": {
     "SALE": "Sale",
@@ -400,6 +413,14 @@
       "activity-log": {
         "label": "Activity log",
         "desc": "Read-only record of every sensitive action."
+      },
+      "purchase-orders": {
+        "label": "Purchase orders",
+        "desc": "Every purchase order, with supplier, status and cost."
+      },
+      "expenses": {
+        "label": "Expenses",
+        "desc": "Every expense, with category, amount and note."
       }
     },
     "nouns": {
@@ -408,7 +429,9 @@
       "by-cashier": "cashiers",
       "voids-refunds": "voids & refunds",
       "stock-movements": "movements",
-      "activity-log": "events"
+      "activity-log": "events",
+      "purchase-orders": "purchase orders",
+      "expenses": "expenses"
     },
     "tiles": {
       "transactions": "Transactions",
@@ -435,10 +458,21 @@
       "users": "Users",
       "modules": "Modules",
       "retention": "Retention",
-      "retentionValue": "12 months"
+      "retentionValue": "12 months",
+      "orders": "Purchase orders",
+      "openOrders": "Open orders",
+      "expenseCount": "Expenses",
+      "categories": "Categories",
+      "average": "Average"
+    },
+    "detail": {
+      "matchingSales": "Matching sales",
+      "empty": "Nothing to show.",
+      "ip": "IP address"
     }
   },
   "col": {
+    "id": "ID",
     "receipt": "Receipt",
     "date": "Date",
     "cashier": "Cashier",
@@ -512,7 +546,8 @@
     "terms": "Terms",
     "productsSupplied": "Products supplied",
     "unitCost": "Unit cost",
-    "lineTotal": "Line total"
+    "lineTotal": "Line total",
+    "size": "Size"
   },
   "audit": {
     "module": {
@@ -613,10 +648,15 @@
     "viewOnly": "You can view users but don't have permission to change them.",
     "created": "User created.",
     "saved": "User saved.",
+    "deleted": "User deleted.",
     "usersCount": "{n} users",
     "readOnly": "Read-only",
     "unsaved": "Unsaved changes",
     "duplicate": "Duplicate",
+    "newRole": "New role",
+    "newRoleName": "Role name",
+    "newRoleDescription": "Description",
+    "newRoleHint": "Starts with no permissions — grant what it needs after creating it.",
     "saveRole": "Save role",
     "ofCount": "{granted} of {total}",
     "limits": "Limits",
@@ -626,6 +666,7 @@
     "newPinTitle": "New POS PIN",
     "newPinBody": "A new PIN was set for {name}. It is shown once — the system stores only a hash, so write it down and hand it over.",
     "roleSaved": "{name} role saved.",
+    "roleCreated": "{name} role created.",
     "roleCopy": "{name} copy",
     "roleDuplicated": "Duplicated as \"{name}\".",
     "roleDeleted": "{name} deleted."
@@ -655,6 +696,8 @@
       "receive": "Receive stock",
       "adjust": "Adjust/write off/count stock",
       "edit_price": "Edit product price/cost",
+      "product_create": "Create new products (and add variants)",
+      "product_edit": "Edit or delete existing products",
       "purchase_order": "Manage purchase orders",
       "transfer": "Transfer stock between branches"
     },
@@ -682,7 +725,9 @@
     },
     "expense": {
       "manage": "Manage expenses"
-    }
+    },
+    "system.manage": "Manage Telegram alerts and database backups",
+    "system.reset": "Wipe all data for a fresh production setup"
   },
   "settings": {
     "title": "Settings",
@@ -718,6 +763,7 @@
     "create": "Create",
     "register": "Register",
     "branchCreated": "Branch created. It appears for users after their next sign-in.",
+    "noBranchesYetHint": "You don't have any branches yet — create one to start using the rest of the app.",
     "branchUpdated": "Branch updated.",
     "branchDeleted": "Branch deleted.",
     "pickBranch": "Pick a branch.",
@@ -737,7 +783,39 @@
     "receiptHeader": "Receipt header",
     "receiptFooterBilingual": "Receipt footer (bilingual)",
     "loyaltyRate": "Loyalty points per $1 spent",
-    "receiptSaved": "Receipt & loyalty settings saved."
+    "receiptSaved": "Receipt & loyalty settings saved.",
+    "tabSystem": "System",
+    "numberingTitle": "Document numbering",
+    "numberingIntro": "Each new sale, expense and purchase order gets the next number in its sequence, e.g. INV-000001.",
+    "prefix": "Prefix",
+    "nextNumber": "Next number",
+    "preview": "Preview",
+    "numberingSaved": "Numbering sequence saved.",
+    "docType": {
+      "SALE": "Sales",
+      "EXPENSE": "Expenses",
+      "PURCHASE_ORDER": "Purchase orders"
+    },
+    "retentionTitle": "Audit log retention",
+    "retentionIntro": "Activity log entries older than the retention period are purged automatically every night.",
+    "retentionMonths": "Keep for",
+    "retentionMonthsOption": "{n} month | {n} months",
+    "retentionSaved": "Retention period saved.",
+    "retentionClearNowTitle": "Clear now",
+    "retentionClearNowHint": "Purge activity log entries older than the retention period immediately, instead of waiting for tonight's automatic cleanup.",
+    "retentionClearNow": "Clear old entries now",
+    "retentionCleared": "Cleared {count} old activity log entries.",
+    "stockPolicyTitle": "Stock-sale policy",
+    "stockPolicyIntro": "One store-wide switch for every product — not set per product.",
+    "stockPolicyToggle": "Allow selling when out of stock (backorder)",
+    "stockPolicySaved": "Stock-sale policy saved.",
+    "dangerZoneTitle": "Set up new system for production",
+    "dangerZoneIntro": "Wipes all branches, products, categories, suppliers, customers, sales, shifts, purchase orders, expenses, stock history, backup records and the activity log — for starting a brand-new production deployment from a clean slate.",
+    "dangerZoneKeeps": "Kept: roles & permissions, and your own login (you'll need to sign in again). You'll need to create at least one branch before the app is usable again — the first one you create is assigned to you automatically.",
+    "dangerZoneWipes": "Wiped: every branch, every other user account and all business data. This cannot be undone.",
+    "dangerZoneButton": "Set up new system for production",
+    "dangerZoneConfirmLabel": "Type RESET to confirm",
+    "resetDone": "System reset. Please sign in again."
   },
   "shifts": {
     "title": "Shifts",
@@ -798,6 +876,15 @@
     "exportCsv": "Export CSV",
     "newProduct": "New product",
     "editProduct": "Edit product",
+    "addVariant": "Add variant",
+    "addVariantAria": "Add variant",
+    "variantOfNote": "Variant of {name} — name, category and type are shared with it.",
+    "variantName": "Variant name",
+    "variantNameHint": "e.g. Red / Large",
+    "variantNameRequired": "Variant name is required.",
+    "variantFullNamePreview": "Will show as: {name}",
+    "variantInheritedNote": "Category and type are inherited from the parent product.",
+    "variantCount": "{n} variant | {n} variants",
     "stockValue": "Stock value (cost)",
     "activeProducts": "Active products",
     "belowReorder": "Below reorder",
@@ -807,11 +894,16 @@
     "tabCategories": "Categories",
     "tabMoves": "Stock moves",
     "tabPo": "Purchase orders",
+    "tabSales": "Sales",
     "tabSuppliers": "Suppliers",
     "searchPlaceholder": "Search by name, SKU or barcode",
+    "searchCategoriesPlaceholder": "Search category name",
+    "searchSuppliersPlaceholder": "Search name, phone or contact",
+    "searchSalesPlaceholder": "Search receipt no.",
     "allCategories": "All categories",
     "allStatuses": "All statuses",
     "allProducts": "All products",
+    "allSuppliers": "All suppliers",
     "allTypes": "All types",
     "previewAria": "Preview image",
     "editProductAria": "Edit product",
@@ -819,7 +911,9 @@
     "categoriesNoun": "categories",
     "movementsNoun": "movements",
     "posNoun": "purchase orders",
+    "salesNoun": "sales",
     "suppliersNoun": "suppliers",
+    "noSales": "No sales in this range.",
     "newCategory": "New category",
     "editCategory": "Edit category",
     "editCategoryAria": "Edit category",
@@ -846,7 +940,11 @@
     "unit": "Unit",
     "unitHint": "pcs, bottle, kg…",
     "barcode": "Barcode",
+    "productType": "Type",
+    "standardHint": "A physical item — tracked in stock, can run low or out.",
+    "serviceHint": "A fee or job with no stock — always sellable, never shows a stock level.",
     "reorderPoint": "Reorder point",
+    "hideWhenOutOfStock": "Hide from POS when out of stock",
     "costUsd": "Cost ($)",
     "priceUsd": "Price ($)",
     "image": "Image",
@@ -874,7 +972,15 @@
     "categoryUpdated": "Category updated.",
     "categoryDeleted": "Category deleted.",
     "imageTooBig": "That image is over 1.5 MB — pick a smaller one or paste a link.",
-    "pickCatSupplier": "Pick a category and a supplier.",
+    "pickCategory": "Pick a category.",
+    "selectAll": "Select all",
+    "selectRowAria": "Select {name}",
+    "selectedProducts": "{n} products",
+    "bulkDeleted": "{n} product(s) deleted.",
+    "bulkDeleteFailed": "{n} product(s) could not be deleted.",
+    "selectedCategories": "{n} categories",
+    "bulkCategoriesDeleted": "{n} categories deleted.",
+    "bulkCategoriesDeleteFailed": "{n} categories could not be deleted.",
     "productCreated": "Product created.",
     "productUpdated": "Product updated.",
     "productDeleted": "Product deleted.",
@@ -886,24 +992,49 @@
     "poUpdated": "Purchase order updated.",
     "poReceived": "{code} marked received — stock updated.",
     "poDeleted": "Purchase order deleted.",
+    "editSaleItems": "Edit items",
+    "saleNotEditableHint": "This sale can't be edited — either its shift is closed, or you don't have permission to edit sales.",
+    "saleEditHint": "Only the items and quantities can change here. The amount already tendered stays as it was; the change due is recalculated.",
+    "saleNeedsItem": "Add at least one item.",
+    "saleUpdated": "Sale updated.",
+    "saleDeletedReason": "Deleted from Inventory",
+    "saleDeleted": "Sale deleted.",
     "csvHeader": {
+      "id": "ID",
       "sku": "SKU",
       "product": "Product",
+      "parentSku": "Parent SKU",
+      "variantName": "Variant name",
+      "categoryId": "Category ID",
       "category": "Category",
-      "supplier": "Supplier",
+      "nameEn": "Name (English)",
+      "nameKm": "Name (Khmer)",
+      "type": "Type",
       "cost": "Cost",
       "price": "Price",
       "stock": "Stock",
-      "reorder": "Reorder point"
+      "reorder": "Reorder point",
+      "products": "Products"
     },
     "nameEnProduct": "Name (English)",
     "nameKmProduct": "Name (Khmer)",
-    "nameKmHint": "Optional — shown when the app is in Khmer"
+    "nameKmHint": "Optional — shown when the app is in Khmer",
+    "import": "Import",
+    "importCategories": "Import categories",
+    "importProducts": "Import products",
+    "importCategoriesHint": "A CSV with columns name_en (required) and name_km. A name that already exists is skipped.",
+    "importProductsHint": "A CSV with columns name_en, name_km, barcode, category_id, category, unit, type (\"standard\" or \"service\", default standard), cost, price, reorder_point, active, parent_sku, variant_name. Price is always required, and so is a category (category_id or category) — unless the row is a variant, see below. category_id (the number shown on the Categories tab) is exact and wins if given; category matches by name and is only used when category_id is blank. A service row is never stocked — reorder_point is ignored for it. To import a variant, set parent_sku to an existing product's SKU (from an earlier row or already in the catalog) plus a variant_name — name_en, category and type are then inherited automatically and don't need to be filled in. SKU is generated automatically, same as adding a product by hand.",
+    "downloadSample": "Download sample CSV",
+    "chooseCsv": "Choose a CSV file",
+    "importCreated": "{n} row(s) created.",
+    "importRow": "Row",
+    "importReason": "Reason skipped"
   },
   "stockStatus": {
     "in_stock": "In stock",
     "low": "Low",
-    "out": "Out of stock"
+    "out": "Out of stock",
+    "service": "Service"
   },
   "pos": {
     "heldSales": "Held sales",
@@ -954,6 +1085,12 @@
     "thanks": "Thank you for shopping with us!",
     "newSale": "New sale",
     "addToCart": "Add to cart",
+    "pickVariantHint": "Choose a variant to add.",
+    "variantsAvailable": "{n} option | {n} options",
+    "addNote": "Add note",
+    "editLineAria": "Edit discount / note",
+    "notePlaceholder": "e.g. less sugar, no ice",
+    "itemNoteLine": "↳ {note}",
     "cashMovementTitle": "Cash movement",
     "salesThisShift": "Sales this shift",
     "noSalesYet": "No sales yet this shift.",
@@ -980,5 +1117,53 @@
     "openingFloat": "Opening float: {usd} + {khr}",
     "cashSales": "Cash sales",
     "each": "{price} each"
+  },
+  "alerts": {
+    "tab": "Alerts & Backup",
+    "telegramTitle": "Telegram alerts",
+    "telegramIntro": "Get a Telegram message when something in the list below happens. In Telegram, message BotFather to create a bot, then message your new bot and get your chat ID from userinfobot.",
+    "enabled": "Enabled",
+    "botToken": "Bot token",
+    "botTokenPlaceholder": "123456789:AAExampleTokenFromBotFather",
+    "chatId": "Chat ID",
+    "chatIdPlaceholder": "e.g. 123456789",
+    "alertTypesLabel": "Alert me when…",
+    "sendTest": "Send test message",
+    "testSent": "Test message sent — check Telegram.",
+    "enterTokenChatFirst": "Enter a bot token and chat ID first.",
+    "settingsSaved": "Alert settings saved.",
+    "backupTitle": "Database backups",
+    "autoBackup": "Automatic nightly backup",
+    "autoBackupHint": "Runs at midnight, business time. A backup file is kept on the server for the number of days below.",
+    "retentionDays": "Keep backups for (days)",
+    "backupNow": "Backup now",
+    "backingUp": "Backing up…",
+    "backupStarted": "Backup complete.",
+    "backupSettingsSaved": "Backup settings saved.",
+    "history": "Backup history",
+    "noBackupsYet": "No backups yet. Click \"Backup now\" to create the first one.",
+    "download": "Download",
+    "diskNote": "Backups are stored on the server's disk. On a host with no persistent volume (e.g. a plain Railway service) they're lost on redeploy — download anything you need to keep.",
+    "deleted": "Backup deleted."
+  },
+  "alertType": {
+    "low_stock": "A product drops to or below its reorder point",
+    "shift_closed": "A cashier closes their shift",
+    "void_refund": "A sale is voided",
+    "expense_added": "An expense is added",
+    "po_received": "A purchase order is received",
+    "backup_success": "A database backup finishes successfully",
+    "backup_failed": "A database backup fails",
+    "shift_opened": "A cashier opens a shift",
+    "sale_completed": "A sale is completed (can be frequent)"
+  },
+  "backupTrigger": {
+    "SCHEDULED": "Scheduled",
+    "MANUAL": "Manual"
+  },
+  "backupStatus": {
+    "RUNNING": "Running",
+    "SUCCESS": "Success",
+    "FAILED": "Failed"
   }
 }

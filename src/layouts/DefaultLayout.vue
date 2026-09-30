@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { label } from '@/i18n'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
@@ -16,12 +16,21 @@ import {
   Contact,
   Receipt,
   Settings,
+  Menu,
+  X,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
+
+// Below lg, the sidebar is an off-canvas drawer instead of a permanent
+// column — closed by default, opened by the header's hamburger button,
+// closed again by the backdrop, the × button, or just picking a page.
+const mobileMenuOpen = ref(false)
+watch(() => route.fullPath, () => (mobileMenuOpen.value = false))
 
 const navItems = computed(() => [
   { name: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, to: { name: 'dashboard' } },
@@ -49,12 +58,21 @@ async function handleSignOut() {
 
 <template>
   <div class="flex min-h-screen">
-    <aside class="w-60 shrink-0 bg-sidebar text-white flex flex-col">
-      <div class="px-5 py-6">
+    <!-- Backdrop: mobile/tablet only, only while the drawer is open -->
+    <div v-if="mobileMenuOpen" class="fixed inset-0 z-40 bg-ink/40 lg:hidden" @click="mobileMenuOpen = false" />
+
+    <aside
+      class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 bg-sidebar text-white flex flex-col transform transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-60 lg:translate-x-0"
+      :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
+    >
+      <div class="px-5 py-6 flex items-center justify-between">
         <p class="font-heading text-lg leading-tight">{{ t('app.name') }}</p>
+        <button type="button" class="p-1 text-white/70 hover:text-white lg:hidden" :aria-label="$t('common.close')" @click="mobileMenuOpen = false">
+          <X :stroke-width="1.8" class="w-5 h-5" />
+        </button>
       </div>
 
-      <nav class="flex-1 px-3 space-y-1">
+      <nav class="flex-1 px-3 space-y-1 overflow-y-auto">
         <RouterLink
           v-for="item in navItems"
           :key="item.name"
@@ -89,13 +107,22 @@ async function handleSignOut() {
       </div>
     </aside>
 
-    <div class="flex-1 flex flex-col min-h-screen">
-      <header class="h-16 shrink-0 flex items-center justify-end gap-4 border-b border-line bg-surface px-6">
-        <LanguageSwitch />
-        <RouterLink :to="{ name: 'pos' }" class="btn-primary flex items-center gap-2 text-sm">
-          <ShoppingCart :stroke-width="1.8" class="w-4 h-4" />
-          {{ t('nav.pos') }}
-        </RouterLink>
+    <div class="flex-1 flex flex-col min-h-screen min-w-0">
+      <header class="h-16 shrink-0 flex items-center justify-between gap-4 border-b border-line bg-surface px-4 sm:px-6">
+        <div class="flex items-center gap-3 min-w-0 lg:hidden">
+          <button type="button" class="p-1.5 -ml-1.5 text-ink shrink-0" :aria-label="$t('common.openMenu')" @click="mobileMenuOpen = true">
+            <Menu :stroke-width="1.8" class="w-5 h-5" />
+          </button>
+          <p class="font-heading text-base truncate">{{ t('app.name') }}</p>
+        </div>
+        <div class="hidden lg:block" />
+        <div class="flex items-center gap-2 sm:gap-4 shrink-0">
+          <LanguageSwitch />
+          <RouterLink :to="{ name: 'pos' }" class="btn-primary flex items-center gap-2 text-sm px-3 sm:px-4">
+            <ShoppingCart :stroke-width="1.8" class="w-4 h-4" />
+            <span class="hidden sm:inline">{{ t('nav.pos') }}</span>
+          </RouterLink>
+        </div>
       </header>
 
       <main class="flex-1 bg-page overflow-y-auto">

@@ -19,6 +19,7 @@ export interface HeldItem {
   unitPriceCents: number
   discountType?: 'percent' | 'amount'
   discountValue?: number
+  note?: string
 }
 
 export interface HeldSale {

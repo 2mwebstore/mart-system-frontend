@@ -1,4 +1,4 @@
-import { get, getPaged, post, type PageQuery } from './http'
+import { get, getPaged, post, put, type PageQuery } from './http'
 import type { CreateSaleInput, Sale, Shift } from '@/types/domain'
 
 // ---- Shifts ---------------------------------------------------------------
@@ -17,4 +17,13 @@ export const pageShifts = (
 // ---- Sales ------------------------------------------------------------------
 export const createSale = (input: CreateSaleInput) => post<Sale>('/sales', input)
 export const pageShiftSales = (branchId: number, shiftId: number, q: PageQuery) => getPaged<Sale[]>('/sales', { branchId, shiftId, ...q })
+// Branch-wide sales history (Inventory's Sales tab) — same endpoint, without
+// shift_id, so it takes a date range and a receipt-no search instead.
+export const pageSales = (branchId: number, q: PageQuery & { q?: string; status?: string | null; dateFrom?: string | null; dateTo?: string | null }) =>
+  getPaged<Sale[]>('/sales', { branchId, ...q })
+export const getSale = (branchId: number, id: number) => get<Sale>(`/sales/${id}`, { branchId })
+// Corrects a still-open-shift sale's items/quantities only — see
+// docs/DECISIONS.md for why payment and discounts are deliberately not
+// editable here (use Void + re-ring for anything bigger than a qty fix).
+export const editSale = (id: number, items: { productId: number; qty: number; note: string }[]) => put<Sale>(`/sales/${id}`, { items })
 export const voidSale = (id: number, reason: string) => post<Sale>(`/sales/${id}/void`, { reason })

@@ -9,7 +9,7 @@ export const updateCustomer = (id: number, c: CustomerInput) => put<Customer>(`/
 export const deleteCustomer = (id: number) => del(`/customers/${id}`)
 
 export type ExpenseInput = { branchId: number; category: string; amountCents: number; expenseDate: string; note: string }
-export const pageExpenses = (branchId: number, q: PageQuery & { category?: string | null }) =>
+export const pageExpenses = (branchId: number, q: PageQuery & { category?: string | null; dateFrom?: string | null; dateTo?: string | null }) =>
   getPaged<Expense[], { totalCents: number }>('/expenses', { branchId, ...q })
 export const createExpense = (e: ExpenseInput) => post<Expense>('/expenses', e)
 export const updateExpense = (id: number, e: ExpenseInput) => put<Expense>(`/expenses/${id}`, e)
@@ -30,6 +30,7 @@ export const pageUsers = (q: PageQuery & { q?: string; roleId?: number | null; b
   getPaged<StaffUser[]>('/users', { ...q })
 export const createUser = (u: UserInput) => post<StaffUser>('/users', u)
 export const updateUser = (id: number, u: UserInput) => put<StaffUser>(`/users/${id}`, u)
+export const deleteUser = (id: number) => del(`/users/${id}`)
 export const resetUserPin = (id: number) => post<{ pin: string }>(`/users/${id}/reset-pin`)
 
 export type RoleInput = {

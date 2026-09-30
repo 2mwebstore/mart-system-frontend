@@ -1,10 +1,14 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import * as reportsApi from '@/api/reports'
+import { pagePurchaseOrders } from '@/api/catalog'
+import { pageExpenses } from '@/api/people'
 import type {
   ActivityLogRow,
   ByCashierRow,
   ByProductRow,
+  Expense,
   PaymentMethodReportRow,
+  PurchaseOrder,
   StockMovement,
   TransactionRow,
   TransactionsReport,
@@ -15,7 +19,17 @@ import { label, t } from '@/i18n'
 
 // Report ids; their names / descriptions are translated in the page
 // (reportDetails.types.<id>.label / .desc).
-export const reportTypes = ['transactions', 'by-product', 'by-cashier', 'payment-methods', 'voids-refunds', 'stock-movements', 'activity-log']
+export const reportTypes = [
+  'transactions',
+  'by-product',
+  'by-cashier',
+  'payment-methods',
+  'voids-refunds',
+  'stock-movements',
+  'purchase-orders',
+  'expenses',
+  'activity-log',
+]
 
 // Report details (build spec §8.4). Only the selected report is fetched, and
 // it is re-fetched when the date range, branch, the report type or (for
@@ -42,6 +56,8 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
   const paymentRows = ref<PaymentMethodReportRow[]>([])
   const voidsRefunds = ref<VoidRefundRow[]>([])
   const stockMovements = ref<StockMovement[]>([])
+  const purchaseOrderRows = ref<PurchaseOrder[]>([])
+  const expenseRows = ref<Expense[]>([])
   const activityLog = ref<ActivityLogRow[]>([])
 
   function resetFilters() {
@@ -100,6 +116,18 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
         case 'stock-movements': {
           const res = await reportsApi.getStockMovementsReport(paged)
           stockMovements.value = res.data
+          setMeta(res.meta)
+          break
+        }
+        case 'purchase-orders': {
+          const res = await pagePurchaseOrders(branchId.value, paged)
+          purchaseOrderRows.value = res.data
+          setMeta(res.meta)
+          break
+        }
+        case 'expenses': {
+          const res = await pageExpenses(branchId.value, paged)
+          expenseRows.value = res.data
           setMeta(res.meta)
           break
         }
@@ -171,6 +199,23 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
           { label: t('reportDetails.tiles.sold'), value: String(sm.value.sold ?? 0) },
           { label: t('reportDetails.tiles.adjustments'), value: String(sm.value.adjustments ?? 0) },
         ]
+      case 'purchase-orders':
+        return [
+          { label: t('reportDetails.tiles.orders'), value: String(sm.value.totalOrders ?? 0) },
+          { label: t('reportDetails.tiles.received'), value: String(sm.value.receivedOrders ?? 0) },
+          { label: t('reportDetails.tiles.openOrders'), value: String(sm.value.openOrders ?? 0) },
+          { label: t('reportDetails.tiles.total'), value: formatUSD(sm.value.totalCostCents ?? 0) },
+        ]
+      case 'expenses':
+        return [
+          { label: t('reportDetails.tiles.expenseCount'), value: String(total.value ?? 0) },
+          { label: t('reportDetails.tiles.categories'), value: String(sm.value.categories ?? 0) },
+          { label: t('reportDetails.tiles.total'), value: formatUSD(sm.value.totalCents ?? 0) },
+          {
+            label: t('reportDetails.tiles.average'),
+            value: formatUSD(total.value > 0 ? Math.round((sm.value.totalCents ?? 0) / total.value) : 0),
+          },
+        ]
       case 'activity-log':
         return [
           { label: t('reportDetails.tiles.events'), value: String(sm.value.events ?? 0) },
@@ -203,6 +248,8 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
     paymentRows,
     voidsRefunds,
     stockMovements,
+    purchaseOrderRows,
+    expenseRows,
     activityLog,
     totalsByReport,
   }
