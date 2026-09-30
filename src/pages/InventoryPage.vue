@@ -249,8 +249,17 @@ async function runImport() {
   const res = await (importKind.value === 'categories' ? importCategoriesFile(importFile.value) : importProductsFile(importFile.value))
   importing.value = false
   if (!res) return // toasted by the API client
-  importResult.value = res
   if (res.created > 0) toast.success(t('inventory.importCreated', { n: res.created }))
+  // A fully clean import (something was actually created, nothing skipped)
+  // closes itself — there's nothing left to review, the toast already says
+  // what happened. If any row was skipped, or nothing was created at all
+  // (e.g. an empty file), the modal stays open so that's still visible
+  // instead of silently closing with no explanation.
+  if (res.created > 0 && res.skipped.length === 0) {
+    showImportModal.value = false
+    return
+  }
+  importResult.value = res
 }
 
 // --- Categories (full CRUD) -------------------------------------------------
@@ -1200,7 +1209,7 @@ function viewPoDetail(po: PurchaseOrder) {
     <Modal v-if="previewRow" :title="localName(previewRow.nameEn, previewRow.nameKm)" @close="previewRow = null">
       <div class="space-y-4">
         <div class="w-full aspect-square rounded-card bg-primary-tint flex items-center justify-center overflow-hidden">
-          <img v-if="previewRow.imageUrl" :src="previewRow.imageUrl" :alt="localName(previewRow.nameEn, previewRow.nameKm)" class="w-full h-full object-cover" />
+          <img v-if="previewRow.imageUrl" :src="previewRow.imageUrl" :alt="localName(previewRow.nameEn, previewRow.nameKm)" class="size-full" />
           <span v-else class="text-primary-tint-text font-heading text-6xl">{{ previewRow.imageInitials }}</span>
         </div>
         <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
