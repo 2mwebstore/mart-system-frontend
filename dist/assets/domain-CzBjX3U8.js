@@ -1,1 +1,0 @@
-const E=["STANDARD","SERVICE"],e=["WAGES","RENT","ELECTRICITY","WATER","INTERNET","PACKAGING","PAYMENT_FEES","STOCK_LOSS","OTHER"],s=["low_stock","shift_opened","shift_closed","sale_completed","void_refund","expense_added","po_received","backup_success","backup_failed"];export{s as A,e as E,E as P};
