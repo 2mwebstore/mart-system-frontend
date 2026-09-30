@@ -410,7 +410,7 @@ function goToCloseShift() {
           >
             <button type="button" class="w-full flex flex-col gap-2 text-left hover:opacity-75 transition" @click="openCard(p)">
               <span class="w-full aspect-square rounded-control bg-primary-tint flex items-center justify-center overflow-hidden">
-                <img v-if="p.imageUrl" :src="p.imageUrl" :alt="localName(p.nameEn, p.nameKm)" class="size-full" />
+                <img v-if="p.imageUrl" :src="p.imageUrl" :alt="localName(p.nameEn, p.nameKm)" class="w-auto h-full" />
                 <span v-else class="text-primary-tint-text font-heading text-2xl">{{ initialsOf(p.nameEn) }}</span>
               </span>
               <span class="flex flex-col gap-0.5">

@@ -1209,7 +1209,7 @@ function viewPoDetail(po: PurchaseOrder) {
     <Modal v-if="previewRow" :title="localName(previewRow.nameEn, previewRow.nameKm)" @close="previewRow = null">
       <div class="space-y-4">
         <div class="w-full aspect-square rounded-card bg-primary-tint flex items-center justify-center overflow-hidden">
-          <img v-if="previewRow.imageUrl" :src="previewRow.imageUrl" :alt="localName(previewRow.nameEn, previewRow.nameKm)" class="size-full" />
+          <img v-if="previewRow.imageUrl" :src="previewRow.imageUrl" :alt="localName(previewRow.nameEn, previewRow.nameKm)" class="w-auto h-full" />
           <span v-else class="text-primary-tint-text font-heading text-6xl">{{ previewRow.imageInitials }}</span>
         </div>
         <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
