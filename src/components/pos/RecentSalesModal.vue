@@ -42,40 +42,42 @@ async function voidSale(id: number, receiptNo: string) {
 <template>
   <Modal :title="$t('pos.salesThisShift')" wide @close="emit('close')">
     <div v-if="!list.loading && list.total === 0" class="text-center text-muted py-8">{{ $t('pos.noSalesYet') }}</div>
-    <table v-else class="w-full text-sm">
-      <thead>
-        <tr class="text-left text-muted border-b border-line">
-          <th class="py-2 font-medium">{{ $t('col.receipt') }}</th>
-          <th class="py-2 font-medium">{{ $t('col.time') }}</th>
-          <th class="py-2 font-medium text-right">{{ $t('col.items') }}</th>
-          <th class="py-2 font-medium">{{ $t('col.payment') }}</th>
-          <th class="py-2 font-medium text-right">{{ $t('col.total') }}</th>
-          <th class="py-2 font-medium">{{ $t('col.status') }}</th>
-          <th class="py-2 font-medium"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="s in list.rows" :key="s.id" class="border-b border-line last:border-0">
-          <td class="py-2 font-mono text-xs">{{ s.receiptNo }}</td>
-          <td class="py-2 font-mono text-xs">{{ formatDateTime(s.soldAt).split(' ').slice(-1)[0] }}</td>
-          <td class="py-2 text-right font-mono">{{ s.items.reduce((sum, i) => sum + i.qty, 0) }}</td>
-          <td class="py-2">{{ label('method', s.payment.method) }}</td>
-          <td class="py-2 text-right font-mono">{{ formatUSD(s.totalCents) }}</td>
-          <td class="py-2"><StatusBadge :tone="s.status === 'PAID' ? 'success' : 'danger'" :label="label('saleStatus', s.status)" /></td>
-          <td class="py-2">
-            <button
-              v-if="s.status === 'PAID' && canVoid"
-              type="button"
-              class="p-1.5 text-muted hover:text-danger-strong"
-              :aria-label="$t('pos.voidSaleAria')"
-              @click="voidSale(s.id, s.receiptNo)"
-            >
-              <Ban :stroke-width="1.8" class="w-4 h-4" />
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else class="overflow-x-auto -mx-1 px-1">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-muted border-b border-line">
+            <th class="py-2 font-medium">{{ $t('col.receipt') }}</th>
+            <th class="py-2 font-medium">{{ $t('col.time') }}</th>
+            <th class="py-2 font-medium text-right">{{ $t('col.items') }}</th>
+            <th class="py-2 font-medium">{{ $t('col.payment') }}</th>
+            <th class="py-2 font-medium text-right">{{ $t('col.total') }}</th>
+            <th class="py-2 font-medium">{{ $t('col.status') }}</th>
+            <th class="py-2 font-medium"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="s in list.rows" :key="s.id" class="border-b border-line last:border-0">
+            <td class="py-2 font-mono text-xs whitespace-nowrap">{{ s.receiptNo }}</td>
+            <td class="py-2 font-mono text-xs">{{ formatDateTime(s.soldAt).split(' ').slice(-1)[0] }}</td>
+            <td class="py-2 text-right font-mono">{{ s.items.reduce((sum, i) => sum + i.qty, 0) }}</td>
+            <td class="py-2">{{ label('method', s.payment.method) }}</td>
+            <td class="py-2 text-right font-mono">{{ formatUSD(s.totalCents) }}</td>
+            <td class="py-2"><StatusBadge :tone="s.status === 'PAID' ? 'success' : 'danger'" :label="label('saleStatus', s.status)" /></td>
+            <td class="py-2">
+              <button
+                v-if="s.status === 'PAID' && canVoid"
+                type="button"
+                class="p-1.5 text-muted hover:text-danger-strong"
+                :aria-label="$t('pos.voidSaleAria')"
+                @click="voidSale(s.id, s.receiptNo)"
+              >
+                <Ban :stroke-width="1.8" class="w-4 h-4" />
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <Pagination v-model:page="list.page" :total-pages="list.totalPages" :total="list.total" :per-page="list.perPage" :noun="$t('pos.sales').toLowerCase()" />
   </Modal>
 </template>

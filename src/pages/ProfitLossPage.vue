@@ -87,7 +87,7 @@ async function submitExpense() {
         <h1 class="font-heading text-2xl">{{ t('pl.title') }}</h1>
         <p class="text-muted text-sm">{{ auth.branches.find((b) => b.id === branchId)?.name }}</p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <DateRangePicker v-model="range" />
         <button type="button" class="btn-secondary flex items-center gap-2" @click="toast.info(t('pl.pdfSoon'))">
           <FileDown :stroke-width="1.8" class="w-4 h-4" /> {{ t('pl.downloadPdf') }}

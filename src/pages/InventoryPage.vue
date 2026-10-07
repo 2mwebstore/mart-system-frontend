@@ -16,6 +16,9 @@ import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import Pagination from '@/components/Pagination.vue'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import SearchAddInput from '@/components/SearchAddInput.vue'
+import SaleEditor from '@/components/SaleEditor.vue'
+import DiscountInput from '@/components/DiscountInput.vue'
+import type { DiscountType } from '@/composables/useCart'
 import { useToast } from '@/composables/useToast'
 import { categoryName, label, localName, t } from '@/i18n'
 
@@ -64,6 +67,8 @@ const {
   removeSupplier,
   moveList,
   poList,
+  poItemsGrossCents,
+  poItemsDiscountCents,
   poItemsCostCents,
   poTotalCostCents,
   poItemCount,
@@ -581,6 +586,9 @@ interface PoFormItem {
   sku: string
   qty: number
   unitCostDollars: number // form-only unit; converted to unitCostCents on submit
+  // % or $ off the whole line (qty × unit cost); sent as cents.
+  discountType: DiscountType
+  discountValue: number
 }
 
 const showPoModal = ref(false)
@@ -608,7 +616,15 @@ function editPo(po: PurchaseOrder) {
     status: po.status,
     note: po.note,
     shippingDollars: po.shippingCents / 100,
-    items: po.items.map((i) => ({ productId: i.productId, name: localName(i.productName, i.productNameKm), sku: i.sku, qty: i.qtyOrdered, unitCostDollars: i.unitCostCents / 100 })),
+    items: po.items.map((i) => ({
+      productId: i.productId,
+      name: localName(i.productName, i.productNameKm),
+      sku: i.sku,
+      qty: i.qtyOrdered,
+      unitCostDollars: i.unitCostCents / 100,
+      discountType: 'amount' as DiscountType,
+      discountValue: (i.discountCents || 0) / 100,
+    })),
   })
   void loadAllProducts()
   showPoModal.value = true
@@ -626,14 +642,33 @@ function addPoProduct(productId: string | number) {
     existing.qty += 1
     poForm.items.unshift(existing)
   } else {
-    poForm.items.unshift({ productId: product.id, name: localName(product.nameEn, product.nameKm), sku: product.sku, qty: 1, unitCostDollars: product.costCents / 100 })
+    poForm.items.unshift({
+      productId: product.id,
+      name: localName(product.nameEn, product.nameKm),
+      sku: product.sku,
+      qty: 1,
+      unitCostDollars: product.costCents / 100,
+      discountType: 'amount',
+      discountValue: 0,
+    })
   }
 }
 function removePoItem(productId: number) {
   const idx = poForm.items.findIndex((i) => i.productId === productId)
   if (idx !== -1) poForm.items.splice(idx, 1)
 }
-const poFormItemsCents = computed(() => poForm.items.reduce((sum, i) => sum + i.qty * Math.round(i.unitCostDollars * 100), 0))
+function poLineGrossCents(i: PoFormItem) {
+  return (Number(i.qty) || 0) * Math.round((Number(i.unitCostDollars) || 0) * 100)
+}
+// Same % / $ rule as the sale editor, clamped to the line's cost.
+function poLineDiscountCents(i: PoFormItem) {
+  const gross = poLineGrossCents(i)
+  const v = Math.max(0, Number(i.discountValue) || 0)
+  const raw = i.discountType === 'percent' ? Math.round((gross * Math.min(v, 100)) / 100) : Math.round(v * 100)
+  return Math.min(raw, gross)
+}
+const poFormDiscountCents = computed(() => poForm.items.reduce((sum, i) => sum + poLineDiscountCents(i), 0))
+const poFormItemsCents = computed(() => poForm.items.reduce((sum, i) => sum + poLineGrossCents(i) - poLineDiscountCents(i), 0))
 const poFormShippingCents = computed(() => Math.round(poForm.shippingDollars * 100))
 const poFormTotalCents = computed(() => poFormItemsCents.value + poFormShippingCents.value)
 
@@ -651,7 +686,12 @@ async function submitPo() {
       status: poForm.status,
       note: poForm.note,
       shippingCents: poFormShippingCents.value,
-      items: poForm.items.map((i) => ({ productId: i.productId, qty: Number(i.qty), unitCostCents: Math.round(i.unitCostDollars * 100) })),
+      items: poForm.items.map((i) => ({
+        productId: i.productId,
+        qty: Number(i.qty),
+        unitCostCents: Math.round(i.unitCostDollars * 100),
+        discountCents: poLineDiscountCents(i),
+      })),
     },
     id,
   )
@@ -680,45 +720,59 @@ const canVoidSale = auth.hasPermission('pos.void')
 const saleSearch = ref('')
 const debouncedSaleSearch = useDebounced(saleSearch)
 const saleRange = ref<{ from: string; to: string } | null>(null)
+// 'all' by default; the filter is local to this tab and doesn't change the
+// header's active branch.
+const saleBranch = ref<number | 'all'>('all')
+const saleBranchOptions = computed(() => [
+  { value: 'all', label: t('inventory.allBranches') },
+  ...auth.branches.map((b) => ({ value: b.id, label: b.name, sub: b.code })),
+])
+function pickSaleBranch(v: string | number | null) {
+  saleBranch.value = v === null || v === 'all' ? 'all' : Number(v)
+}
 const saleList = reactive(
   usePagedList(
     ({ page, perPage }) =>
-      posApi.pageSales(branchId.value, {
+      posApi.pageSales(saleBranch.value, {
         page,
         perPage,
         q: debouncedSaleSearch.value.trim(),
         dateFrom: saleRange.value?.from,
         dateTo: saleRange.value?.to,
       }),
-    { deps: [branchId, debouncedSaleSearch, saleRange] },
+    { deps: [saleBranch, debouncedSaleSearch, saleRange] },
   ),
 )
+function branchName(id: number) {
+  const b = auth.branches.find((x) => x.id === id)
+  return b ? b.name : `#${id}`
+}
 watch(activeTab, (tab) => {
   if ((tab === 'moves' || tab === 'sales') && products.value.length === 0) void loadAllProducts()
 })
 // Unlike the PO item picker, a sale can include SERVICE products.
-const saleProductOptions = computed(() =>
-  products.value.filter((p) => p.active).map((p) => ({ value: p.id, label: localName(p.nameEn, p.nameKm), sub: [p.sku, p.nameEn, p.nameKm].filter(Boolean).join(' · ') })),
-)
-
-interface SaleEditItem {
-  productId: number
-  name: string
-  sku: string
-  qty: number
-  // Carried over unchanged from the original line — not independently
-  // editable here, same scope boundary as payment/discounts (see
-  // docs/DECISIONS.md): this flow only corrects which products and how many.
-  note: string
-}
 const showSaleModal = ref(false)
 const saleModalMode = ref<'view' | 'edit'>('view')
 const activeSale = ref<Sale | null>(null)
-const saleEditItems = ref<SaleEditItem[]>([])
 const savingSale = ref(false)
 
+// The sale stores one discount total; split it into line and invoice parts.
+function saleLineDiscountCents(s: Sale) {
+  return s.items.reduce((n, i) => n + i.discountCents, 0)
+}
+function saleCartDiscountCents(s: Sale) {
+  return Math.max(0, s.discountCents - saleLineDiscountCents(s))
+}
+function percentOf(part: number, base: number) {
+  if (!base || !part) return ''
+  const pct = (part * 100) / base
+  return `(${Number(pct.toFixed(1))}%)`
+}
+
+// Edit = the sale's full state (lines, discounts, note, payment). The form is
+// SaleEditor; the server re-prices and is the authority on totals and change.
 function canEditSaleRow(s: Sale) {
-  return canEditSale && s.status === 'PAID'
+  return canEditSale && s.status === 'PAID' && s.shiftStatus === 'OPEN'
 }
 function openSaleDetail(row: Sale) {
   activeSale.value = row
@@ -727,37 +781,16 @@ function openSaleDetail(row: Sale) {
 }
 function startEditSale() {
   if (!activeSale.value) return
-  saleEditItems.value = activeSale.value.items.map((i) => ({ productId: i.productId, name: localName(i.name, i.nameKm), sku: i.sku, qty: i.qty, note: i.note }))
   saleModalMode.value = 'edit'
 }
 function cancelEditSale() {
   saleModalMode.value = 'view'
 }
-function addSaleItem(productId: string | number) {
-  const product = products.value.find((p) => p.id === productId)
-  if (!product) return
-  const idx = saleEditItems.value.findIndex((i) => i.productId === product.id)
-  if (idx !== -1) {
-    saleEditItems.value[idx].qty += 1
-  } else {
-    saleEditItems.value.push({ productId: product.id, name: localName(product.nameEn, product.nameKm), sku: product.sku, qty: 1, note: '' })
-  }
-}
-function removeSaleEditItem(productId: number) {
-  const idx = saleEditItems.value.findIndex((i) => i.productId === productId)
-  if (idx !== -1) saleEditItems.value.splice(idx, 1)
-}
-async function submitSaleEdit() {
-  if (!activeSale.value || saleEditItems.value.length === 0) {
-    toast.error(t('inventory.saleNeedsItem'))
-    return
-  }
+async function submitSaleEdit(input: posApi.EditSaleInput) {
+  if (!activeSale.value) return
   savingSale.value = true
   try {
-    const updated = await posApi.editSale(
-      activeSale.value.id,
-      saleEditItems.value.map((i) => ({ productId: i.productId, qty: Number(i.qty) || 1, note: i.note })),
-    )
+    const updated = await posApi.editSale(activeSale.value.id, input)
     toast.success(t('inventory.saleUpdated'))
     activeSale.value = updated
     saleModalMode.value = 'view'
@@ -842,9 +875,9 @@ function viewPoDetail(po: PurchaseOrder) {
       <div class="flex flex-wrap items-end justify-between gap-2 mb-3">
         <div class="flex flex-wrap gap-2">
           <input v-model="search" type="search" :placeholder="$t('inventory.searchPlaceholder')" class="input max-w-xs" />
-          <SearchableSelect v-model="categoryFilter" class="w-52" :options="categoryFilterOptions" :clearable="false" />
-          <SearchableSelect v-model="typeFilter" class="w-40" :options="typeFilterOptions" :searchable="false" :clearable="false" />
-          <SearchableSelect v-model="statusFilter" class="w-44" :options="statusFilterOptions" :searchable="false" :clearable="false" />
+          <SearchableSelect v-model="categoryFilter" class="w-full sm:w-52" :options="categoryFilterOptions" :clearable="false" />
+          <SearchableSelect v-model="typeFilter" class="w-full sm:w-40" :options="typeFilterOptions" :searchable="false" :clearable="false" />
+          <SearchableSelect v-model="statusFilter" class="w-full sm:w-44" :options="statusFilterOptions" :searchable="false" :clearable="false" />
         </div>
         <div class="flex flex-wrap gap-2">
           <button v-if="canCreateProduct" type="button" class="btn-secondary flex items-center gap-2" @click="openImport('products')">
@@ -1021,8 +1054,8 @@ function viewPoDetail(po: PurchaseOrder) {
 
     <div v-else-if="activeTab === 'moves'" class="card overflow-x-auto space-y-3">
       <div class="flex flex-wrap items-end gap-3">
-        <SearchableSelect v-model="moveProduct" :label="$t('common.product')" class="w-60" :options="moveProductOptions" :clearable="false" />
-        <SearchableSelect v-model="moveType" :label="$t('common.type')" class="w-44" :options="moveTypeOptions" :searchable="false" :clearable="false" />
+        <SearchableSelect v-model="moveProduct" :label="$t('common.product')" class="w-full sm:w-60" :options="moveProductOptions" :clearable="false" />
+        <SearchableSelect v-model="moveType" :label="$t('common.type')" class="w-full sm:w-44" :options="moveTypeOptions" :searchable="false" :clearable="false" />
         <div>
           <label class="block text-sm text-muted mb-1">{{ $t('inventory.dateRange') }}</label>
           <DateRangePicker v-model="moveRange" clearable @clear="moveRange = null" />
@@ -1052,7 +1085,10 @@ function viewPoDetail(po: PurchaseOrder) {
             </td>
             <td class="py-2 pr-4 text-right font-mono">{{ m.balanceAfter }}</td>
             <td class="py-2">{{ m.user }}</td>
-            <td class="py-2 font-mono text-xs">{{ m.reference }}</td>
+            <td class="py-2">
+              <p class="font-mono text-xs">{{ m.reference }}</p>
+              <p v-if="m.note && m.note !== m.reference" class="text-xs text-muted">{{ m.note }}</p>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -1066,7 +1102,7 @@ function viewPoDetail(po: PurchaseOrder) {
             <label class="block text-sm text-muted mb-1">{{ $t('inventory.created') }}</label>
             <DateRangePicker v-model="poRange" clearable @clear="poRange = null" />
           </div>
-          <SearchableSelect v-model="poSupplierFilter" :label="$t('col.supplier')" class="w-52" :options="poSupplierFilterOptions" :clearable="false" />
+          <SearchableSelect v-model="poSupplierFilter" :label="$t('col.supplier')" class="w-full sm:w-52" :options="poSupplierFilterOptions" :clearable="false" />
         </div>
         <button v-if="canPo" type="button" class="btn-primary flex items-center gap-2" @click="newPo">
           <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('inventory.newPo') }}
@@ -1121,6 +1157,10 @@ function viewPoDetail(po: PurchaseOrder) {
       <div class="flex flex-wrap items-end gap-3">
         <input v-model="saleSearch" type="search" :placeholder="$t('inventory.searchSalesPlaceholder')" class="input max-w-xs" />
         <div>
+          <label class="block text-sm text-muted mb-1">{{ $t('col.branch') }}</label>
+          <SearchableSelect :model-value="saleBranch" class="w-full sm:w-52" :options="saleBranchOptions" :clearable="false" @update:model-value="pickSaleBranch" />
+        </div>
+        <div>
           <label class="block text-sm text-muted mb-1">{{ $t('inventory.dateRange') }}</label>
           <DateRangePicker v-model="saleRange" clearable @clear="saleRange = null" />
         </div>
@@ -1130,6 +1170,7 @@ function viewPoDetail(po: PurchaseOrder) {
           <tr class="text-left text-muted border-b border-line">
             <th class="py-2 font-medium">{{ $t('col.receipt') }}</th>
             <th class="py-2 font-medium">{{ $t('col.date') }}</th>
+            <th class="py-2 font-medium">{{ $t('col.branch') }}</th>
             <th class="py-2 font-medium">{{ $t('col.cashier') }}</th>
             <th class="py-2 font-medium text-right">{{ $t('col.items') }}</th>
             <th class="py-2 font-medium text-right">{{ $t('col.total') }}</th>
@@ -1146,6 +1187,7 @@ function viewPoDetail(po: PurchaseOrder) {
           >
             <td class="py-2 font-mono text-xs">{{ s.receiptNo }}</td>
             <td class="py-2 font-mono text-xs">{{ formatDateTime(s.soldAt) }}</td>
+            <td class="py-2">{{ branchName(s.branchId) }}</td>
             <td class="py-2">{{ s.cashier }}</td>
             <td class="py-2 text-right font-mono">{{ s.items.reduce((n, i) => n + i.qty, 0) }}</td>
             <td class="py-2 text-right font-mono">{{ formatUSD(s.totalCents) }}</td>
@@ -1157,7 +1199,7 @@ function viewPoDetail(po: PurchaseOrder) {
             </td>
           </tr>
           <tr v-if="!saleList.loading && saleList.rows.length === 0">
-            <td colspan="7" class="py-6 text-center text-muted">{{ $t('inventory.noSales') }}</td>
+            <td colspan="8" class="py-6 text-center text-muted">{{ $t('inventory.noSales') }}</td>
           </tr>
         </tbody>
       </table>
@@ -1416,24 +1458,34 @@ function viewPoDetail(po: PurchaseOrder) {
             <p v-if="poForm.items.length === 0" class="rounded-control border border-dashed border-line py-4 text-center text-sm text-muted">
               {{ $t('inventory.noItemsYet') }}
             </p>
-            <div v-for="item in poForm.items" :key="item.productId" class="flex items-end gap-2">
-              <div class="flex-1 min-w-0 pb-2">
-                <p class="text-sm font-medium truncate">{{ item.name }}</p>
-                <p class="text-xs text-muted font-mono">{{ item.sku }}</p>
+            <div v-for="item in poForm.items" :key="item.productId" class="rounded-control border border-line p-3 space-y-2">
+              <div class="flex items-start gap-2">
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium truncate">{{ item.name }}</p>
+                  <p class="text-xs text-muted font-mono">{{ item.sku }}</p>
+                </div>
+                <button type="button" class="p-1.5 -m-1 text-muted hover:text-danger-strong" :aria-label="$t('inventory.removeItem')" @click="removePoItem(item.productId)">
+                  <X class="w-4 h-4" />
+                </button>
               </div>
-              <div class="w-20">
-                <label class="block text-xs text-muted mb-1">{{ $t('inventory.qty') }}</label>
-                <input v-model.number="item.qty" type="number" min="1" class="input" />
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div>
+                  <label class="block text-xs text-muted mb-1">{{ $t('inventory.qty') }}</label>
+                  <input v-model.number="item.qty" type="number" min="1" class="input" />
+                </div>
+                <div>
+                  <label class="block text-xs text-muted mb-1">{{ $t('inventory.unitCostUsd') }}</label>
+                  <input v-model.number="item.unitCostDollars" type="number" min="0" step="0.01" class="input" />
+                </div>
+                <DiscountInput v-model:type="item.discountType" v-model:value="item.discountValue" class="col-span-2 sm:col-span-1" :label="$t('pos.discount')" small />
               </div>
-              <div class="w-28">
-                <label class="block text-xs text-muted mb-1">{{ $t('inventory.unitCostUsd') }}</label>
-                <input v-model.number="item.unitCostDollars" type="number" min="0" step="0.01" class="input" />
-              </div>
-              <button type="button" class="p-2 text-muted hover:text-danger-strong" :aria-label="$t('inventory.removeItem')" @click="removePoItem(item.productId)">
-                <X class="w-4 h-4" />
-              </button>
+              <p class="text-right text-sm font-mono">
+                <span v-if="poLineDiscountCents(item)" class="text-muted line-through mr-2">{{ formatUSD(poLineGrossCents(item)) }}</span>
+                {{ formatUSD(poLineGrossCents(item) - poLineDiscountCents(item)) }}
+              </p>
             </div>
           </div>
+          <p v-if="poFormDiscountCents" class="text-sm text-right font-mono mt-2 text-muted">{{ $t('inventory.itemDiscounts') }}: −{{ formatUSD(poFormDiscountCents) }}</p>
           <p class="text-sm text-right font-mono mt-2">{{ $t('inventory.itemsTotal', { amount: formatUSD(poFormItemsCents) }) }}</p>
         </div>
 
@@ -1469,15 +1521,29 @@ function viewPoDetail(po: PurchaseOrder) {
               <th class="py-2 font-medium">{{ $t('col.product') }}</th>
               <th class="py-2 font-medium text-right">{{ $t('col.qty') }}</th>
               <th class="py-2 font-medium text-right">{{ $t('col.unitCost') }}</th>
+              <th class="py-2 font-medium text-right">{{ $t('pos.discount') }}</th>
               <th class="py-2 pr-1 font-medium text-right">{{ $t('col.lineTotal') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(item, idx) in detailPo.items" :key="idx" class="border-b border-line last:border-0">
-              <td class="py-2">{{ localName(item.productName, item.productNameKm) }}</td>
-              <td class="py-2 text-right font-mono">{{ item.qtyOrdered }}</td>
+              <td class="py-2">
+                <p>{{ localName(item.productName, item.productNameKm) }}</p>
+                <p class="text-xs text-muted font-mono">{{ item.sku }}</p>
+              </td>
+              <td class="py-2 text-right font-mono">
+                {{ item.qtyOrdered }}
+                <span v-if="item.qtyReceived" class="block text-xs text-muted">{{ $t('inventory.receivedQty', { n: item.qtyReceived }) }}</span>
+              </td>
               <td class="py-2 text-right font-mono">{{ formatUSD(item.unitCostCents) }}</td>
-              <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(item.qtyOrdered * item.unitCostCents) }}</td>
+              <td class="py-2 text-right font-mono">
+                <template v-if="item.discountCents">
+                  −{{ formatUSD(item.discountCents) }}
+                  <span class="block text-xs text-muted">{{ percentOf(item.discountCents, item.qtyOrdered * item.unitCostCents) }}</span>
+                </template>
+                <span v-else class="text-muted">—</span>
+              </td>
+              <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(item.qtyOrdered * item.unitCostCents - (item.discountCents || 0)) }}</td>
             </tr>
           </tbody>
         </table>
@@ -1485,7 +1551,11 @@ function viewPoDetail(po: PurchaseOrder) {
         <div class="space-y-1 pt-2 border-t border-line">
           <div class="flex justify-between text-sm">
             <span class="text-muted">{{ $t('inventory.items') }}</span>
-            <span class="font-mono">{{ formatUSD(poItemsCostCents(detailPo)) }}</span>
+            <span class="font-mono">{{ formatUSD(poItemsGrossCents(detailPo)) }}</span>
+          </div>
+          <div v-if="poItemsDiscountCents(detailPo)" class="flex justify-between text-sm">
+            <span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span>
+            <span class="font-mono">−{{ formatUSD(poItemsDiscountCents(detailPo)) }}</span>
           </div>
           <div class="flex justify-between text-sm">
             <span class="text-muted">{{ $t('inventory.shipping') }}</span>
@@ -1516,7 +1586,8 @@ function viewPoDetail(po: PurchaseOrder) {
               <tr class="text-left text-muted border-b border-line">
                 <th class="py-2 font-medium">{{ $t('col.product') }}</th>
                 <th class="py-2 font-medium text-right">{{ $t('col.qty') }}</th>
-                <th class="py-2 font-medium text-right">{{ $t('col.unitCost') }}</th>
+                <th class="py-2 font-medium text-right">{{ $t('col.price') }}</th>
+                <th class="py-2 font-medium text-right">{{ $t('pos.discount') }}</th>
                 <th class="py-2 pr-1 font-medium text-right">{{ $t('col.lineTotal') }}</th>
               </tr>
             </thead>
@@ -1524,21 +1595,60 @@ function viewPoDetail(po: PurchaseOrder) {
               <tr v-for="item in activeSale.items" :key="item.productId" class="border-b border-line last:border-0">
                 <td class="py-2">
                   <p>{{ localName(item.name, item.nameKm) }}</p>
-                  <p v-if="item.note" class="text-xs text-muted">{{ item.note }}</p>
+                  <p class="text-xs text-muted font-mono">{{ item.sku }}</p>
+                  <p v-if="item.note" class="text-xs text-muted">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
                 </td>
                 <td class="py-2 text-right font-mono">{{ item.qty }}</td>
                 <td class="py-2 text-right font-mono">{{ formatUSD(item.unitPriceCents) }}</td>
+                <td class="py-2 text-right font-mono">
+                  <template v-if="item.discountCents">
+                    −{{ formatUSD(item.discountCents) }}
+                    <span class="block text-xs text-muted">{{ percentOf(item.discountCents, item.qty * item.unitPriceCents) }}</span>
+                  </template>
+                  <span v-else class="text-muted">—</span>
+                </td>
                 <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(item.lineTotalCents) }}</td>
               </tr>
             </tbody>
           </table>
-          <div class="flex justify-between items-center pt-2 border-t border-line">
-            <span class="text-sm text-muted">{{ $t('col.total') }}</span>
-            <span class="font-mono font-medium">{{ formatUSD(activeSale.totalCents) }} ({{ formatKHR(activeSale.totalRiel) }})</span>
+          <div class="space-y-1 pt-2 border-t border-line text-sm">
+            <div class="flex justify-between">
+              <span class="text-muted">{{ $t('pos.subtotal') }}</span>
+              <span class="font-mono">{{ formatUSD(activeSale.subtotalCents) }}</span>
+            </div>
+            <div v-if="saleLineDiscountCents(activeSale)" class="flex justify-between">
+              <span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span>
+              <span class="font-mono">−{{ formatUSD(saleLineDiscountCents(activeSale)) }}</span>
+            </div>
+            <div v-if="saleCartDiscountCents(activeSale)" class="flex justify-between">
+              <span class="text-muted">{{ $t('inventory.invoiceDiscount') }}</span>
+              <span class="font-mono">
+                −{{ formatUSD(saleCartDiscountCents(activeSale)) }}
+                <span class="text-xs text-muted">{{ percentOf(saleCartDiscountCents(activeSale), activeSale.subtotalCents - saleLineDiscountCents(activeSale)) }}</span>
+              </span>
+            </div>
+            <div class="flex justify-between font-medium">
+              <span>{{ $t('col.total') }}</span>
+              <span class="font-mono">{{ formatUSD(activeSale.totalCents) }} ({{ formatKHR(activeSale.totalRiel) }})</span>
+            </div>
           </div>
           <div class="flex justify-between text-sm text-muted">
             <span>{{ $t('pos.paidBy') }}</span>
             <span>{{ label('method', activeSale.payment.method) }}</span>
+          </div>
+          <template v-if="activeSale.payment.method === 'CASH'">
+            <div class="flex justify-between text-sm text-muted">
+              <span>{{ $t('pos.tendered') }}</span>
+              <span class="font-mono">{{ formatUSD(activeSale.payment.receivedUsdCents) }}{{ activeSale.payment.receivedKhrRiel ? ` + ${formatKHR(activeSale.payment.receivedKhrRiel)}` : '' }}</span>
+            </div>
+            <div class="flex justify-between text-sm text-muted">
+              <span>{{ $t('pos.change') }}</span>
+              <span class="font-mono">{{ formatUSD(activeSale.payment.changeUsdCents) }}{{ activeSale.payment.changeKhrRiel ? ` + ${formatKHR(activeSale.payment.changeKhrRiel)}` : '' }}</span>
+            </div>
+          </template>
+          <div v-else-if="activeSale.payment.reference" class="flex justify-between text-sm text-muted">
+            <span>{{ $t('col.reference') }}</span>
+            <span>{{ activeSale.payment.reference }}</span>
           </div>
           <p v-if="!canEditSaleRow(activeSale)" class="text-xs text-muted">{{ $t('inventory.saleNotEditableHint') }}</p>
           <div class="flex justify-end gap-2 pt-2">
@@ -1549,34 +1659,15 @@ function viewPoDetail(po: PurchaseOrder) {
           </div>
         </template>
 
-        <!-- Edit mode: same item-picker UX as the purchase-order form -->
-        <template v-else>
-          <SearchAddInput :label="$t('inventory.items')" :options="saleProductOptions" :placeholder="$t('inventory.itemsSearchHint')" @select="addSaleItem" />
-          <div class="space-y-2">
-            <p v-if="saleEditItems.length === 0" class="rounded-control border border-dashed border-line py-4 text-center text-sm text-muted">
-              {{ $t('inventory.noItemsYet') }}
-            </p>
-            <div v-for="item in saleEditItems" :key="item.productId" class="flex items-end gap-2">
-              <div class="flex-1 min-w-0 pb-2">
-                <p class="text-sm font-medium truncate">{{ item.name }}</p>
-                <p class="text-xs text-muted font-mono">{{ item.sku }}</p>
-                <p v-if="item.note" class="text-xs text-muted truncate">{{ item.note }}</p>
-              </div>
-              <div class="w-20">
-                <label class="block text-xs text-muted mb-1">{{ $t('inventory.qty') }}</label>
-                <input v-model.number="item.qty" type="number" min="1" class="input" />
-              </div>
-              <button type="button" class="p-2 text-muted hover:text-danger-strong" :aria-label="$t('inventory.removeItem')" @click="removeSaleEditItem(item.productId)">
-                <X class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <p class="text-xs text-muted">{{ $t('inventory.saleEditHint') }}</p>
-          <div class="flex justify-end gap-2 pt-2">
-            <button type="button" class="btn-secondary" @click="cancelEditSale">{{ $t('common.cancel') }}</button>
-            <button type="button" class="btn-primary" :disabled="savingSale" @click="submitSaleEdit">{{ $t('common.save') }}</button>
-          </div>
-        </template>
+        <!-- Edit mode: full sale (lines, discounts, note, payment) -->
+        <SaleEditor
+          v-else
+          :sale="activeSale"
+          :products="products"
+          :saving="savingSale"
+          @save="submitSaleEdit"
+          @cancel="cancelEditSale"
+        />
       </div>
     </Modal>
 

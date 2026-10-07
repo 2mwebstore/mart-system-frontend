@@ -2,7 +2,7 @@
 // Users & Roles per build spec §8.7, backed by /users, /roles and /permissions.
 // Role permission changes reach a signed-in user's token at their next
 // refresh (access tokens carry the permission list).
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { KeyRound, Plus } from 'lucide-vue-next'
 import * as peopleApi from '@/api/people'
 import type { Permission, Role, StaffUser } from '@/types/domain'
@@ -13,6 +13,7 @@ import Modal from '@/components/Modal.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import MultiSearchableSelect from '@/components/MultiSearchableSelect.vue'
 import Pagination from '@/components/Pagination.vue'
 import { useDebounced, usePagedList } from '@/composables/usePagedList'
 import { useToast } from '@/composables/useToast'
@@ -47,6 +48,7 @@ onMounted(async () => {
 })
 
 const branches = computed(() => auth.branches)
+const branchAccessOptions = computed(() => branches.value.map((b) => ({ value: b.id, label: b.name, sub: b.code })))
 
 // ---- Users tab ----------------------------------------------------------
 
@@ -80,10 +82,21 @@ const creating = ref(false)
 const saving = ref(false)
 const editForm = reactive({ fullName: '', username: '', phone: '', roleId: 0, branchIds: [] as number[], active: true, password: '', pin: '' })
 
+// On a phone the edit panel sits below the list, out of sight; bring it up.
+const editPanelRef = ref<HTMLElement | null>(null)
+function revealEditPanel() {
+  void nextTick(() => {
+    const el = editPanelRef.value
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    if (r.top < 0 || r.top > window.innerHeight - 80) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
 function openUser(u: StaffUser) {
   creating.value = false
   selectedUserId.value = u.id
   Object.assign(editForm, { fullName: u.fullName, username: u.username, phone: u.phone, roleId: u.roleId, branchIds: [...u.branchIds], active: u.active, password: '', pin: '' })
+  revealEditPanel()
 }
 function newUser() {
   selectedUserId.value = null
@@ -98,6 +111,7 @@ function newUser() {
     password: '',
     pin: '',
   })
+  revealEditPanel()
 }
 function closePanel() {
   selectedUserId.value = null
@@ -283,58 +297,60 @@ async function deleteRole() {
       <div class="card lg:col-span-2 space-y-4">
         <div class="flex flex-wrap gap-3 items-center">
           <input v-model="search" type="search" :placeholder="$t('users.searchPlaceholder')" class="input max-w-xs" />
-          <SearchableSelect v-model="roleFilter" class="w-44" :options="roleFilterOptions" :clearable="false" />
-          <SearchableSelect v-model="branchFilter" class="w-44" :options="branchFilterOptions" :clearable="false" />
+          <SearchableSelect v-model="roleFilter" class="w-full sm:w-44" :options="roleFilterOptions" :clearable="false" />
+          <SearchableSelect v-model="branchFilter" class="w-full sm:w-44" :options="branchFilterOptions" :clearable="false" />
           <button v-if="canManageUsers" type="button" class="btn-primary flex items-center gap-2 ml-auto" @click="newUser">
             <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('users.new') }}
           </button>
         </div>
 
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-muted border-b border-line">
-              <th class="py-2 font-medium">{{ $t('col.id') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.name') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.role') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.branches') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.status') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.lastActive') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="s in usersList.rows"
-              :key="s.id"
-              class="border-b border-line last:border-0 hover:bg-surface-subtle"
-              :class="[selectedUserId === s.id ? 'bg-primary-tint-row' : '', canManageUsers ? 'cursor-pointer' : '']"
-              @click="canManageUsers && openUser(s)"
-            >
-              <td class="py-2 font-mono text-xs text-muted">#{{ s.id }}</td>
-              <td class="py-2">
-                <div class="flex items-center gap-2">
-                  <span class="w-7 h-7 rounded-full bg-primary-tint text-primary-tint-text text-xs flex items-center justify-center font-medium shrink-0">
-                    {{ initialsOf(s.fullName) }}
-                  </span>
-                  <div>
-                    <p class="leading-tight">{{ s.fullName }}</p>
-                    <p class="text-xs text-muted leading-tight">@{{ s.username }}</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted border-b border-line">
+                <th class="py-2 font-medium">{{ $t('col.id') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.name') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.role') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.branches') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.status') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.lastActive') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="s in usersList.rows"
+                :key="s.id"
+                class="border-b border-line last:border-0 hover:bg-surface-subtle"
+                :class="[selectedUserId === s.id ? 'bg-primary-tint-row' : '', canManageUsers ? 'cursor-pointer' : '']"
+                @click="canManageUsers && openUser(s)"
+              >
+                <td class="py-2 font-mono text-xs text-muted">#{{ s.id }}</td>
+                <td class="py-2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-full bg-primary-tint text-primary-tint-text text-xs flex items-center justify-center font-medium shrink-0">
+                      {{ initialsOf(s.fullName) }}
+                    </span>
+                    <div>
+                      <p class="leading-tight">{{ s.fullName }}</p>
+                      <p class="text-xs text-muted leading-tight">@{{ s.username }}</p>
+                    </div>
                   </div>
-                </div>
-              </td>
-              <td class="py-2">{{ label('role', s.roleName) }}</td>
-              <td class="py-2 text-muted">{{ s.branchIds.map((id) => branches.find((b) => b.id === id)?.code).filter(Boolean).join(', ') || '—' }}</td>
-              <td class="py-2"><StatusBadge :tone="s.active ? 'success' : 'neutral'" :label="s.active ? $t('common.active') : $t('common.disabled')" /></td>
-              <td class="py-2 font-mono text-xs text-muted">{{ formatDateTime(s.lastActiveAt) }}</td>
-            </tr>
-            <tr v-if="!usersList.loading && usersList.rows.length === 0">
-              <td colspan="6" class="py-6 text-center text-muted">{{ $t('users.none') }}</td>
-            </tr>
-          </tbody>
-        </table>
+                </td>
+                <td class="py-2">{{ label('role', s.roleName) }}</td>
+                <td class="py-2 text-muted">{{ s.branchIds.map((id) => branches.find((b) => b.id === id)?.code).filter(Boolean).join(', ') || '—' }}</td>
+                <td class="py-2"><StatusBadge :tone="s.active ? 'success' : 'neutral'" :label="s.active ? $t('common.active') : $t('common.disabled')" /></td>
+                <td class="py-2 font-mono text-xs text-muted">{{ formatDateTime(s.lastActiveAt) }}</td>
+              </tr>
+              <tr v-if="!usersList.loading && usersList.rows.length === 0">
+                <td colspan="6" class="py-6 text-center text-muted">{{ $t('users.none') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <Pagination v-model:page="usersList.page" :total-pages="usersList.totalPages" :total="usersList.total" :per-page="usersList.perPage" :noun="$t('users.noun')" />
       </div>
 
-      <div v-if="panelOpen" class="card space-y-4 h-fit">
+      <div v-if="panelOpen" ref="editPanelRef" class="card space-y-4 h-fit scroll-mt-20">
         <div class="flex items-center justify-between">
           <h2 class="font-heading text-base">{{ creating ? $t('users.new') : $t('users.edit') }}</h2>
           <span v-if="!creating && selectedUserId !== null" class="font-mono text-xs text-muted">#{{ selectedUserId }}</span>
@@ -361,15 +377,13 @@ async function deleteRole() {
             {{ $t('users.viewRole') }}
           </button>
         </div>
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('users.branchAccess') }}</label>
-          <div class="space-y-1">
-            <label v-for="b in branches" :key="b.id" class="flex items-center gap-2 text-sm">
-              <input v-model="editForm.branchIds" type="checkbox" :value="b.id" class="rounded" />
-              {{ b.name }}
-            </label>
-          </div>
-        </div>
+        <MultiSearchableSelect
+          :model-value="editForm.branchIds"
+          :label="$t('users.branchAccess')"
+          :options="branchAccessOptions"
+          :placeholder="$t('users.noBranchAccess')"
+          @update:model-value="(v) => (editForm.branchIds = v.map(Number))"
+        />
         <div>
           <label class="block text-sm text-muted mb-1">{{ creating ? $t('users.password') : $t('users.newPassword') }}</label>
           <input v-model="editForm.password" type="password" class="input" autocomplete="new-password" :placeholder="$t('users.passwordHint')" />

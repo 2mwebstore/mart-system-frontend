@@ -35,8 +35,10 @@ const popStyle = ref<Record<string, string>>({})
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
 const isNarrow = computed(() => viewportWidth.value < 680)
 
-const pendingFrom = ref<Dayjs>(dayjs(current.value.from))
-const pendingTo = ref<Dayjs | null>(dayjs(current.value.to))
+// With no value (an optional "All dates" filter) nothing is pre-selected:
+// the calendar opens blank and Apply stays disabled until a range is picked.
+const pendingFrom = ref<Dayjs | null>(props.modelValue ? dayjs(props.modelValue.from) : null)
+const pendingTo = ref<Dayjs | null>(props.modelValue ? dayjs(props.modelValue.to) : null)
 const selecting = ref(false) // true once pendingFrom is set but pendingTo isn't yet
 
 const leftMonth = ref(dayjs(current.value.from).startOf('month'))
@@ -70,9 +72,9 @@ function dayClasses(day: Dayjs, month: Dayjs) {
   const inMonth = day.month() === month.month()
   const isFuture = day.isAfter(today, 'day')
   const isToday = day.isSame(today, 'day')
-  const isStart = day.isSame(pendingFrom.value, 'day')
+  const isStart = pendingFrom.value ? day.isSame(pendingFrom.value, 'day') : false
   const isEnd = pendingTo.value ? day.isSame(pendingTo.value, 'day') : false
-  const inRange = pendingTo.value ? day.isAfter(pendingFrom.value, 'day') && day.isBefore(pendingTo.value, 'day') : false
+  const inRange = pendingFrom.value && pendingTo.value ? day.isAfter(pendingFrom.value, 'day') && day.isBefore(pendingTo.value, 'day') : false
 
   return {
     'text-line': !inMonth,
@@ -87,15 +89,16 @@ function dayClasses(day: Dayjs, month: Dayjs) {
 function pickDay(day: Dayjs) {
   if (day.isAfter(today, 'day')) return
 
-  if (!selecting.value) {
+  const start = pendingFrom.value
+  if (!selecting.value || !start) {
     pendingFrom.value = day
     pendingTo.value = null
     selecting.value = true
     return
   }
 
-  if (day.isBefore(pendingFrom.value, 'day')) {
-    pendingTo.value = pendingFrom.value
+  if (day.isBefore(start, 'day')) {
+    pendingTo.value = start
     pendingFrom.value = day
   } else {
     pendingTo.value = day
@@ -110,7 +113,7 @@ function applyPreset(preset: { from: Dayjs; to: Dayjs }) {
   leftMonth.value = preset.from.startOf('month')
 }
 
-const dayCount = computed(() => (pendingTo.value ? pendingTo.value.diff(pendingFrom.value, 'day') + 1 : 1))
+const dayCount = computed(() => (pendingFrom.value && pendingTo.value ? pendingTo.value.diff(pendingFrom.value, 'day') + 1 : 0))
 
 const triggerLabel = computed(() => {
   if (!props.modelValue) return props.placeholder ?? t('dateRange.allDates')
@@ -151,8 +154,8 @@ function calcPosition() {
 
 async function toggleOpen() {
   if (!open.value) {
-    pendingFrom.value = dayjs(current.value.from)
-    pendingTo.value = dayjs(current.value.to)
+    pendingFrom.value = props.modelValue ? dayjs(props.modelValue.from) : null
+    pendingTo.value = props.modelValue ? dayjs(props.modelValue.to) : null
     selecting.value = false
     leftMonth.value = dayjs(current.value.from).startOf('month')
     open.value = true
@@ -170,7 +173,7 @@ function cancel() {
 }
 
 function apply() {
-  if (!pendingTo.value) return
+  if (!pendingFrom.value || !pendingTo.value) return
   emit('update:modelValue', { from: pendingFrom.value.format('YYYY-MM-DD'), to: pendingTo.value.format('YYYY-MM-DD') })
   open.value = false
 }
@@ -275,10 +278,10 @@ const weekdayLabels = computed(() => ['mo', 'tu', 'we', 'th', 'fr', 'sa', 'su'].
 
           <div class="flex items-center justify-between flex-wrap gap-2 px-4 py-3 border-t border-line">
             <div class="text-sm text-muted">
-              <span class="font-mono text-ink">{{ fmt(pendingFrom, 'D MMM YYYY') }}</span>
+              <span class="font-mono text-ink">{{ pendingFrom ? fmt(pendingFrom, 'D MMM YYYY') : '…' }}</span>
               →
               <span class="font-mono text-ink">{{ pendingTo ? fmt(pendingTo, 'D MMM YYYY') : '…' }}</span>
-              <span class="ml-2">({{ $t('dateRange.days', { n: dayCount }) }})</span>
+              <span v-if="dayCount" class="ml-2">({{ $t('dateRange.days', { n: dayCount }) }})</span>
             </div>
             <div class="flex gap-2">
               <button type="button" class="btn-secondary" @click="cancel">{{ $t('common.cancel') }}</button>

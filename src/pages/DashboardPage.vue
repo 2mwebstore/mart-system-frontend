@@ -50,7 +50,7 @@ const paymentSegmentsWithColor = computed(() =>
         <p class="text-muted text-sm">{{ t('dashboard.todayDate', { date: dateLabel }) }}</p>
       </div>
       <div class="flex items-center gap-3">
-        <SearchableSelect v-model="branchId" class="w-44" :options="branchOptions" :searchable="false" :clearable="false" />
+        <SearchableSelect v-model="branchId" class="w-full sm:w-44" :options="branchOptions" :searchable="false" :clearable="false" />
         <RouterLink :to="{ name: 'pos' }" class="btn-primary flex items-center gap-2">
           <ShoppingCart :stroke-width="1.8" class="w-4 h-4" />
           {{ t('dashboard.newSale') }}
@@ -103,22 +103,24 @@ const paymentSegmentsWithColor = computed(() =>
 
       <div class="card">
         <h2 class="font-heading text-base mb-3">{{ t('dashboard.topProducts') }}</h2>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-muted border-b border-line">
-              <th class="py-2 font-medium">{{ t('common.product') }}</th>
-              <th class="py-2 font-medium text-right">{{ t('dashboard.qty') }}</th>
-              <th class="py-2 font-medium text-right">{{ t('dashboard.revenue') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in topProducts" :key="p.productId" class="border-b border-line last:border-0">
-              <td class="py-2">{{ localName(p.name, p.nameKm) }}</td>
-              <td class="py-2 text-right font-mono">{{ p.qty }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(p.revenueCents) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted border-b border-line">
+                <th class="py-2 font-medium">{{ t('common.product') }}</th>
+                <th class="py-2 font-medium text-right">{{ t('dashboard.qty') }}</th>
+                <th class="py-2 font-medium text-right">{{ t('dashboard.revenue') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in topProducts" :key="p.productId" class="border-b border-line last:border-0">
+                <td class="py-2">{{ localName(p.name, p.nameKm) }}</td>
+                <td class="py-2 text-right font-mono">{{ p.qty }}</td>
+                <td class="py-2 text-right font-mono">{{ formatUSD(p.revenueCents) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

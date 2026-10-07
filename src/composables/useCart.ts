@@ -8,6 +8,7 @@ export interface CartLine {
   nameEn: string
   nameKm?: string
   sku: string
+  imageUrl: string // for the customer display; '' when the product has none
   unitPriceCents: number
   qty: number
   // Per-line discount, independent of the cart-level one below — "discount
@@ -46,7 +47,7 @@ export function useCart() {
   // the cart (its qty goes up and it moves to the top). The +/- steppers on
   // a line (incQty/decQty) deliberately don't reorder: moving a row out from
   // under the cursor while someone is tapping it would be worse than useful.
-  function addProduct(product: Pick<Product, 'id' | 'nameEn' | 'nameKm' | 'sku' | 'priceCents'>) {
+  function addProduct(product: Pick<Product, 'id' | 'nameEn' | 'nameKm' | 'sku' | 'priceCents' | 'imageUrl'>) {
     const idx = lines.findIndex((l) => l.productId === product.id)
     if (idx !== -1) {
       const [existing] = lines.splice(idx, 1)
@@ -58,6 +59,7 @@ export function useCart() {
         nameEn: product.nameEn,
         nameKm: product.nameKm,
         sku: product.sku,
+        imageUrl: product.imageUrl ?? '',
         unitPriceCents: product.priceCents,
         qty: 1,
         discountType: 'amount',

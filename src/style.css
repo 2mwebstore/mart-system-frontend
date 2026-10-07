@@ -40,3 +40,24 @@
     @apply bg-danger text-danger-text rounded-control px-2 py-0.5 text-xs font-medium;
   }
 }
+
+/* Phones: table cells stay on one line and the table scrolls sideways inside
+   its card (every table sits in an overflow-x-auto container), instead of
+   squeezing columns until phone numbers and dates wrap onto several lines. */
+@media (max-width: 767px) {
+  table th,
+  table td {
+    white-space: nowrap;
+  }
+  /* Tables inside popups are short and the popup itself scrolls vertically,
+     so they keep wrapping to fit instead of scrolling the popup sideways. */
+  [role='dialog'] table th,
+  [role='dialog'] table td {
+    white-space: normal;
+  }
+  /* A gap between cells once they can't wrap. Zero specificity, so a cell's
+     own padding utility (e.g. pr-4) still wins. */
+  :where(th, td):where(:not(:last-child)) {
+    padding-right: 0.75rem;
+  }
+}

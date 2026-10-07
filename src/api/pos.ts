@@ -19,11 +19,18 @@ export const createSale = (input: CreateSaleInput) => post<Sale>('/sales', input
 export const pageShiftSales = (branchId: number, shiftId: number, q: PageQuery) => getPaged<Sale[]>('/sales', { branchId, shiftId, ...q })
 // Branch-wide sales history (Inventory's Sales tab) — same endpoint, without
 // shift_id, so it takes a date range and a receipt-no search instead.
-export const pageSales = (branchId: number, q: PageQuery & { q?: string; status?: string | null; dateFrom?: string | null; dateTo?: string | null }) =>
+// branchId 'all' = every branch the caller can access (backend scopes it).
+export const pageSales = (branchId: number | 'all', q: PageQuery & { q?: string; status?: string | null; dateFrom?: string | null; dateTo?: string | null }) =>
   getPaged<Sale[]>('/sales', { branchId, ...q })
 export const getSale = (branchId: number, id: number) => get<Sale>(`/sales/${id}`, { branchId })
-// Corrects a still-open-shift sale's items/quantities only — see
-// docs/DECISIONS.md for why payment and discounts are deliberately not
-// editable here (use Void + re-ring for anything bigger than a qty fix).
-export const editSale = (id: number, items: { productId: number; qty: number; note: string }[]) => put<Sale>(`/sales/${id}`, { items })
+// Edits a still-open-shift paid sale. The body is the sale's full desired
+// state (lines with discounts and notes, the cart discount, and the payment);
+// the server re-prices it and returns the authoritative sale. See
+// docs/DECISIONS.md for the scope and the permission rules.
+export interface EditSaleInput {
+  items: { productId: number; qty: number; discountCents: number; note: string }[]
+  discountCents: number
+  payment: { method: 'CASH' | 'KHQR' | 'CARD'; receivedUsdCents: number; receivedKhrRiel: number; reference: string }
+}
+export const editSale = (id: number, input: EditSaleInput) => put<Sale>(`/sales/${id}`, input)
 export const voidSale = (id: number, reason: string) => post<Sale>(`/sales/${id}/void`, { reason })

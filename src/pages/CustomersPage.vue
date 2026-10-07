@@ -94,38 +94,40 @@ async function deleteCustomer(id: number) {
         <input v-model="search" type="search" :placeholder="$t('customers.searchPlaceholder')" class="input pl-9" />
       </div>
 
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="text-left text-muted border-b border-line">
-            <th class="py-2 font-medium">{{ $t('col.name') }}</th>
-            <th class="py-2 font-medium">{{ $t('col.phone') }}</th>
-            <th class="py-2 font-medium">{{ $t('col.tier') }}</th>
-            <th class="py-2 pr-4 font-medium text-right">{{ $t('col.points') }}</th>
-            <th class="py-2 font-medium">{{ $t('col.lastVisit') }}</th>
-            <th class="py-2 font-medium"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in list.rows" :key="c.id" class="border-b border-line last:border-0 hover:bg-surface-subtle">
-            <td class="py-2">{{ c.name }}</td>
-            <td class="py-2 font-mono">{{ c.phone }}</td>
-            <td class="py-2"><StatusBadge :tone="c.tier === 'GOLD' ? 'warning' : 'neutral'" :label="label('tier', c.tier)" /></td>
-            <td class="py-2 pr-4 text-right font-mono">{{ c.points.toLocaleString() }}</td>
-            <td class="py-2 font-mono text-xs text-muted">{{ formatDate(c.lastVisit) }}</td>
-            <td class="py-2">
-              <div v-if="canManage" class="flex items-center gap-1">
-                <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('customers.editAria')" @click="editCustomer(c)">
-                  <Pencil :stroke-width="1.8" class="w-4 h-4" />
-                </button>
-                <ConfirmDelete :item-label="$t('entity.customer')" :item-name="c.name" @confirm="deleteCustomer(c.id)" />
-              </div>
-            </td>
-          </tr>
-          <tr v-if="!list.loading && list.rows.length === 0">
-            <td colspan="6" class="py-6 text-center text-muted">{{ $t('customers.none') }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-muted border-b border-line">
+              <th class="py-2 font-medium">{{ $t('col.name') }}</th>
+              <th class="py-2 font-medium">{{ $t('col.phone') }}</th>
+              <th class="py-2 font-medium">{{ $t('col.tier') }}</th>
+              <th class="py-2 pr-4 font-medium text-right">{{ $t('col.points') }}</th>
+              <th class="py-2 font-medium">{{ $t('col.lastVisit') }}</th>
+              <th class="py-2 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in list.rows" :key="c.id" class="border-b border-line last:border-0 hover:bg-surface-subtle">
+              <td class="py-2">{{ c.name }}</td>
+              <td class="py-2 font-mono">{{ c.phone }}</td>
+              <td class="py-2"><StatusBadge :tone="c.tier === 'GOLD' ? 'warning' : 'neutral'" :label="label('tier', c.tier)" /></td>
+              <td class="py-2 pr-4 text-right font-mono">{{ c.points.toLocaleString() }}</td>
+              <td class="py-2 font-mono text-xs text-muted">{{ formatDate(c.lastVisit) }}</td>
+              <td class="py-2">
+                <div v-if="canManage" class="flex items-center gap-1">
+                  <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('customers.editAria')" @click="editCustomer(c)">
+                    <Pencil :stroke-width="1.8" class="w-4 h-4" />
+                  </button>
+                  <ConfirmDelete :item-label="$t('entity.customer')" :item-name="c.name" @confirm="deleteCustomer(c.id)" />
+                </div>
+              </td>
+            </tr>
+            <tr v-if="!list.loading && list.rows.length === 0">
+              <td colspan="6" class="py-6 text-center text-muted">{{ $t('customers.none') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <Pagination v-model:page="list.page" :total-pages="list.totalPages" :total="list.total" :per-page="list.perPage" :noun="$t('customers.noun')" />
     </div>
 

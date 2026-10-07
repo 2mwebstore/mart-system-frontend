@@ -99,43 +99,45 @@ async function remove(id: number) {
 
     <div class="card space-y-4">
       <div class="flex flex-wrap gap-3 items-end">
-        <SearchableSelect v-model="branchFilter" :label="$t('common.branch')" class="w-44" :options="branchOptions" :searchable="false" :clearable="false" />
-        <SearchableSelect v-model="categoryFilter" :label="$t('common.category')" class="w-48" :options="categoryFilterOptions" :searchable="false" :clearable="false" />
+        <SearchableSelect v-model="branchFilter" :label="$t('common.branch')" class="w-full sm:w-44" :options="branchOptions" :searchable="false" :clearable="false" />
+        <SearchableSelect v-model="categoryFilter" :label="$t('common.category')" class="w-full sm:w-48" :options="categoryFilterOptions" :searchable="false" :clearable="false" />
         <div class="ml-auto text-sm text-muted">{{ $t('common.total') }} <span class="font-mono text-ink">{{ formatUSD(total) }}</span></div>
       </div>
 
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="text-left text-muted border-b border-line">
-            <th class="py-2 font-medium">{{ $t('col.date') }}</th>
-            <th class="py-2 font-medium">{{ $t('col.category') }}</th>
-            <th class="py-2 font-medium">{{ $t('col.note') }}</th>
-            <th class="py-2 font-medium">{{ $t('col.addedBy') }}</th>
-            <th class="py-2 pr-4 font-medium text-right">{{ $t('col.amount') }}</th>
-            <th class="py-2 font-medium"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="e in list.rows" :key="e.id" class="border-b border-line last:border-0">
-            <td class="py-2 font-mono text-xs">{{ e.expenseDate }}</td>
-            <td class="py-2">{{ label('expenseCat', e.category) }}</td>
-            <td class="py-2 text-muted">{{ e.note }}</td>
-            <td class="py-2 text-muted">{{ e.user }}</td>
-            <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(e.amountCents) }}</td>
-            <td class="py-2">
-              <div class="flex items-center gap-1">
-                <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('expenses.editAria')" @click="editExpense(e)">
-                  <Pencil :stroke-width="1.8" class="w-4 h-4" />
-                </button>
-                <ConfirmDelete :item-label="$t('entity.expense')" :item-name="`${label('expenseCat', e.category)} ${formatUSD(e.amountCents)}`" @confirm="remove(e.id)" />
-              </div>
-            </td>
-          </tr>
-          <tr v-if="!list.loading && list.rows.length === 0">
-            <td colspan="6" class="py-6 text-center text-muted">{{ $t('expenses.none') }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-muted border-b border-line">
+              <th class="py-2 font-medium">{{ $t('col.date') }}</th>
+              <th class="py-2 font-medium">{{ $t('col.category') }}</th>
+              <th class="py-2 font-medium">{{ $t('col.note') }}</th>
+              <th class="py-2 font-medium">{{ $t('col.addedBy') }}</th>
+              <th class="py-2 pr-4 font-medium text-right">{{ $t('col.amount') }}</th>
+              <th class="py-2 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="e in list.rows" :key="e.id" class="border-b border-line last:border-0">
+              <td class="py-2 font-mono text-xs">{{ e.expenseDate }}</td>
+              <td class="py-2">{{ label('expenseCat', e.category) }}</td>
+              <td class="py-2 text-muted">{{ e.note }}</td>
+              <td class="py-2 text-muted">{{ e.user }}</td>
+              <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(e.amountCents) }}</td>
+              <td class="py-2">
+                <div class="flex items-center gap-1">
+                  <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('expenses.editAria')" @click="editExpense(e)">
+                    <Pencil :stroke-width="1.8" class="w-4 h-4" />
+                  </button>
+                  <ConfirmDelete :item-label="$t('entity.expense')" :item-name="`${label('expenseCat', e.category)} ${formatUSD(e.amountCents)}`" @confirm="remove(e.id)" />
+                </div>
+              </td>
+            </tr>
+            <tr v-if="!list.loading && list.rows.length === 0">
+              <td colspan="6" class="py-6 text-center text-muted">{{ $t('expenses.none') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <Pagination v-model:page="list.page" :total-pages="list.totalPages" :total="list.total" :per-page="list.perPage" :noun="$t('expenses.noun')" />
     </div>
 

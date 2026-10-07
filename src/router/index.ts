@@ -25,6 +25,14 @@ const router = createRouter({
       component: () => import('@/pages/pos/PinLoginPage.vue'),
       meta: { public: true },
     },
+    // Customer-facing second screen. Public: it makes no API calls and only
+    // shows what the POS tab in this same browser sends it.
+    {
+      path: '/pos/customer-display',
+      name: 'pos-customer-display',
+      component: () => import('@/pages/pos/CustomerDisplayPage.vue'),
+      meta: { public: true },
+    },
     { path: '/pos/open-shift', name: 'pos-open-shift', component: () => import('@/pages/pos/OpenShiftPage.vue'), meta: { pos: true } },
     { path: '/pos/close-shift', name: 'pos-close-shift', component: () => import('@/pages/pos/CloseShiftPage.vue'), meta: { pos: true } },
     { path: '/pos', name: 'pos', component: () => import('@/pages/pos/PosPage.vue'), meta: { pos: true } },
@@ -79,13 +87,10 @@ router.beforeEach(async (to) => {
 
   if (!to.meta.pos) return true
 
-  // A valid admin (password) session must never silently double as a till
-  // session — whoever's actually standing at the till still has to sign in
-  // with their own PIN, even if someone else is already signed into the
-  // back office in another tab on this same machine (see the comment on
-  // `viaPinLogin` in stores/auth.ts).
-  if (!auth.viaPinLogin) return { name: 'pos-login' }
-
+  // A PIN sign-in, or a back-office session that can sell, can run the till
+  // (no second sign-in for the latter — see docs/DECISIONS.md). Either way a
+  // till must be picked first; /pos/login does that.
+  if (!auth.viaPinLogin && !auth.canUsePos) return { name: 'pos-login' }
   if (!auth.deviceKey) return { name: 'pos-login' }
 
   // POS routes additionally gate on whether this till has an open shift. The

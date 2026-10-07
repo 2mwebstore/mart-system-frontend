@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watchEffect } from 'vue'
 import Modal from '@/components/Modal.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import { listPaymentMethods } from '@/api/settings'
@@ -8,11 +8,14 @@ import { seededLabel } from '@/i18n'
 import { calculateChange, usdCentsToRiel } from '@/utils/money'
 import { formatUSD, formatKHR } from '@/utils/format'
 import type { CreateSaleInput } from '@/types/domain'
+import type { PaymentDraft } from '@/composables/useCustomerDisplay'
 
 const props = defineProps<{ totalCents: number; submitting?: boolean }>()
 const emit = defineEmits<{
   close: []
   paid: [CreateSaleInput['payment']]
+  // The tender and change as they're typed, for the customer display.
+  draft: [PaymentDraft]
 }>()
 
 const settings = useSettingsStore()
@@ -47,6 +50,19 @@ const tenderKHRRiel = computed(() => Math.round(tenderKHR.value || 0))
 const change = computed(() => calculateChange(props.totalCents, tenderUSDCents.value, tenderKHRRiel.value, rate.value))
 const shortfallKHRRiel = computed(() => usdCentsToRiel(change.value.shortCents, rate.value))
 const canConfirmCash = computed(() => change.value.shortCents === 0 && props.totalCents >= 0)
+
+watchEffect(() => {
+  const cash = method.value === 'CASH'
+  emit('draft', {
+    method: method.value,
+    receivedUsdCents: cash ? tenderUSDCents.value : 0,
+    receivedKhrRiel: cash ? tenderKHRRiel.value : 0,
+    changeUsdCents: cash ? change.value.usdCents : 0,
+    changeKhrRiel: cash ? change.value.khrRiel : 0,
+    shortCents: cash ? change.value.shortCents : 0,
+    shortRiel: cash ? shortfallKHRRiel.value : 0,
+  })
+})
 
 function setExactCash() {
   tenderUSD.value = Number((props.totalCents / 100).toFixed(2))

@@ -36,9 +36,10 @@ const rules: Rule[] = [
   // below would otherwise match it too (no $ anchor) with the wrong wording.
   { re: /^This sale belongs to a closed shift and can't be edited\.$/, key: 'apiErrors.saleShiftClosedEdit' },
   { re: /^This sale belongs to a closed shift/, key: 'apiErrors.saleShiftClosed' },
-  { re: /^This sale now totals more than the cash received/, key: 'apiErrors.saleEditExceedsCash' },
+  { re: /^The amount tendered is less than the new total/, key: 'apiErrors.saleEditShortCash' },
   { re: /^This shift is already closed\.$/, key: 'apiErrors.shiftClosed' },
   { re: /^Open a shift on this till before selling\.$/, key: 'apiErrors.shiftRequired' },
+  { re: /^A line's discount can't be more than its cost\.$/, key: 'apiErrors.poDiscountTooHigh' },
   { re: /^This supplier has purchase orders and can't be deleted\.$/, key: 'apiErrors.supplierInUse' },
   { re: /^This till has shift history and can't be deleted/, key: 'apiErrors.tillInUse' },
   { re: /^That till isn't registered or is inactive\.$/, key: 'apiErrors.unknownDevice' },

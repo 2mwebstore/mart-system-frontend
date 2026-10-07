@@ -65,7 +65,7 @@ function poItemCount(po: PurchaseOrder) {
   return po.items.reduce((sum, i) => sum + i.qtyOrdered, 0)
 }
 function poItemsCostCents(po: PurchaseOrder) {
-  return po.items.reduce((sum, i) => sum + i.qtyOrdered * i.unitCostCents, 0)
+  return po.items.reduce((sum, i) => sum + i.qtyOrdered * i.unitCostCents - (i.discountCents || 0), 0)
 }
 function poTotalCostCents(po: PurchaseOrder) {
   return poItemsCostCents(po) + po.shippingCents
@@ -240,8 +240,8 @@ function shiftStatus(s: Shift) {
     </div>
 
     <div class="card flex flex-wrap items-end gap-3">
-      <SearchableSelect v-model="cashierFilter" :label="$t('common.cashier')" class="w-44" :options="cashierOptions" :clearable="false" />
-      <SearchableSelect v-model="paymentFilter" :label="$t('reportDetails.payment')" class="w-40" :options="paymentOptions" :searchable="false" :clearable="false" />
+      <SearchableSelect v-model="cashierFilter" :label="$t('common.cashier')" class="w-full sm:w-44" :options="cashierOptions" :clearable="false" />
+      <SearchableSelect v-model="paymentFilter" :label="$t('reportDetails.payment')" class="w-full sm:w-40" :options="paymentOptions" :searchable="false" :clearable="false" />
       <div class="flex-1 min-w-[160px]">
         <label class="block text-xs text-muted mb-1">{{ $t('reportDetails.searchLabel') }}</label>
         <input v-model="search" type="search" :placeholder="$t('reportDetails.receiptPlaceholder')" class="input" />
@@ -680,6 +680,7 @@ function shiftStatus(s: Shift) {
               <th class="py-2 font-medium">{{ $t('col.product') }}</th>
               <th class="py-2 font-medium text-right">{{ $t('col.qty') }}</th>
               <th class="py-2 font-medium text-right">{{ $t('col.unitCost') }}</th>
+              <th class="py-2 font-medium text-right">{{ $t('pos.discount') }}</th>
               <th class="py-2 pr-1 font-medium text-right">{{ $t('col.lineTotal') }}</th>
             </tr>
           </thead>
@@ -688,7 +689,8 @@ function shiftStatus(s: Shift) {
               <td class="py-2">{{ localName(item.productName, item.productNameKm) }}</td>
               <td class="py-2 text-right font-mono">{{ item.qtyOrdered }}</td>
               <td class="py-2 text-right font-mono">{{ formatUSD(item.unitCostCents) }}</td>
-              <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(item.qtyOrdered * item.unitCostCents) }}</td>
+              <td class="py-2 text-right font-mono">{{ item.discountCents ? `−${formatUSD(item.discountCents)}` : '—' }}</td>
+              <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(item.qtyOrdered * item.unitCostCents - (item.discountCents || 0)) }}</td>
             </tr>
           </tbody>
         </table>

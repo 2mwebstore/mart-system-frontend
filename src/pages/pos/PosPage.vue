@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { Minus, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { Minus, Monitor, MoreVertical, Pencil, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useShiftStore, type HeldSale } from '@/stores/shift'
@@ -20,7 +20,9 @@ import HeldSalesModal from '@/components/pos/HeldSalesModal.vue'
 import VariantPickerModal from '@/components/pos/VariantPickerModal.vue'
 import LineEditModal from '@/components/pos/LineEditModal.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
-import { localName, t } from '@/i18n'
+import { i18n, localName, t } from '@/i18n'
+import { usdCentsToRiel } from '@/utils/money'
+import { openCustomerDisplay, useCustomerDisplaySender, type CartMessage, type PaidMessage, type PaymentDraft } from '@/composables/useCustomerDisplay'
 
 const auth = useAuthStore()
 const shift = useShiftStore()
@@ -30,6 +32,28 @@ const cart = useCart()
 const settings = useSettingsStore()
 
 const canDiscount = auth.hasPermission('pos.discount')
+
+// Phones: the cart is a full-screen sheet (closed by default) and the header
+// actions live in a menu. See the template.
+const cartOpen = ref(false)
+const showMenu = ref(false)
+const menuRef = ref<HTMLElement | null>(null)
+function menu(action: () => void) {
+  showMenu.value = false
+  action()
+}
+function onDocMouseDown(e: MouseEvent) {
+  if (showMenu.value && menuRef.value && !menuRef.value.contains(e.target as Node)) showMenu.value = false
+}
+// Paid, held or cleared: back to the products.
+watch(
+  () => cart.lines.length,
+  (n) => {
+    if (n === 0) cartOpen.value = false
+  },
+)
+onMounted(() => document.addEventListener('mousedown', onDocMouseDown))
+onUnmounted(() => document.removeEventListener('mousedown', onDocMouseDown))
 
 // Catalog, stock and customers come from the API for this till's branch.
 const products = ref<Product[]>([])
@@ -167,6 +191,8 @@ function saveLineEdit(v: { discountType: DiscountType; discountValue: number; no
 
 // --- Modals ---
 const showPayment = ref(false)
+// Live tender/change from the open payment window (customer display only).
+const paymentDraft = ref<PaymentDraft | null>(null)
 const showCashMovement = ref(false)
 const showRecentSales = ref(false)
 const showHeldSales = ref(false)
@@ -209,6 +235,62 @@ async function onPaid(payment: CreateSaleInput['payment']) {
 function closeReceipt() {
   completedSale.value = null
 }
+
+// --- Customer display (second window facing the customer) -------------------
+// The order as it's built, then the payment result while the receipt is up.
+// See composables/useCustomerDisplay.ts.
+function displayState(): CartMessage | PaidMessage {
+  const common = { storeName: settings.app.receiptHeader || t('app.brand'), tillName: auth.tillName, locale: String(i18n.global.locale.value) }
+  const sale = completedSale.value
+  if (cart.lines.length === 0 && sale) {
+    return {
+      type: 'paid',
+      ...common,
+      receiptNo: sale.receiptNo,
+      method: sale.payment.method,
+      totalCents: sale.totalCents,
+      totalRiel: sale.totalRiel,
+      receivedUsdCents: sale.payment.receivedUsdCents,
+      receivedKhrRiel: sale.payment.receivedKhrRiel,
+      changeUsdCents: sale.payment.changeUsdCents,
+      changeKhrRiel: sale.payment.changeKhrRiel,
+      pointsEarned: sale.pointsEarned,
+      customerName: sale.customerName,
+    }
+  }
+  return {
+    type: 'cart',
+    ...common,
+    lines: cart.lines.map((l) => ({
+      productId: l.productId,
+      nameEn: l.nameEn,
+      nameKm: l.nameKm ?? '',
+      imageUrl: l.imageUrl,
+      qty: l.qty,
+      unitPriceCents: l.unitPriceCents,
+      discountCents: cart.lineDiscountCents(l),
+      discountPercent: l.discountType === 'percent' && cart.lineDiscountCents(l) > 0 ? l.discountValue : null,
+      note: l.note,
+      lineTotalCents: cart.lineNetCents(l),
+    })),
+    itemCount: cart.itemCount.value,
+    subtotalCents: cart.subtotalCents.value,
+    lineDiscountsCents: cart.discountCentsCapped.value - cart.cartDiscountCents.value,
+    cartDiscountCents: cart.cartDiscountCents.value,
+    cartDiscountPercent: cart.cartDiscountType.value === 'percent' && cart.cartDiscountCents.value > 0 ? cart.cartDiscountValue.value : null,
+    totalCents: cart.totalCents.value,
+    totalRiel: usdCentsToRiel(cart.totalCents.value, settings.rate),
+    customerName: customers.value.find((c) => c.id === cart.customerId.value)?.name ?? '',
+    payment: showPayment.value ? paymentDraft.value : null,
+  }
+}
+const customerDisplay = useCustomerDisplaySender(displayState)
+watchEffect(() => customerDisplay.send(displayState()))
+onUnmounted(() => {
+  // Leaving the sale screen (close shift, back office): show the welcome screen.
+  customerDisplay.send({ ...(displayState() as CartMessage), type: 'cart', lines: [], itemCount: 0, subtotalCents: 0, lineDiscountsCents: 0, cartDiscountCents: 0, cartDiscountPercent: null, totalCents: 0, totalRiel: 0, customerName: '', payment: null })
+  customerDisplay.close()
+})
 
 function holdCurrentSale() {
   if (cart.lines.length === 0) return
@@ -266,13 +348,14 @@ function goToCloseShift() {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col">
-    <header class="h-14 shrink-0 flex items-center justify-between gap-4 border-b border-line bg-surface px-4">
-      <div class="flex items-center gap-3">
-        <p class="font-heading text-lg">{{ settings.app.receiptHeader || $t('app.brand') }}</p>
-        <span class="text-muted text-sm">{{ auth.tillName }} · {{ auth.user?.full_name }}</span>
+  <div class="h-screen h-dvh flex flex-col">
+    <header class="h-14 shrink-0 flex items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <p class="font-heading text-lg truncate">{{ settings.app.receiptHeader || $t('app.brand') }}</p>
+        <span class="hidden sm:inline text-muted text-sm truncate">{{ auth.tillName }} · {{ auth.user?.full_name }}</span>
       </div>
-      <div class="flex items-center gap-2">
+      <!-- Wide screens: every action inline -->
+      <div class="hidden xl:flex items-center gap-2 shrink-0">
         <LanguageSwitch class="mr-2" />
         <button type="button" class="btn-secondary text-sm px-3 py-1.5 relative" @click="showHeldSales = true">
           {{ $t('pos.heldSales') }}<span v-if="shift.heldSales.length" class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-ink text-[10px]">
@@ -282,13 +365,53 @@ function goToCloseShift() {
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="showRecentSales = true">{{ $t('pos.sales') }}</button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="showCashMovement = true">{{ $t('shifts.cashMovement') }}</button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="goToCloseShift">{{ $t('shifts.closeShift') }}</button>
+        <button type="button" class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5" :title="$t('pos.customerDisplayHint')" @click="openCustomerDisplay">
+          <Monitor :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.customerDisplay') }}
+        </button>
         <RouterLink :to="{ name: 'dashboard' }" class="btn-secondary text-sm px-3 py-1.5">{{ $t('pos.backOffice') }}</RouterLink>
+      </div>
+      <!-- Narrower screens: held sales stays one tap away, the rest go in a menu -->
+      <div class="flex xl:hidden items-center gap-2 shrink-0">
+        <button type="button" class="btn-secondary text-sm px-3 py-1.5 relative" @click="showHeldSales = true">
+          {{ $t('pos.heldSales') }}<span v-if="shift.heldSales.length" class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-ink text-[10px]">
+            {{ shift.heldSales.length }}
+          </span>
+        </button>
+        <div ref="menuRef" class="relative">
+          <button
+            type="button"
+            class="btn-secondary p-2"
+            :aria-label="$t('pos.moreActions')"
+            :aria-expanded="showMenu"
+            @click="showMenu = !showMenu"
+          >
+            <MoreVertical :stroke-width="1.8" class="w-5 h-5" />
+          </button>
+          <div v-if="showMenu" class="absolute right-0 top-full mt-2 z-40 w-60 rounded-card border border-line bg-surface shadow-lg py-1" role="menu">
+            <p class="sm:hidden px-4 py-2 text-xs text-muted border-b border-line">{{ auth.tillName }} · {{ auth.user?.full_name }}</p>
+            <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(() => (showRecentSales = true))">{{ $t('pos.sales') }}</button>
+            <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(() => (showCashMovement = true))">{{ $t('shifts.cashMovement') }}</button>
+            <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(goToCloseShift)">{{ $t('shifts.closeShift') }}</button>
+            <button type="button" role="menuitem" class="hidden md:block w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(openCustomerDisplay)">{{ $t('pos.customerDisplay') }}</button>
+            <RouterLink :to="{ name: 'dashboard' }" role="menuitem" class="block px-4 py-2.5 text-sm hover:bg-surface-subtle">{{ $t('pos.backOffice') }}</RouterLink>
+            <div class="px-4 py-2 border-t border-line"><LanguageSwitch /></div>
+          </div>
+        </div>
       </div>
     </header>
 
-    <div class="flex-1 flex min-h-0">
-      <!-- Cart -->
-      <div class="w-96 shrink-0 border-l border-line bg-surface flex flex-col min-h-0">
+    <div class="flex-1 flex min-h-0 relative">
+      <!-- Cart: a side panel from md up; on phones a full-screen sheet opened from the bottom bar -->
+      <div
+        class="bg-surface flex-col min-h-0 md:static md:z-auto md:flex md:w-80 lg:w-96 md:shrink-0 md:border-r md:border-line"
+        :class="cartOpen ? 'fixed inset-0 z-30 flex' : 'hidden'"
+      >
+        <div class="md:hidden flex items-center justify-between gap-3 h-14 shrink-0 px-4 border-b border-line">
+          <p class="font-heading text-lg">{{ $t('pos.cartTitle', { n: cart.itemCount.value }) }}</p>
+          <button type="button" class="p-2 -mr-2 text-muted hover:text-ink" :aria-label="$t('pos.backToProducts')" @click="cartOpen = false">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
         <div class="p-4 border-b border-line">
           <SearchableSelect v-model="cart.customerId.value" :label="$t('pos.customer')" :options="customerOptions" :placeholder="$t('pos.walkIn')" />
         </div>
@@ -296,27 +419,33 @@ function goToCloseShift() {
         <div ref="cartListRef" class="flex-1 overflow-y-auto divide-y divide-line">
           <div v-if="cart.lines.length === 0" class="text-center text-muted py-10 px-4 text-sm">{{ $t('pos.cartEmpty') }}</div>
           <div v-for="line in cart.lines" :key="line.productId" class="p-3 space-y-1.5">
-            <div class="flex items-center gap-2">
+            <!-- Name and line total on top, controls underneath, so the name
+                 isn't cut to a few letters in a narrow cart (phones, tablets). -->
+            <div class="flex items-start gap-2">
               <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium truncate">{{ localName(line.nameEn, line.nameKm) }}</p>
+                <p class="text-sm font-medium leading-snug line-clamp-2">{{ localName(line.nameEn, line.nameKm) }}</p>
                 <p class="text-xs text-muted font-mono">{{ $t('pos.each', { price: formatUSD(line.unitPriceCents) }) }}</p>
               </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button type="button" class="w-7 h-7 rounded-control border border-line flex items-center justify-center hover:bg-surface-subtle" @click="cart.decQty(line.productId)">
+              <p class="text-right font-mono text-sm font-medium shrink-0">{{ formatUSD(cart.lineNetCents(line)) }}</p>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <button type="button" class="w-9 h-9 md:w-7 md:h-7 rounded-control border border-line flex items-center justify-center hover:bg-surface-subtle" :aria-label="$t('pos.decreaseQty')" @click="cart.decQty(line.productId)">
                   <Minus class="w-3.5 h-3.5" />
                 </button>
-                <span class="w-6 text-center font-mono text-sm">{{ line.qty }}</span>
-                <button type="button" class="w-7 h-7 rounded-control border border-line flex items-center justify-center hover:bg-surface-subtle" @click="cart.incQty(line.productId)">
+                <span class="w-8 text-center font-mono text-sm">{{ line.qty }}</span>
+                <button type="button" class="w-9 h-9 md:w-7 md:h-7 rounded-control border border-line flex items-center justify-center hover:bg-surface-subtle" :aria-label="$t('pos.increaseQty')" @click="cart.incQty(line.productId)">
                   <Plus class="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p class="w-16 text-right font-mono text-sm shrink-0">{{ formatUSD(cart.lineNetCents(line)) }}</p>
-              <button type="button" class="p-1 text-muted hover:text-ink shrink-0" :aria-label="$t('pos.editLineAria')" @click="editingLineFor = line.productId">
-                <Pencil class="w-4 h-4" />
-              </button>
-              <button type="button" class="p-1 text-muted hover:text-danger-strong shrink-0" :aria-label="$t('inventory.removeItem')" @click="cart.removeLine(line.productId)">
-                <X class="w-4 h-4" />
-              </button>
+              <div class="flex items-center gap-1">
+                <button type="button" class="p-2 md:p-1 text-muted hover:text-ink" :aria-label="$t('pos.editLineAria')" @click="editingLineFor = line.productId">
+                  <Pencil class="w-4 h-4" />
+                </button>
+                <button type="button" class="p-2 md:p-1 text-muted hover:text-danger-strong" :aria-label="$t('inventory.removeItem')" @click="cart.removeLine(line.productId)">
+                  <X class="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div v-if="line.discountValue > 0 || line.note" class="flex items-center justify-between gap-2 pl-0.5 text-xs text-muted">
@@ -376,7 +505,7 @@ function goToCloseShift() {
         </div>
       </div>
       <!-- Product browsing -->
-      <div class="flex-1 flex flex-col min-w-0 p-4 gap-3">
+      <div class="flex-1 flex flex-col min-w-0 p-3 sm:p-4 gap-3">
         <div class="relative">
           <Search :stroke-width="1.8" class="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -401,7 +530,7 @@ function goToCloseShift() {
           </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 content-start">
+        <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3 content-start pb-20 md:pb-0">
           <div
             v-for="p in filteredProducts"
             :key="p.id"
@@ -426,6 +555,22 @@ function goToCloseShift() {
           <p v-if="filteredProducts.length === 0" class="col-span-full text-center text-muted py-8">{{ $t('pos.noProducts') }}</p>
         </div>
       </div>
+
+      <!-- Phones: cart summary bar; tap to open the cart -->
+      <div v-if="!cartOpen" class="md:hidden absolute inset-x-0 bottom-0 z-20 border-t border-line bg-surface p-3">
+        <button
+          type="button"
+          class="btn-primary w-full flex items-center justify-between gap-3 py-3"
+          :aria-label="$t('pos.viewCart')"
+          @click="cartOpen = true"
+        >
+          <span class="flex items-center gap-2">
+            <ShoppingCart :stroke-width="1.8" class="w-5 h-5" />
+            {{ $t('pos.itemsCount', { n: cart.itemCount.value }) }}
+          </span>
+          <span class="font-mono text-lg">{{ formatUSD(cart.totalCents.value) }}</span>
+        </button>
+      </div>
     </div>
 
     <VariantPickerModal
@@ -445,7 +590,14 @@ function goToCloseShift() {
       @close="editingLineFor = null"
       @save="saveLineEdit"
     />
-    <PaymentModal v-if="showPayment" :total-cents="cart.totalCents.value" :submitting="submitting" @close="showPayment = false" @paid="onPaid" />
+    <PaymentModal
+      v-if="showPayment"
+      :total-cents="cart.totalCents.value"
+      :submitting="submitting"
+      @close="showPayment = false"
+      @paid="onPaid"
+      @draft="paymentDraft = $event"
+    />
     <ReceiptModal v-if="completedSale" :sale="completedSale" @close="closeReceipt" />
     <CashMovementModal v-if="showCashMovement" @close="showCashMovement = false" />
     <RecentSalesModal v-if="showRecentSales" @close="showRecentSales = false" @voided="loadProducts" />

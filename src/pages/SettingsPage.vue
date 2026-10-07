@@ -453,22 +453,24 @@ async function submitReset() {
       </div>
       <div class="card">
         <h2 class="font-heading text-base mb-3">{{ $t('settings.history') }}</h2>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-muted border-b border-line">
-              <th class="py-2 font-medium">{{ $t('col.rate') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.setBy') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.effectiveFrom') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="h in settings.rateHistory" :key="h.id" class="border-b border-line last:border-0">
-              <td class="py-2 font-mono">៛ {{ h.rate.toLocaleString() }}</td>
-              <td class="py-2">{{ h.setBy }}</td>
-              <td class="py-2 font-mono text-xs">{{ formatDateTime(h.effectiveAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted border-b border-line">
+                <th class="py-2 font-medium">{{ $t('col.rate') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.setBy') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.effectiveFrom') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="h in settings.rateHistory" :key="h.id" class="border-b border-line last:border-0">
+                <td class="py-2 font-mono">៛ {{ h.rate.toLocaleString() }}</td>
+                <td class="py-2">{{ h.setBy }}</td>
+                <td class="py-2 font-mono text-xs">{{ formatDateTime(h.effectiveAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -483,34 +485,36 @@ async function submitReset() {
             <Plus :stroke-width="1.8" class="w-3.5 h-3.5" /> {{ $t('settings.newBranch') }}
           </button>
         </div>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-muted border-b border-line">
-              <th class="py-2 font-medium">{{ $t('col.name') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.code') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.status') }}</th>
-              <th class="py-2 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="b in branches" :key="b.id" class="border-b border-line last:border-0 group">
-              <td class="py-2">
-                <p>{{ b.name }}</p>
-                <p class="text-xs text-muted">{{ b.address }}</p>
-              </td>
-              <td class="py-2 font-mono">{{ b.code }}</td>
-              <td class="py-2"><StatusBadge :tone="b.active ? 'success' : 'neutral'" :label="b.active ? $t('common.active') : $t('settings.inactive')" /></td>
-              <td class="py-2">
-                <div v-if="canManage" class="flex items-center gap-1">
-                  <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editBranchAria')" @click="editBranch(b)">
-                    <Pencil :stroke-width="1.8" class="w-4 h-4" />
-                  </button>
-                  <ConfirmDelete :item-label="$t('entity.branch')" :item-name="b.name" @confirm="deleteBranch(b.id)" />
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted border-b border-line">
+                <th class="py-2 font-medium">{{ $t('col.name') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.code') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.status') }}</th>
+                <th class="py-2 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="b in branches" :key="b.id" class="border-b border-line last:border-0 group">
+                <td class="py-2">
+                  <p>{{ b.name }}</p>
+                  <p class="text-xs text-muted">{{ b.address }}</p>
+                </td>
+                <td class="py-2 font-mono">{{ b.code }}</td>
+                <td class="py-2"><StatusBadge :tone="b.active ? 'success' : 'neutral'" :label="b.active ? $t('common.active') : $t('settings.inactive')" /></td>
+                <td class="py-2">
+                  <div v-if="canManage" class="flex items-center gap-1">
+                    <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editBranchAria')" @click="editBranch(b)">
+                      <Pencil :stroke-width="1.8" class="w-4 h-4" />
+                    </button>
+                    <ConfirmDelete :item-label="$t('entity.branch')" :item-name="b.name" @confirm="deleteBranch(b.id)" />
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       <div class="card">
         <div class="flex items-center justify-between mb-3">
@@ -519,35 +523,37 @@ async function submitReset() {
             <Plus :stroke-width="1.8" class="w-3.5 h-3.5" /> {{ $t('settings.newTill') }}
           </button>
         </div>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-muted border-b border-line">
-              <th class="py-2 font-medium">{{ $t('col.till') }}</th>
-              <th class="py-2 font-medium">{{ $t('common.branch') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.deviceKey') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.lastSeen') }}</th>
-              <th class="py-2 font-medium">{{ $t('col.status') }}</th>
-              <th class="py-2 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="d in tills" :key="d.id" class="border-b border-line last:border-0">
-              <td class="py-2">{{ d.name }}</td>
-              <td class="py-2 text-muted">{{ branches.find((b) => b.id === d.branchId)?.name ?? '—' }}</td>
-              <td class="py-2 font-mono text-xs">{{ d.deviceKey }}</td>
-              <td class="py-2 font-mono text-xs">{{ formatDateTime(d.lastSeenAt) }}</td>
-              <td class="py-2"><StatusBadge :tone="d.active ? 'success' : 'neutral'" :label="d.active ? $t('common.active') : $t('settings.inactive')" /></td>
-              <td class="py-2">
-                <div v-if="canManage" class="flex items-center gap-1">
-                  <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editTillAria')" @click="editTill(d)">
-                    <Pencil :stroke-width="1.8" class="w-4 h-4" />
-                  </button>
-                  <ConfirmDelete :item-label="$t('entity.till')" :item-name="d.name" @confirm="deleteTill(d.id)" />
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted border-b border-line">
+                <th class="py-2 font-medium">{{ $t('col.till') }}</th>
+                <th class="py-2 font-medium">{{ $t('common.branch') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.deviceKey') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.lastSeen') }}</th>
+                <th class="py-2 font-medium">{{ $t('col.status') }}</th>
+                <th class="py-2 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="d in tills" :key="d.id" class="border-b border-line last:border-0">
+                <td class="py-2">{{ d.name }}</td>
+                <td class="py-2 text-muted">{{ branches.find((b) => b.id === d.branchId)?.name ?? '—' }}</td>
+                <td class="py-2 font-mono text-xs">{{ d.deviceKey }}</td>
+                <td class="py-2 font-mono text-xs">{{ formatDateTime(d.lastSeenAt) }}</td>
+                <td class="py-2"><StatusBadge :tone="d.active ? 'success' : 'neutral'" :label="d.active ? $t('common.active') : $t('settings.inactive')" /></td>
+                <td class="py-2">
+                  <div v-if="canManage" class="flex items-center gap-1">
+                    <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editTillAria')" @click="editTill(d)">
+                      <Pencil :stroke-width="1.8" class="w-4 h-4" />
+                    </button>
+                    <ConfirmDelete :item-label="$t('entity.till')" :item-name="d.name" @confirm="deleteTill(d.id)" />
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -558,45 +564,47 @@ async function submitReset() {
           <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('settings.newPayment') }}
         </button>
       </div>
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="text-left text-muted border-b border-line">
-            <th class="py-2 font-medium">{{ $t('col.name') }}</th>
-            <th class="py-2 font-medium">{{ $t('col.type') }}</th>
-            <th class="py-2 pr-4 font-medium text-right">{{ $t('col.fee') }}</th>
-            <th class="py-2 font-medium">{{ $t('col.enabled') }}</th>
-            <th class="py-2 font-medium"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="p in paymentMethodsList" :key="p.id" class="border-b border-line last:border-0">
-            <td class="py-2">{{ p.name }}</td>
-            <td class="py-2 text-muted">{{ paymentTypeLabel(p.type) }}</td>
-            <td class="py-2 pr-4 text-right font-mono">{{ p.feePercent }}%</td>
-            <td class="py-2">
-              <button
-                type="button"
-                role="switch"
-                :aria-checked="p.enabled"
-                class="w-9 h-5 rounded-full transition-colors relative disabled:opacity-50"
-                :class="p.enabled ? 'bg-primary' : 'bg-line'"
-                :disabled="!canManage"
-                @click="togglePaymentEnabled(p)"
-              >
-                <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" :class="p.enabled ? 'left-4' : 'left-0.5'" />
-              </button>
-            </td>
-            <td class="py-2">
-              <div v-if="canManage" class="flex items-center gap-1">
-                <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editPaymentAria')" @click="editPaymentMethod(p)">
-                  <Pencil :stroke-width="1.8" class="w-4 h-4" />
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-muted border-b border-line">
+              <th class="py-2 font-medium">{{ $t('col.name') }}</th>
+              <th class="py-2 font-medium">{{ $t('col.type') }}</th>
+              <th class="py-2 pr-4 font-medium text-right">{{ $t('col.fee') }}</th>
+              <th class="py-2 font-medium">{{ $t('col.enabled') }}</th>
+              <th class="py-2 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in paymentMethodsList" :key="p.id" class="border-b border-line last:border-0">
+              <td class="py-2">{{ p.name }}</td>
+              <td class="py-2 text-muted">{{ paymentTypeLabel(p.type) }}</td>
+              <td class="py-2 pr-4 text-right font-mono">{{ p.feePercent }}%</td>
+              <td class="py-2">
+                <button
+                  type="button"
+                  role="switch"
+                  :aria-checked="p.enabled"
+                  class="w-9 h-5 rounded-full transition-colors relative disabled:opacity-50"
+                  :class="p.enabled ? 'bg-primary' : 'bg-line'"
+                  :disabled="!canManage"
+                  @click="togglePaymentEnabled(p)"
+                >
+                  <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" :class="p.enabled ? 'left-4' : 'left-0.5'" />
                 </button>
-                <ConfirmDelete :item-label="$t('entity.paymentMethod')" :item-name="p.name" @confirm="deletePaymentMethod(p.id)" />
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </td>
+              <td class="py-2">
+                <div v-if="canManage" class="flex items-center gap-1">
+                  <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editPaymentAria')" @click="editPaymentMethod(p)">
+                    <Pencil :stroke-width="1.8" class="w-4 h-4" />
+                  </button>
+                  <ConfirmDelete :item-label="$t('entity.paymentMethod')" :item-name="p.name" @confirm="deletePaymentMethod(p.id)" />
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div v-else-if="activeTab === 'receipt'" class="card max-w-xl space-y-4">

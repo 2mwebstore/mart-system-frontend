@@ -18,13 +18,12 @@ const ACTIVE_BRANCH_KEY = 'com-mart-active-branch'
 // signed-in cashier changes).
 const DEVICE_KEY_STORAGE = 'com-mart-pos-device-key'
 const TILL_NAME_STORAGE = 'com-mart-pos-till-name'
-// Admin and POS share one token store now that they're one project/origin,
-// but a valid admin session must never silently double as a till session —
-// the person standing at the till still has to type their own PIN, even if
-// someone's already signed into the back office in another tab on this same
-// machine. This flag tracks which flow produced the *current* session, and
-// is what the router's POS guard checks (see router/index.ts) — persisted
-// so it survives a reload mid-shift, cleared by a password login or logout.
+// Admin and POS share one token store (one project/origin). Which flow
+// produced the current session is recorded here: a PIN sign-in at the till,
+// or a back-office password sign-in. A back-office session that can sell
+// (pos.sell) may open the POS directly without a second, PIN sign-in — see
+// the POS guard in router/index.ts and docs/DECISIONS.md. Persisted so it
+// survives a reload mid-shift, cleared by a password login or logout.
 const VIA_PIN_LOGIN_KEY = 'com-mart-pos-via-pin-login'
 
 export const useAuthStore = defineStore('auth', {
@@ -41,6 +40,8 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isAuthenticated: (state) => state.user !== null,
     hasPermission: (state) => (key: string) => state.permissions.includes(key),
+    // The signed-in user can run a till with this session, PIN or not.
+    canUsePos: (state) => state.user !== null && state.permissions.includes('pos.sell'),
   },
 
   actions: {
@@ -90,6 +91,23 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem(DEVICE_KEY_STORAGE, deviceKey)
       localStorage.setItem(TILL_NAME_STORAGE, tillName)
       localStorage.setItem(VIA_PIN_LOGIN_KEY, '1')
+    },
+
+    // Points this session at a till without a PIN sign-in (back-office
+    // session with pos.sell). The server still checks the till's branch
+    // against the user's branches on every POS call.
+    selectTill(deviceKey: string, tillName: string) {
+      this.deviceKey = deviceKey
+      this.tillName = tillName
+      localStorage.setItem(DEVICE_KEY_STORAGE, deviceKey)
+      localStorage.setItem(TILL_NAME_STORAGE, tillName)
+    },
+
+    forgetTill() {
+      this.deviceKey = ''
+      this.tillName = ''
+      localStorage.removeItem(DEVICE_KEY_STORAGE)
+      localStorage.removeItem(TILL_NAME_STORAGE)
     },
 
     async fetchMe() {

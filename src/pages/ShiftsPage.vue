@@ -368,8 +368,8 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
     <div class="card overflow-x-auto">
       <h2 class="font-heading text-base mb-3">{{ $t('shifts.history') }}</h2>
       <div class="flex flex-wrap items-end gap-3 mb-4">
-        <SearchableSelect v-model="historyTill" :label="$t('common.till')" class="w-44" :options="historyTillOptions" :searchable="false" :clearable="false" />
-        <SearchableSelect v-model="historyCashier" :label="$t('common.cashier')" class="w-52" :options="historyCashierOptions" :clearable="false" />
+        <SearchableSelect v-model="historyTill" :label="$t('common.till')" class="w-full sm:w-44" :options="historyTillOptions" :searchable="false" :clearable="false" />
+        <SearchableSelect v-model="historyCashier" :label="$t('common.cashier')" class="w-full sm:w-52" :options="historyCashierOptions" :clearable="false" />
         <div>
           <label class="block text-sm text-muted mb-1">{{ $t('shifts.openedFilter') }}</label>
           <DateRangePicker v-model="historyRange" clearable @clear="historyRange = null" />

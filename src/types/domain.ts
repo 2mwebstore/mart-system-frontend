@@ -25,6 +25,7 @@ export interface PublicTill {
   deviceKey: string
   name: string
   branchId: number
+  branchName: string
 }
 
 export interface PaymentMethodRow {
@@ -129,6 +130,9 @@ export interface StockMovement {
   balanceAfter: number
   user: string
   reference: string
+  referenceType: string
+  referenceId: number | null
+  note: string
 }
 
 export type PurchaseOrderStatus = 'DRAFT' | 'SENT' | 'PARTIAL' | 'RECEIVED' | 'CANCELLED'
@@ -141,6 +145,7 @@ export interface PurchaseOrderItem {
   qtyOrdered: number
   qtyReceived: number
   unitCostCents: number
+  discountCents: number // on the whole line (qty × unit cost)
 }
 
 export interface PurchaseOrder {
@@ -162,7 +167,7 @@ export interface PurchaseOrderInput {
   status: string
   note: string
   shippingCents: number
-  items: { productId: number; qty: number; unitCostCents: number }[]
+  items: { productId: number; qty: number; unitCostCents: number; discountCents: number }[]
 }
 
 export interface Customer {
@@ -284,6 +289,7 @@ export interface Sale {
   customerId: number | null
   customerName: string
   status: 'PAID' | 'VOIDED' | 'REFUNDED' | 'PARTIAL_REFUND'
+  shiftStatus: 'OPEN' | 'CLOSED' | ''
   subtotalCents: number
   discountCents: number
   totalCents: number

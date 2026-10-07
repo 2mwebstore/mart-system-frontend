@@ -211,8 +211,15 @@ export function useInventoryData(branchId: Ref<number>) {
   const receivePurchaseOrder = (id: number) =>
     attempt(() => catalogApi.receivePurchaseOrder(id), [poList.reload, refreshProducts, moveList.reload])
 
-  function poItemsCostCents(po: PurchaseOrder) {
+  // Items before discounts, the line discounts, and items after discounts.
+  function poItemsGrossCents(po: PurchaseOrder) {
     return po.items.reduce((sum, i) => sum + i.qtyOrdered * i.unitCostCents, 0)
+  }
+  function poItemsDiscountCents(po: PurchaseOrder) {
+    return po.items.reduce((sum, i) => sum + (i.discountCents || 0), 0)
+  }
+  function poItemsCostCents(po: PurchaseOrder) {
+    return poItemsGrossCents(po) - poItemsDiscountCents(po)
   }
   // Items plus shipping — the actual total cost of the order.
   function poTotalCostCents(po: PurchaseOrder) {
@@ -272,6 +279,8 @@ export function useInventoryData(branchId: Ref<number>) {
     removeSupplier,
     moveList,
     poList,
+    poItemsGrossCents,
+    poItemsDiscountCents,
     poItemsCostCents,
     poTotalCostCents,
     poItemCount,

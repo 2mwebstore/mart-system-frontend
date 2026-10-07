@@ -92,20 +92,22 @@ const shiftTone: Record<string, 'success' | 'neutral' | 'warning'> = { Open: 'su
           <h2 class="font-heading text-base">{{ t('staffReport.rolesPermissions') }}</h2>
           <RouterLink :to="{ name: 'users-roles' }" class="text-sm text-primary-text hover:underline">{{ t('staffReport.manage') }}</RouterLink>
         </div>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-muted border-b border-line">
-              <th class="py-2 font-medium">{{ t('common.role') }}</th>
-              <th v-for="g in rolesSummary[0]?.groupCounts" :key="g.group" class="py-2 font-medium text-right">{{ label('permGroup', g.group) }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="r in rolesSummary" :key="r.id" class="border-b border-line last:border-0">
-              <td class="py-2">{{ label('role', r.name) }}</td>
-              <td v-for="g in r.groupCounts" :key="g.group" class="py-2 text-right font-mono text-muted">{{ g.granted }}/{{ g.total }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted border-b border-line">
+                <th class="py-2 font-medium">{{ t('common.role') }}</th>
+                <th v-for="g in rolesSummary[0]?.groupCounts" :key="g.group" class="py-2 font-medium text-right">{{ label('permGroup', g.group) }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in rolesSummary" :key="r.id" class="border-b border-line last:border-0">
+                <td class="py-2">{{ label('role', r.name) }}</td>
+                <td v-for="g in r.groupCounts" :key="g.group" class="py-2 text-right font-mono text-muted">{{ g.granted }}/{{ g.total }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

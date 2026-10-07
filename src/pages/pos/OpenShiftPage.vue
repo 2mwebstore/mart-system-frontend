@@ -34,6 +34,12 @@ async function switchUser() {
   await auth.logout()
   router.push({ name: 'pos-login' })
 }
+// A back-office session didn't sign in at this till, so "Not you?" would sign
+// it out of the back office too; it changes the till instead.
+function changeTill() {
+  auth.forgetTill()
+  router.push({ name: 'pos-login' })
+}
 </script>
 
 <template>
@@ -62,9 +68,13 @@ async function switchUser() {
 
       <div class="flex justify-center"><LanguageSwitch /></div>
 
-      <button type="button" class="text-sm text-muted hover:text-ink block mx-auto" @click="switchUser">
+      <button v-if="auth.viaPinLogin" type="button" class="text-sm text-muted hover:text-ink block mx-auto" @click="switchUser">
         {{ $t('shifts.notYou') }}
       </button>
+      <div v-else class="flex items-center justify-center gap-4 text-sm">
+        <button type="button" class="text-muted hover:text-ink" @click="changeTill">{{ $t('pos.changeTill') }}</button>
+        <RouterLink :to="{ name: 'dashboard' }" class="text-muted hover:text-ink">{{ $t('pos.backOffice') }}</RouterLink>
+      </div>
     </div>
   </div>
 </template>
