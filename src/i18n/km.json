@@ -1052,7 +1052,8 @@
     "chooseCsv": "ជ្រើសរើសឯកសារ CSV",
     "importCreated": "បានបង្កើត {n} ជួរ។",
     "importRow": "ជួរដេក",
-    "importReason": "មូលហេតុរំលង"
+    "importReason": "មូលហេតុរំលង",
+    "selectCategory": "ជ្រើសរើសប្រភេទ"
   },
   "stockStatus": {
     "in_stock": "មានស្តុក",

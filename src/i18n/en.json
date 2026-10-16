@@ -1052,7 +1052,8 @@
     "chooseCsv": "Choose a CSV file",
     "importCreated": "{n} row(s) created.",
     "importRow": "Row",
-    "importReason": "Reason skipped"
+    "importReason": "Reason skipped",
+    "selectCategory": "Select a category"
   },
   "stockStatus": {
     "in_stock": "In stock",

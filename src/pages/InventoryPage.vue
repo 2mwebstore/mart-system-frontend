@@ -388,7 +388,9 @@ function newProduct() {
     nameKm: '',
     variantName: '',
     barcode: '',
-    categoryId: categories.value[0]?.id ?? null,
+    // Left empty on purpose: the category is picked, never pre-filled with
+    // whichever one happens to be first (Save asks for it if it's missing).
+    categoryId: null,
     unit: 'pcs',
     productType: 'STANDARD',
     costDollars: 0,
@@ -1318,7 +1320,14 @@ function viewPoDetail(po: PurchaseOrder) {
             <input v-model="productForm.nameKm" type="text" class="input" :placeholder="$t('inventory.nameKmHint')" />
           </div>
         </template>
-        <SearchableSelect v-if="!variantOf" v-model="productForm.categoryId" :label="$t('common.category')" :options="categoryOptions" required />
+        <SearchableSelect
+          v-if="!variantOf"
+          v-model="productForm.categoryId"
+          :label="$t('common.category')"
+          :options="categoryOptions"
+          :placeholder="$t('inventory.selectCategory')"
+          required
+        />
         <div v-if="!variantOf">
           <label class="block text-sm text-muted mb-1">{{ $t('inventory.productType') }}</label>
           <div class="flex rounded-control border border-line overflow-hidden text-sm w-fit">
