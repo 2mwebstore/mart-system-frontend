@@ -3,12 +3,15 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useBrandingStore } from '@/stores/branding'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import { apiErrorMessage } from '@/i18n/apiErrors'
 
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
+const branding = useBrandingStore()
 
 const username = ref('')
 const password = ref('')
@@ -33,7 +36,8 @@ async function handleSubmit() {
   <div class="min-h-screen flex items-center justify-center bg-page px-4">
     <div class="w-full max-w-sm">
       <div class="text-center mb-6">
-        <h1 class="font-heading text-2xl text-ink">{{ t('app.name') }}</h1>
+        <BrandLogo class="h-20 max-w-[14rem] mb-3" />
+        <h1 class="font-heading text-2xl text-ink">{{ branding.name }}</h1>
       </div>
 
       <form class="card space-y-4" @submit.prevent="handleSubmit">

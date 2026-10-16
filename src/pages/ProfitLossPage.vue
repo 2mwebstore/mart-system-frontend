@@ -28,6 +28,9 @@ const { range } = useDateRangeQuery()
 
 const {
   netSalesCents,
+  posSalesCents,
+  invoiceSalesCents,
+  invoiceCount,
   grossProfitCents,
   grossMarginPct,
   totalOperatingExpensesCents,
@@ -102,6 +105,9 @@ async function submitExpense() {
       <div class="card">
         <p class="text-sm text-muted">{{ t('pl.netSales') }}</p>
         <p class="font-mono text-xl mt-1">{{ formatUSD(netSalesCents) }}</p>
+        <p v-if="invoiceCount > 0" class="text-xs text-muted mt-1">
+          {{ t('pl.salesSplit', { pos: formatUSD(posSalesCents), invoices: formatUSD(invoiceSalesCents), n: invoiceCount }) }}
+        </p>
       </div>
       <div class="card">
         <p class="text-sm text-muted">{{ t('pl.grossProfit') }}</p>

@@ -24,6 +24,7 @@ import { useToast } from '@/composables/useToast'
 import { formatDateTime } from '@/utils/format'
 import { label, t } from '@/i18n'
 import DiningTablesPanel from '@/components/settings/DiningTablesPanel.vue'
+import CompanyPanel from '@/components/settings/CompanyPanel.vue'
 
 const auth = useAuthStore()
 const settings = useSettingsStore()
@@ -32,7 +33,7 @@ const route = useRoute()
 const toast = useToast()
 // Defaults to Branches when the router sent us here for having none (see
 // router/index.ts) — otherwise the usual first tab.
-const activeTab = ref(['branches', 'tables'].includes(String(route.query.tab)) ? String(route.query.tab) : 'rate')
+const activeTab = ref(['branches', 'tables', 'company'].includes(String(route.query.tab)) ? String(route.query.tab) : 'rate')
 const canManageSystem = auth.hasPermission('system.manage')
 const canResetSystem = auth.hasPermission('system.reset')
 const tabs = computed(() => [
@@ -40,6 +41,7 @@ const tabs = computed(() => [
   { key: 'branches', label: t('settings.tabBranches') },
   ...(canManage ? [{ key: 'tables', label: t('tables.tab') }] : []),
   { key: 'payments', label: t('settings.tabPayments') },
+  { key: 'company', label: t('settings.tabCompany') },
   { key: 'receipt', label: t('settings.tabReceipt') },
   ...(canManageSystem ? [{ key: 'alerts', label: t('alerts.tab') }] : []),
   ...(canManageSystem || canResetSystem ? [{ key: 'system', label: t('settings.tabSystem') }] : []),
@@ -328,6 +330,7 @@ const numberForms = reactive<Record<DocType, { prefix: string; nextNumber: numbe
   SALE: { prefix: '', nextNumber: 1 },
   EXPENSE: { prefix: '', nextNumber: 1 },
   PURCHASE_ORDER: { prefix: '', nextNumber: 1 },
+  INVOICE: { prefix: '', nextNumber: 1 },
 })
 const savingSequence = ref<DocType | null>(null)
 
@@ -611,10 +614,13 @@ async function submitReset() {
       </div>
     </div>
 
+    <CompanyPanel v-else-if="activeTab === 'company'" />
+
     <div v-else-if="activeTab === 'receipt'" class="card max-w-xl space-y-4">
       <div>
         <label class="block text-sm text-muted mb-1">{{ $t('settings.receiptHeader') }}</label>
         <input v-model="receiptForm.header" type="text" class="input" />
+        <p class="text-xs text-muted mt-1">{{ $t('settings.receiptHeaderHint') }}</p>
       </div>
       <div>
         <label class="block text-sm text-muted mb-1">{{ $t('settings.receiptFooterBilingual') }}</label>

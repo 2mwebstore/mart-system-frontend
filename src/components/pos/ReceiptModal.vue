@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { Printer } from 'lucide-vue-next'
 import Modal from '@/components/Modal.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { useBrandingStore } from '@/stores/branding'
 import type { Sale } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
 import { label, localName } from '@/i18n'
@@ -9,6 +11,7 @@ import { label, localName } from '@/i18n'
 defineProps<{ sale: Sale }>()
 const emit = defineEmits<{ close: [] }>()
 const settings = useSettingsStore()
+const branding = useBrandingStore()
 
 function printReceipt() {
   window.print()
@@ -19,7 +22,8 @@ function printReceipt() {
   <Modal :title="$t('pos.paymentComplete')" @close="emit('close')">
     <div id="pos-receipt" class="font-mono text-sm space-y-3">
       <div class="text-center space-y-0.5 font-body">
-        <p class="font-heading text-lg">{{ settings.app.receiptHeader || $t('app.brand') }}</p>
+        <BrandLogo class="h-14 max-w-[10rem] mb-1" />
+        <p class="font-heading text-lg">{{ settings.app.receiptHeader || branding.shortName }}</p>
         <p class="text-muted">{{ sale.receiptNo }} · {{ formatDateTime(sale.soldAt) }}</p>
         <p class="text-muted">{{ $t('pos.cashierLine', { name: sale.cashier }) }}</p>
       </div>

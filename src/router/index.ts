@@ -33,6 +33,12 @@ const router = createRouter({
       component: () => import('@/pages/TableMenuPage.vue'),
       meta: { public: true },
     },
+    // Printable invoice (signed-in, no app chrome).
+    {
+      path: '/print/invoice/:id',
+      name: 'invoice-print',
+      component: () => import('@/pages/InvoicePrintPage.vue'),
+    },
     // Printable QR sheet for a branch's tables (signed-in, no app chrome).
     {
       path: '/print/table-qr',
@@ -58,6 +64,9 @@ const router = createRouter({
         { path: 'dashboard', name: 'dashboard', component: () => import('@/pages/DashboardPage.vue') },
         { path: 'shifts', name: 'shifts', component: () => import('@/pages/ShiftsPage.vue') },
         { path: 'inventory', name: 'inventory', component: () => import('@/pages/InventoryPage.vue') },
+        { path: 'invoices', name: 'invoices', component: () => import('@/pages/InvoicesPage.vue') },
+        { path: 'invoices/new', name: 'invoice-new', component: () => import('@/pages/InvoiceEditPage.vue') },
+        { path: 'invoices/:id/edit', name: 'invoice-edit', component: () => import('@/pages/InvoiceEditPage.vue') },
         { path: 'reports-staff', name: 'reports-staff', component: () => import('@/pages/ReportsStaffPage.vue') },
         { path: 'report-details', name: 'report-details', component: () => import('@/pages/ReportDetailsPage.vue') },
         { path: 'profit-loss', name: 'profit-loss', component: () => import('@/pages/ProfitLossPage.vue') },

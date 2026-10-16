@@ -5,6 +5,8 @@ import { Printer, ArrowLeft } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useShiftStore } from '@/stores/shift'
 import { useSettingsStore } from '@/stores/settings'
+import { useBrandingStore } from '@/stores/branding'
+import BrandLogo from '@/components/BrandLogo.vue'
 import type { Shift } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
 import { drawerStatus } from '@/utils/money'
@@ -14,6 +16,7 @@ import { t } from '@/i18n'
 const auth = useAuthStore()
 const shift = useShiftStore()
 const settings = useSettingsStore()
+const branding = useBrandingStore()
 const router = useRouter()
 const toast = useToast()
 
@@ -115,7 +118,8 @@ function printReport() {
 
     <div v-else-if="report" id="pos-shift-report" class="card max-w-md w-full font-mono text-sm space-y-3">
       <div class="text-center space-y-0.5 font-body">
-        <p class="font-heading text-lg">{{ settings.app.receiptHeader || $t('app.brand') }}</p>
+        <BrandLogo class="h-14 max-w-[10rem] mb-1" />
+        <p class="font-heading text-lg">{{ settings.app.receiptHeader || branding.shortName }}</p>
         <p class="text-muted">{{ $t('shifts.reportTitle', { till: report.deviceName }) }}</p>
         <p class="text-muted">{{ report.cashierName }}</p>
         <p class="text-muted">{{ formatDateTime(report.openedAt) }} → {{ formatDateTime(report.closedAt) }}</p>

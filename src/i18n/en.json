@@ -14,7 +14,8 @@
     "usersRoles": "Users & Roles",
     "customers": "Customers",
     "expenses": "Expenses",
-    "settings": "Settings"
+    "settings": "Settings",
+    "invoices": "Invoices"
   },
   "auth": {
     "signIn": "Sign in",
@@ -211,7 +212,18 @@
     "moveOtherBranch": "Orders can only move to a table in the same branch.",
     "tableGone": "That table doesn’t exist any more.",
     "tableNotFree": "That table isn’t free any more.",
-    "tableNotTakingOrders": "That table isn’t taking orders."
+    "tableNotTakingOrders": "That table isn’t taking orders.",
+    "invoiceDate": "Pick the invoice date.",
+    "invoiceCustomer": "Pick a customer.",
+    "invoiceBelowPaid": "The new total is less than what has already been paid.",
+    "invoiceCancelledChange": "A cancelled invoice can’t be changed.",
+    "invoiceAlreadyCancelled": "This invoice is already cancelled.",
+    "invoiceHasPayments": "Remove this invoice’s payments before cancelling it.",
+    "paymentDate": "Pick the payment date.",
+    "paymentProof": "The proof must be an image or a web link (up to about 2 MB).",
+    "invoiceCancelledPay": "A cancelled invoice can’t take payments.",
+    "invoicePaid": "This invoice is already paid in full.",
+    "paymentOverBalance": "That’s more than the {amount} still owed."
   },
   "fields": {
     "name_en": "Name",
@@ -353,7 +365,8 @@
     "report": "Reports",
     "customer": "Customers",
     "user": "Admin",
-    "userFull": "Users & settings"
+    "userFull": "Users & settings",
+    "invoice": "Invoices"
   },
   "staffReport": {
     "title": "Reports & Staff",
@@ -390,7 +403,8 @@
     "totalOpex": "Total operating expenses",
     "addExpenseTitle": "Add expense",
     "amountUsd": "Amount ($)",
-    "expenseAdded": "Expense added."
+    "expenseAdded": "Expense added.",
+    "salesSplit": "POS {pos} · Invoices {invoices} ({n})"
   },
   "reportDetails": {
     "title": "Report details",
@@ -437,6 +451,10 @@
       "expenses": {
         "label": "Expenses",
         "desc": "Every expense, with category, amount and note."
+      },
+      "invoices": {
+        "label": "Invoices",
+        "desc": "Back-office sales by invoice date: totals, paid and still owed."
       }
     },
     "nouns": {
@@ -479,7 +497,11 @@
       "openOrders": "Open orders",
       "expenseCount": "Expenses",
       "categories": "Categories",
-      "average": "Average"
+      "average": "Average",
+      "invoices": "Invoices",
+      "invoiced": "Invoiced",
+      "collected": "Collected",
+      "owed": "Still owed"
     },
     "detail": {
       "matchingSales": "Matching sales",
@@ -745,7 +767,10 @@
       "manage": "Manage expenses"
     },
     "system.manage": "Manage Telegram alerts and database backups",
-    "system.reset": "Wipe all data for a fresh production setup"
+    "system.reset": "Wipe all data for a fresh production setup",
+    "invoice": {
+      "manage": "Create invoices and record their payments"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -753,6 +778,26 @@
     "tabBranches": "Branches & devices",
     "tabPayments": "Payment methods",
     "tabReceipt": "Receipt & loyalty",
+    "tabCompany": "Company",
+    "companyTitle": "Company name & logo",
+    "companyIntro": "Your company's name and logo, used across the system instead of “{default}”.",
+    "companyName": "Company name",
+    "companyNameHint": "Shown in the sidebar, the sign-in pages and the browser tab — and on receipts, invoices and the QR menu unless you've written your own receipt header. Leave it empty to use “{default}”.",
+    "logo": "Logo",
+    "logoHint": "A PNG with a transparent background works best; it's resized to 512 px. Shown in the sidebar, sign-in pages, POS, receipts, invoices, table QR cards, the customer display and the QR menu.",
+    "logoUpload": "Upload",
+    "logoLink": "Link",
+    "logoChoose": "Choose image",
+    "logoChange": "Change image",
+    "logoRemove": "Remove logo",
+    "logoDrop": "Drop or paste an image here",
+    "logoNone": "No logo",
+    "logoPreparing": "Preparing image…",
+    "logoNotImage": "That file isn't an image.",
+    "logoLinkInvalid": "The link must start with http:// or https://",
+    "logoPreview": "Preview",
+    "companySaved": "Company name and logo saved.",
+    "receiptHeaderHint": "Printed on receipts, invoices and table QR cards. Empty uses the company name.",
     "rateUpdated": "Exchange rate updated to ៛ {rate} / $1.",
     "currentRate": "Current rate",
     "rielPerUsd": "Riel per $1",
@@ -812,7 +857,8 @@
     "docType": {
       "SALE": "Sales",
       "EXPENSE": "Expenses",
-      "PURCHASE_ORDER": "Purchase orders"
+      "PURCHASE_ORDER": "Purchase orders",
+      "INVOICE": "Invoices"
     },
     "retentionTitle": "Audit log retention",
     "retentionIntro": "Activity log entries older than the retention period are purged automatically every night.",
@@ -1053,7 +1099,8 @@
     "importCreated": "{n} row(s) created.",
     "importRow": "Row",
     "importReason": "Reason skipped",
-    "selectCategory": "Select a category"
+    "selectCategory": "Select a category",
+    "poNoteHint": "e.g. delivery date, terms, contact at the supplier"
   },
   "stockStatus": {
     "in_stock": "In stock",
@@ -1128,7 +1175,7 @@
     "resume": "Resume",
     "discardAria": "Discard held sale",
     "confirmDiscard": "Discard held sale \"{label}\"? This can't be undone.",
-    "signInTitle": "Com Mart POS",
+    "signInTitle": "{brand} POS",
     "signInSubtitle": "Sign in at this till",
     "usernameHint": "e.g. kim.vannak",
     "pin": "PIN",
@@ -1312,6 +1359,117 @@
     "noFreeTables": "No free tables right now — every other table has open orders or isn’t taking orders.",
     "tableTotal": "Table total · {n} order | Table total · {n} orders",
     "payTable": "Load table & take payment · {amount}"
+  },
+  "invoices": {
+    "title": "Invoices",
+    "subtitle": "Sales to customers, paid over time",
+    "new": "New invoice",
+    "editTitle": "Edit {code}",
+    "kpiInvoiced": "Invoiced",
+    "kpiCount": "{n} invoice | {n} invoices",
+    "kpiCollected": "Collected",
+    "kpiOutstanding": "Still owed",
+    "kpiOverdue": "Overdue invoices",
+    "searchPlaceholder": "Search invoice no., customer or phone",
+    "filter": {
+      "open": "All open",
+      "all": "Everything"
+    },
+    "status": {
+      "DUE": "Due",
+      "PENDING": "Pending",
+      "PAID": "Paid",
+      "OVERDUE": "Overdue",
+      "CANCELLED": "Cancelled"
+    },
+    "invoice": "Invoice",
+    "customer": "Customer",
+    "invoiceDate": "Invoice date",
+    "dueDate": "Due date",
+    "paid": "Paid",
+    "balance": "Balance",
+    "balanceDue": "Balance due",
+    "none": "No invoices here yet.",
+    "noun": "invoices",
+    "saved": "{code} saved.",
+    "created": "{code} created — record payments below when they come in.",
+    "paymentSaved": "Payment of {amount} recorded.",
+    "paymentDeleted": "Payment removed.",
+    "cancelled": "{code} cancelled — its stock is back on the shelf.",
+    "pickCustomer": "Search and pick a customer",
+    "inStock": "{n} in stock",
+    "inDays": "{n} days",
+    "noDueDate": "No due date",
+    "unitPrice": "Unit price ($)",
+    "lineNoteHint": "Note for this item (optional)",
+    "shipping": "Shipping ($)",
+    "noteHint": "e.g. delivery address, terms",
+    "alreadyPaid": "Already paid",
+    "needCustomer": "Pick a customer.",
+    "needItems": "Add at least one item.",
+    "needQty": "Each quantity must be a whole number of 1 or more.",
+    "dueBeforeDate": "The due date can’t be before the invoice date.",
+    "belowPaid": "The total can’t be less than the {paid} already paid.",
+    "create": "Create invoice",
+    "notAnImage": "That file isn’t an image.",
+    "pickMethod": "Pick a payment method.",
+    "amountPositive": "Enter an amount.",
+    "overBalance": "That’s more than the {balance} still owed.",
+    "linkInvalid": "A proof link must start with http:// or https://.",
+    "cancelPrompt": "Cancel {code}? Its items go back into stock. Reason (optional):",
+    "cancelledNote": "This invoice was cancelled",
+    "payments": "Payments",
+    "noPayments": "No payments yet.",
+    "recordedBy": "Recorded by {name}",
+    "viewProof": "View proof",
+    "payment": "payment",
+    "recordPayment": "Record a payment",
+    "amount": "Amount ($)",
+    "fullBalance": "Full balance ({amount})",
+    "referenceHint": "Reference (e.g. transfer no.)",
+    "paymentNoteHint": "Note (optional)",
+    "proof": "Proof of payment (optional)",
+    "proofLink": "Link",
+    "proofImage": "Image",
+    "preparing": "Preparing…",
+    "changeImage": "Change image",
+    "chooseImage": "Choose image",
+    "savePayment": "Record {amount}",
+    "cancelInvoice": "Cancel invoice",
+    "print": "Print",
+    "edit": "Edit",
+    "billTo": "Bill to",
+    "loadFailed": "Couldn’t load this invoice.",
+    "shippingLine": "Shipping",
+    "createdShort": "{code} created.",
+    "actions": "Actions",
+    "payBtn": "Payment",
+    "cancelBtn": "Cancel",
+    "payAria": "Record a payment for {code}",
+    "editAria": "Edit {code}",
+    "cancelAria": "Cancel {code}",
+    "payTitle": "Payment · {code}",
+    "backToList": "Back to invoices",
+    "paymentNow": "Payment received (optional)",
+    "paymentNowHint": "Paid something already? Record it here and it’s saved with the invoice. Leave the amount at 0 for none.",
+    "paidInFull": "Paid in full ({amount})",
+    "dropHint": "Drop or paste a photo here, or choose one."
+  },
+  "richText": {
+    "toolbar": "Formatting",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strike": "Strikethrough",
+    "bulletList": "Bulleted list",
+    "orderedList": "Numbered list",
+    "quote": "Quote",
+    "link": "Link",
+    "clear": "Clear formatting",
+    "undo": "Undo",
+    "redo": "Redo",
+    "linkPrompt": "Link address (https://…). Leave empty to remove the link.",
+    "linkInvalid": "A link must start with http://, https:// or mailto:."
   },
   "tables": {
     "tab": "Tables & QR",

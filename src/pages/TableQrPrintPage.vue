@@ -9,17 +9,20 @@ import { Printer } from 'lucide-vue-next'
 import { listDiningTables } from '@/api/tableOrders'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
+import { useBrandingStore } from '@/stores/branding'
+import BrandLogo from '@/components/BrandLogo.vue'
 import { t } from '@/i18n'
 import type { DiningTable } from '@/types/domain'
 
 const route = useRoute()
 const auth = useAuthStore()
 const settings = useSettingsStore()
+const branding = useBrandingStore()
 
 const branchId = Number(route.query.branch_id)
 const onlyIds = new Set(String(route.query.ids ?? '').split(',').filter(Boolean).map(Number))
 const branchName = computed(() => auth.branches.find((b) => b.id === branchId)?.name ?? '')
-const storeName = computed(() => settings.app.receiptHeader || t('app.brand'))
+const storeName = computed(() => settings.app.receiptHeader || branding.shortName)
 
 const cards = ref<{ table: DiningTable; url: string; qr: string }[]>([])
 const error = ref('')
@@ -74,6 +77,7 @@ onMounted(async () => {
         :key="c.table.id"
         class="qr-card bg-white text-black rounded-card border border-line print:rounded-none print:border-dashed p-6 flex flex-col items-center text-center gap-3"
       >
+        <BrandLogo class="h-14 max-w-[10rem]" />
         <p class="font-heading text-xl">{{ storeName }}</p>
         <p class="text-sm">{{ branchName }}</p>
         <p class="font-heading text-4xl tracking-wide">{{ c.table.name }}</p>

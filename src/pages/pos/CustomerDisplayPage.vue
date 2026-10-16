@@ -7,6 +7,8 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { CheckCircle2, Maximize } from 'lucide-vue-next'
 import { useCustomerDisplayReceiver, type CartMessage, type DisplayLine, type PaidMessage, type PaymentDraft } from '@/composables/useCustomerDisplay'
 import { i18n, label, setLocale, type Locale } from '@/i18n'
+import BrandLogo from '@/components/BrandLogo.vue'
+import { useBrandingStore } from '@/stores/branding'
 import { formatKHR, formatUSD, initialsOf } from '@/utils/format'
 
 const state = ref<CartMessage | PaidMessage | null>(null)
@@ -34,7 +36,8 @@ const receiver = useCustomerDisplayReceiver(onMessage)
 
 const cart = computed(() => (state.value?.type === 'cart' ? state.value : null))
 const paid = computed(() => (state.value?.type === 'paid' ? state.value : null))
-const storeName = computed(() => state.value?.storeName ?? '')
+const branding = useBrandingStore()
+const storeName = computed(() => state.value?.storeName || branding.shortName)
 
 // The customer reads in the till's language; the other one goes underneath
 // when the product has both.
@@ -79,7 +82,10 @@ onUnmounted(() => {
 <template>
   <div class="h-screen flex flex-col bg-page text-ink select-none">
     <header class="h-16 shrink-0 flex items-center justify-between gap-4 border-b border-line bg-surface px-6">
-      <p class="font-heading text-2xl truncate">{{ storeName || $t('app.brand') }}</p>
+      <div class="flex items-center gap-3 min-w-0">
+        <BrandLogo class="h-11 max-w-[6rem]" />
+        <p class="font-heading text-2xl truncate">{{ storeName }}</p>
+      </div>
       <div class="flex items-center gap-4">
         <span v-if="state?.tillName" class="text-muted">{{ state.tillName }}</span>
         <button v-if="!isFullscreen" type="button" class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5" @click="enterFullscreen">
@@ -132,8 +138,9 @@ onUnmounted(() => {
 
     <!-- Empty cart: welcome -->
     <div v-else-if="cart && cart.lines.length === 0" class="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+      <BrandLogo class="h-32 max-w-[20rem] mb-2" />
       <p class="font-heading text-5xl">{{ $t('customerDisplay.welcome') }}</p>
-      <p class="text-muted text-xl">{{ storeName || $t('app.brand') }}</p>
+      <p class="text-muted text-xl">{{ storeName }}</p>
     </div>
 
     <!-- The order -->

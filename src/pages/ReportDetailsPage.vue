@@ -14,6 +14,7 @@ import type {
   ByCashierRow,
   ByProductRow,
   Expense,
+  Invoice,
   PaymentMethodReportRow,
   PurchaseOrder,
   Sale,
@@ -26,6 +27,9 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import Modal from '@/components/Modal.vue'
+import RichText from '@/components/RichText.vue'
+import InvoiceDetail from '@/components/invoices/InvoiceDetail.vue'
+import { getInvoice } from '@/api/invoices'
 import { useToast } from '@/composables/useToast'
 import { i18n, label, localName } from '@/i18n'
 
@@ -55,6 +59,7 @@ const {
   stockMovements,
   purchaseOrderRows,
   expenseRows,
+  invoiceRows,
   activityLog,
   totalsByReport,
 } = useReportDetails(range, branchId)
@@ -106,7 +111,7 @@ function printPage() {
 //    each row in those lists can itself be clicked through to 'sale'.
 //  - the rest (stock movement, purchase order, expense, activity log) need no
 //    fetch — the row already has everything, just laid out as a detail.
-type DetailMode = 'sale' | 'product-sales' | 'method-sales' | 'cashier-shifts' | 'stock-movement' | 'po' | 'expense' | 'activity' | null
+type DetailMode = 'sale' | 'product-sales' | 'method-sales' | 'cashier-shifts' | 'stock-movement' | 'po' | 'invoice' | 'expense' | 'activity' | null
 const detailMode = ref<DetailMode>(null)
 const detailTitle = ref('')
 const detailSubtitle = ref('')
@@ -117,6 +122,7 @@ const detailTransactionRows = ref<TransactionRow[]>([])
 const detailShifts = ref<Shift[]>([])
 const detailStockMovement = ref<StockMovement | null>(null)
 const detailPO = ref<PurchaseOrder | null>(null)
+const detailInvoice = ref<Invoice | null>(null)
 const detailExpense = ref<Expense | null>(null)
 const detailActivity = ref<ActivityLogRow | null>(null)
 
@@ -128,6 +134,7 @@ function closeDetail() {
   detailShifts.value = []
   detailStockMovement.value = null
   detailPO.value = null
+  detailInvoice.value = null
   detailExpense.value = null
   detailActivity.value = null
 }
@@ -207,6 +214,32 @@ function openStockMovementDetail(row: StockMovement) {
   detailTitle.value = localName(row.product, row.productKm)
   detailStockMovement.value = row
 }
+function printInvoice(id: number) {
+  window.open(`/print/invoice/${id}`, '_blank')
+}
+// An invoice row has no items or payments; fetch the full invoice to show it read-only.
+async function openInvoiceDetail(row: Invoice) {
+  detailMode.value = 'invoice'
+  detailTitle.value = row.code
+  detailSubtitle.value = row.customerName
+  detailLoading.value = true
+  try {
+    detailInvoice.value = await getInvoice(row.id)
+  } catch {
+    closeDetail()
+  } finally {
+    detailLoading.value = false
+  }
+}
+function invoiceTone(i: Invoice) {
+  const overdue = i.paymentStatus !== 'PAID' && !!i.dueDate && i.dueDate < new Date().toISOString().slice(0, 10)
+  return i.paymentStatus === 'PAID' ? 'success' : overdue ? 'danger' : 'warning'
+}
+function invoiceStatusLabel(i: Invoice) {
+  const overdue = i.paymentStatus !== 'PAID' && !!i.dueDate && i.dueDate < new Date().toISOString().slice(0, 10)
+  return overdue ? t('invoices.status.OVERDUE') : t(`invoices.status.${i.paymentStatus}`)
+}
+
 function openPODetail(row: PurchaseOrder) {
   detailMode.value = 'po'
   detailTitle.value = row.code
@@ -456,6 +489,32 @@ function shiftStatus(s: Shift) {
               </tbody>
             </table>
 
+            <table v-else-if="selected === 'invoices'" class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-muted border-b border-line">
+                  <th class="py-2 font-medium">{{ $t('invoices.invoice') }}</th>
+                  <th class="py-2 font-medium">{{ $t('col.date') }}</th>
+                  <th class="py-2 font-medium">{{ $t('invoices.customer') }}</th>
+                  <th class="py-2 font-medium">{{ $t('invoices.dueDate') }}</th>
+                  <th class="py-2 font-medium text-right">{{ $t('col.total') }}</th>
+                  <th class="py-2 font-medium text-right">{{ $t('invoices.paid') }}</th>
+                  <th class="py-2 font-medium text-right">{{ $t('invoices.balance') }}</th>
+                  <th class="py-2 font-medium">{{ $t('col.status') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="inv in invoiceRows" :key="inv.id" class="border-b border-line last:border-0 cursor-pointer hover:bg-surface-subtle" @click="openInvoiceDetail(inv)">
+                  <td class="py-2 font-mono text-xs">{{ inv.code }}</td>
+                  <td class="py-2 font-mono text-xs">{{ inv.invoiceDate }}</td>
+                  <td class="py-2">{{ inv.customerName }}</td>
+                  <td class="py-2 font-mono text-xs">{{ inv.dueDate ?? '—' }}</td>
+                  <td class="py-2 text-right font-mono">{{ formatUSD(inv.totalCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ formatUSD(inv.paidCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ formatUSD(inv.balanceCents) }}</td>
+                  <td class="py-2"><StatusBadge :tone="invoiceTone(inv)" :label="invoiceStatusLabel(inv)" /></td>
+                </tr>
+              </tbody>
+            </table>
             <table v-else-if="selected === 'purchase-orders'" class="w-full text-sm">
               <thead>
                 <tr class="text-left text-muted border-b border-line">
@@ -539,7 +598,7 @@ function shiftStatus(s: Shift) {
     </div>
 
     <!-- Detail modal: shape depends on detailMode, see the script for why. -->
-    <Modal v-if="detailMode" :title="detailTitle" @close="closeDetail">
+    <Modal v-if="detailMode" :title="detailTitle" :wide="detailMode === 'invoice'" @close="closeDetail">
       <p v-if="detailSubtitle" class="text-muted text-xs -mt-2 mb-3">{{ detailSubtitle }}</p>
       <div v-if="detailLoading" class="text-center text-sm text-muted py-8">{{ $t('common.loading') }}</div>
 
@@ -669,6 +728,10 @@ function shiftStatus(s: Shift) {
       </div>
 
       <!-- Purchase order, with line items -->
+      <div v-else-if="detailMode === 'invoice'" class="text-sm">
+        <p v-if="detailLoading || !detailInvoice" class="py-6 text-center text-muted">{{ $t('tableMenu.loading') }}</p>
+        <InvoiceDetail v-else :invoice="detailInvoice" :payment-methods="[]" :can-manage="false" @print="printInvoice(detailInvoice.id)" />
+      </div>
       <div v-else-if="detailMode === 'po' && detailPO" class="space-y-4 text-sm">
         <div class="flex items-center justify-between text-muted">
           <span>{{ detailPO.supplierName }}</span>
@@ -694,7 +757,7 @@ function shiftStatus(s: Shift) {
             </tr>
           </tbody>
         </table>
-        <p v-if="detailPO.note" class="text-muted">{{ detailPO.note }}</p>
+        <RichText v-if="detailPO.note" :html="detailPO.note" class="rounded-control bg-surface-subtle px-3 py-2" />
         <div class="space-y-1 pt-2 border-t border-line">
           <div class="flex justify-between"><span class="text-muted">{{ $t('inventory.items') }}</span><span class="font-mono">{{ formatUSD(poItemsCostCents(detailPO)) }}</span></div>
           <div class="flex justify-between"><span class="text-muted">{{ $t('inventory.shipping') }}</span><span class="font-mono">{{ formatUSD(detailPO.shippingCents) }}</span></div>

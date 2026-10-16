@@ -17,6 +17,8 @@ import Pagination from '@/components/Pagination.vue'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import SearchAddInput from '@/components/SearchAddInput.vue'
 import SaleEditor from '@/components/SaleEditor.vue'
+import RichTextEditor from '@/components/RichTextEditor.vue'
+import RichText from '@/components/RichText.vue'
 import DiscountInput from '@/components/DiscountInput.vue'
 import type { DiscountType } from '@/composables/useCart'
 import { useToast } from '@/composables/useToast'
@@ -1506,10 +1508,7 @@ function viewPoDetail(po: PurchaseOrder) {
           <p class="text-sm text-right font-mono font-medium">{{ $t('inventory.totalLine', { amount: formatUSD(poFormTotalCents) }) }}</p>
         </div>
 
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('common.note') }}</label>
-          <input v-model="poForm.note" type="text" class="input" />
-        </div>
+        <RichTextEditor id="po-note" v-model="poForm.note" :label="$t('common.note')" :placeholder="$t('inventory.poNoteHint')" />
 
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" class="btn-secondary" @click="showPoModal = false">{{ $t('common.cancel') }}</button>
@@ -1556,7 +1555,10 @@ function viewPoDetail(po: PurchaseOrder) {
             </tr>
           </tbody>
         </table>
-        <p v-if="detailPo.note" class="text-sm text-muted">{{ $t('inventory.poNote', { note: detailPo.note }) }}</p>
+        <div v-if="detailPo.note" class="text-sm">
+          <p class="text-muted mb-1">{{ $t('common.note') }}</p>
+          <RichText :html="detailPo.note" class="rounded-control bg-surface-subtle px-3 py-2" />
+        </div>
         <div class="space-y-1 pt-2 border-t border-line">
           <div class="flex justify-between text-sm">
             <span class="text-muted">{{ $t('inventory.items') }}</span>

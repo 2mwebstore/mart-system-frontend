@@ -4,27 +4,16 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { label } from '@/i18n'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
-import {
-  LayoutDashboard,
-  ShoppingCart,
-  Clock,
-  Package,
-  BarChart3,
-  FileSearch,
-  TrendingUp,
-  Users,
-  Contact,
-  Receipt,
-  Settings,
-  Menu,
-  X,
-} from 'lucide-vue-next'
+import BrandLogo from '@/components/BrandLogo.vue'
+import { BarChart3, Clock, Contact, FileSearch, FileText, LayoutDashboard, Menu, Package, Receipt, Settings, ShoppingCart, TrendingUp, Users, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useBrandingStore } from '@/stores/branding'
 
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const branding = useBrandingStore()
 
 // Below lg, the sidebar is an off-canvas drawer instead of a permanent
 // column — closed by default, opened by the header's hamburger button,
@@ -36,6 +25,10 @@ const navItems = computed(() => [
   { name: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, to: { name: 'dashboard' } },
   { name: 'shifts', label: t('nav.shifts'), icon: Clock, to: { name: 'shifts' } },
   { name: 'inventory', label: t('nav.inventory'), icon: Package, to: { name: 'inventory' } },
+  // Back-office sales paid over time; only for those who can work with them.
+  ...(auth.hasPermission('invoice.manage') || auth.hasPermission('report.sales')
+    ? [{ name: 'invoices', label: t('nav.invoices'), icon: FileText, to: { name: 'invoices' } }]
+    : []),
   { name: 'reports-staff', label: t('nav.reportsStaff'), icon: BarChart3, to: { name: 'reports-staff' } },
   { name: 'report-details', label: t('nav.reportDetails'), icon: FileSearch, to: { name: 'report-details' } },
   { name: 'profit-loss', label: t('nav.profitLoss'), icon: TrendingUp, to: { name: 'profit-loss' } },
@@ -65,8 +58,11 @@ async function handleSignOut() {
       class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 bg-sidebar text-white flex flex-col transform transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-60 lg:translate-x-0"
       :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
     >
-      <div class="px-5 py-6 flex items-center justify-between">
-        <p class="font-heading text-lg leading-tight">{{ t('app.name') }}</p>
+      <div class="px-5 py-6 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <BrandLogo tile class="h-10 max-w-[5.5rem]" />
+          <p class="font-heading text-lg leading-tight break-words min-w-0">{{ branding.name }}</p>
+        </div>
         <button type="button" class="p-1 text-white/70 hover:text-white lg:hidden" :aria-label="$t('common.close')" @click="mobileMenuOpen = false">
           <X :stroke-width="1.8" class="w-5 h-5" />
         </button>
@@ -113,7 +109,8 @@ async function handleSignOut() {
           <button type="button" class="p-1.5 -ml-1.5 text-ink shrink-0" :aria-label="$t('common.openMenu')" @click="mobileMenuOpen = true">
             <Menu :stroke-width="1.8" class="w-5 h-5" />
           </button>
-          <p class="font-heading text-base truncate">{{ t('app.name') }}</p>
+          <BrandLogo class="h-8 max-w-[4.5rem]" />
+          <p class="font-heading text-base truncate">{{ branding.name }}</p>
         </div>
         <div class="hidden lg:block" />
         <div class="flex items-center gap-2 sm:gap-4 shrink-0">

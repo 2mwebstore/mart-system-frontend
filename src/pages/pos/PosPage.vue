@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { LayoutGrid, Minus, Monitor, MoreVertical, Package, Pencil, Plus, Search, ShoppingCart, Trash2, UtensilsCrossed, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
+import { useBrandingStore } from '@/stores/branding'
 import { useShiftStore, type HeldSale } from '@/stores/shift'
 import { useCart, type DiscountType } from '@/composables/useCart'
 import * as catalogApi from '@/api/catalog'
@@ -24,6 +25,7 @@ import { useTableOrders } from '@/composables/useTableOrders'
 import VariantPickerModal from '@/components/pos/VariantPickerModal.vue'
 import LineEditModal from '@/components/pos/LineEditModal.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import { i18n, localName, t } from '@/i18n'
 import { usdCentsToRiel } from '@/utils/money'
 import { openCustomerDisplay, useCustomerDisplaySender, type CartMessage, type PaidMessage, type PaymentDraft } from '@/composables/useCustomerDisplay'
@@ -34,6 +36,7 @@ const router = useRouter()
 const toast = useToast()
 const cart = useCart()
 const settings = useSettingsStore()
+const branding = useBrandingStore()
 
 const canDiscount = auth.hasPermission('pos.discount')
 
@@ -373,7 +376,7 @@ function unlinkTableOrder() {
 // The order as it's built, then the payment result while the receipt is up.
 // See composables/useCustomerDisplay.ts.
 function displayState(): CartMessage | PaidMessage {
-  const common = { storeName: settings.app.receiptHeader || t('app.brand'), tillName: auth.tillName, locale: String(i18n.global.locale.value) }
+  const common = { storeName: settings.app.receiptHeader || branding.shortName, tillName: auth.tillName, locale: String(i18n.global.locale.value) }
   const sale = completedSale.value
   if (cart.lines.length === 0 && sale) {
     return {
@@ -488,7 +491,8 @@ function goToCloseShift() {
   <div class="h-screen h-dvh flex flex-col">
     <header class="h-14 shrink-0 flex items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-4">
       <div class="flex items-center gap-3 min-w-0">
-        <p class="font-heading text-lg truncate">{{ settings.app.receiptHeader || $t('app.brand') }}</p>
+        <BrandLogo class="h-8 max-w-[4.5rem]" />
+        <p class="font-heading text-lg truncate">{{ settings.app.receiptHeader || branding.shortName }}</p>
         <span class="hidden sm:inline text-muted text-sm truncate">{{ auth.tillName }} · {{ auth.user?.full_name }}</span>
       </div>
       <!-- Wide screens: every action inline -->

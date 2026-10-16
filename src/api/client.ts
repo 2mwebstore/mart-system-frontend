@@ -5,6 +5,8 @@ import { useToast } from '@/composables/useToast'
 import { apiErrorMessage } from '@/i18n/apiErrors'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
+// For URLs the browser loads itself (the company logo as an <img>).
+export const apiBaseURL = baseURL
 
 export const apiClient = axios.create({ baseURL })
 

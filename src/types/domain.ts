@@ -46,6 +46,14 @@ export interface AppSettings {
   allowOutOfStockSale: boolean
 }
 
+// The company's name and logo (Settings > Company).
+export interface Branding {
+  companyName: string // '' = the app's default name
+  hasLogo: boolean
+  logoLink: string // set when the logo is a web link
+  logoVersion: string // set when it's an uploaded image; changes with it
+}
+
 export interface ExchangeRateEntry {
   id: number
   rate: number
@@ -319,6 +327,93 @@ export interface CreateSaleInput {
   tableOrderIds?: number[]
 }
 
+// ---- Invoices (back-office sales, paid over time) ---------------------------
+
+export type InvoicePaymentStatus = 'DUE' | 'PENDING' | 'PAID'
+
+export interface InvoiceItem {
+  productId: number
+  nameEn: string
+  nameKm: string
+  sku: string
+  qty: number
+  unitPriceCents: number
+  discountCents: number // on the whole line
+  lineTotalCents: number
+  note: string
+}
+
+export interface InvoicePayment {
+  id: number
+  paidOn: string
+  methodName: string
+  methodType: 'CASH' | 'KHQR' | 'CARD' | 'OTHER'
+  amountCents: number
+  reference: string
+  note: string
+  attachment: string | null // https link or an image data URL
+  user: string
+  createdAt: string
+}
+
+export interface Invoice {
+  id: number
+  code: string
+  branchId: number
+  customerId: number
+  customerName: string
+  customerPhone: string
+  invoiceDate: string
+  dueDate: string | null
+  status: 'OPEN' | 'CANCELLED'
+  paymentStatus: InvoicePaymentStatus
+  subtotalCents: number
+  lineDiscountCents: number
+  discountCents: number
+  shippingCents: number
+  totalCents: number
+  paidCents: number
+  balanceCents: number
+  exchangeRate: number
+  itemCount: number
+  note: string
+  cancelReason: string
+  createdBy: string
+  createdAt: string
+  items?: InvoiceItem[] // detail only
+  payments?: InvoicePayment[] // detail only
+}
+
+export interface InvoiceSummary {
+  count: number
+  totalCents: number
+  paidCents: number
+  balanceCents: number
+  overdue: number
+}
+
+export interface InvoiceInput {
+  branchId: number
+  customerId: number
+  invoiceDate: string
+  dueDate: string
+  items: { productId: number; qty: number; unitPriceCents: number; discountCents: number; note: string }[]
+  discountCents: number
+  shippingCents: number
+  note: string // rich text (HTML)
+  payment?: InvoicePaymentInput // money received now (create only)
+}
+
+export interface InvoicePaymentInput {
+  paidOn: string
+  methodName: string
+  methodType: 'CASH' | 'KHQR' | 'CARD' | 'OTHER'
+  amountCents: number
+  reference: string
+  note: string
+  attachment: string
+}
+
 // ---- QR table ordering -------------------------------------------------------
 
 export type TableOrderStatus = 'NEW' | 'ACCEPTED' | 'PAID' | 'CANCELLED'
@@ -447,6 +542,10 @@ export interface ProfitLossReport {
   netProfitCents: number
   profitByCategory: { name: string; nameKm: string; profitCents: number; share: number }[]
   netProfitByDay: { date: string; netProfitCents: number }[]
+  // Net sales split by where they came from (invoices count on their invoice date).
+  posSalesCents: number
+  invoiceSalesCents: number
+  invoiceCount: number
 }
 
 export interface TransactionRow {
@@ -576,7 +675,7 @@ export interface BackupSettings {
 
 // ---- Document numbering ----------------------------------------------------
 
-export type DocType = 'SALE' | 'EXPENSE' | 'PURCHASE_ORDER'
+export type DocType = 'SALE' | 'EXPENSE' | 'PURCHASE_ORDER' | 'INVOICE'
 
 export interface NumberSequence {
   docType: DocType

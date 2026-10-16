@@ -7,6 +7,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CheckCircle2, ChefHat, Clock, Minus, Plus, Search, ShoppingBag, X, XCircle } from 'lucide-vue-next'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
+import { useBrandingStore } from '@/stores/branding'
 import { getPublicTableOrder, getTableMenu, placeTableOrder } from '@/api/tableOrders'
 import { i18n, t } from '@/i18n'
 import { apiErrorMessage } from '@/i18n/apiErrors'
@@ -249,7 +251,8 @@ function statusIcon(s: string) {
 function timeOf(iso: string) {
   return new Date(iso).toLocaleTimeString(i18n.global.locale.value === 'km' ? 'km-KH' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
 }
-const title = computed(() => menu.value?.storeName || t('app.brand'))
+const branding = useBrandingStore()
+const title = computed(() => menu.value?.storeName || branding.shortName)
 watch(title, (v) => (document.title = v), { immediate: true })
 </script>
 
@@ -257,9 +260,12 @@ watch(title, (v) => (document.title = v), { immediate: true })
   <div class="min-h-screen bg-page text-ink pb-28">
     <header class="sticky top-0 z-20 bg-surface/95 backdrop-blur border-b border-line">
       <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-        <div class="min-w-0">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <BrandLogo class="h-9 max-w-[4.5rem]" />
+          <div class="min-w-0">
           <p class="font-heading text-lg truncate leading-tight">{{ title }}</p>
           <p v-if="menu" class="text-xs text-muted truncate">{{ $t('tableMenu.tableAt', { table: menu.table.name, branch: menu.branch.name }) }}</p>
+          </div>
         </div>
         <LanguageSwitch />
       </div>

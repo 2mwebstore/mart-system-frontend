@@ -2,11 +2,13 @@ import { computed, ref, watch, type Ref } from 'vue'
 import * as reportsApi from '@/api/reports'
 import { pagePurchaseOrders } from '@/api/catalog'
 import { pageExpenses } from '@/api/people'
+import { pageInvoices } from '@/api/invoices'
 import type {
   ActivityLogRow,
   ByCashierRow,
   ByProductRow,
   Expense,
+  Invoice,
   PaymentMethodReportRow,
   PurchaseOrder,
   StockMovement,
@@ -27,6 +29,7 @@ export const reportTypes = [
   'voids-refunds',
   'stock-movements',
   'purchase-orders',
+  'invoices',
   'expenses',
   'activity-log',
 ]
@@ -58,6 +61,7 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
   const stockMovements = ref<StockMovement[]>([])
   const purchaseOrderRows = ref<PurchaseOrder[]>([])
   const expenseRows = ref<Expense[]>([])
+  const invoiceRows = ref<Invoice[]>([])
   const activityLog = ref<ActivityLogRow[]>([])
 
   function resetFilters() {
@@ -122,6 +126,13 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
         case 'purchase-orders': {
           const res = await pagePurchaseOrders(branchId.value, paged)
           purchaseOrderRows.value = res.data
+          setMeta(res.meta)
+          break
+        }
+        case 'invoices': {
+          // Open invoices by invoice date — the same ones Profit & Loss counts.
+          const res = await pageInvoices(branchId.value, { ...paged, status: 'open' })
+          invoiceRows.value = res.data
           setMeta(res.meta)
           break
         }
@@ -206,6 +217,13 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
           { label: t('reportDetails.tiles.openOrders'), value: String(sm.value.openOrders ?? 0) },
           { label: t('reportDetails.tiles.total'), value: formatUSD(sm.value.totalCostCents ?? 0) },
         ]
+      case 'invoices':
+        return [
+          { label: t('reportDetails.tiles.invoices'), value: String(sm.value.count ?? 0) },
+          { label: t('reportDetails.tiles.invoiced'), value: formatUSD(sm.value.totalCents ?? 0) },
+          { label: t('reportDetails.tiles.collected'), value: formatUSD(sm.value.paidCents ?? 0) },
+          { label: t('reportDetails.tiles.owed'), value: formatUSD(sm.value.balanceCents ?? 0) },
+        ]
       case 'expenses':
         return [
           { label: t('reportDetails.tiles.expenseCount'), value: String(total.value ?? 0) },
@@ -250,6 +268,7 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
     stockMovements,
     purchaseOrderRows,
     expenseRows,
+    invoiceRows,
     activityLog,
     totalsByReport,
   }

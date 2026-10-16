@@ -3,6 +3,7 @@ import type {
   ActivityLogRetention,
   AppSettings,
   BackupRow,
+  Branding,
   BackupSettings,
   Branch,
   DocType,
@@ -33,6 +34,11 @@ export const updatePaymentMethod = (id: number, p: PaymentMethodInput) => put<Pa
 export const deletePaymentMethod = (id: number) => del(`/payment-methods/${id}`)
 
 export const getSettings = () => get<AppSettings>('/settings')
+
+// Company name + logo. Public — the sign-in pages show them too. `logo` left
+// out keeps the current one; '' removes it.
+export const getBranding = () => get<Branding>('/auth/branding', undefined, { silent: true })
+export const updateBranding = (b: { companyName: string; logo?: string }) => put<Branding>('/settings/branding', b)
 export const updateSettings = (s: AppSettings) => put<AppSettings>('/settings', s)
 
 export const getExchangeRate = () => get<{ rate: number; history: ExchangeRateEntry[] }>('/exchange-rate')

@@ -28,10 +28,21 @@ export const i18n = createI18n({
 // when called inside a template or computed.
 export const t = i18n.global.t
 
+// The system's name: the company name from Settings > Company when one is
+// set (stores/branding.ts passes it in), otherwise "Com Mart Control System".
+let companyName = ''
+export function appName(): string {
+  return companyName || i18n.global.t('app.name')
+}
+export function setCompanyName(name: string) {
+  companyName = name
+  document.title = appName()
+}
+
 function applyLocale(locale: Locale) {
   document.documentElement.lang = locale
   dayjs.locale(locale) // month / weekday names in the date pickers
-  document.title = i18n.global.t('app.name')
+  document.title = appName()
 }
 applyLocale(i18n.global.locale.value)
 

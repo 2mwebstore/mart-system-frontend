@@ -12,6 +12,7 @@ import { usePagedList } from '@/composables/usePagedList'
 import { Printer, ArrowRight } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
+import { useBrandingStore } from '@/stores/branding'
 import * as posApi from '@/api/pos'
 import { listPublicTills } from '@/api/settings'
 import type { PublicTill, Shift } from '@/types/domain'
@@ -19,6 +20,7 @@ import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
 import { drawerStatus } from '@/utils/money'
 import StatusBadge from '@/components/StatusBadge.vue'
 import Modal from '@/components/Modal.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import { useToast } from '@/composables/useToast'
@@ -26,6 +28,7 @@ import { label, t } from '@/i18n'
 
 const auth = useAuthStore()
 const settings = useSettingsStore()
+const branding = useBrandingStore()
 const toast = useToast()
 
 const branchId = computed(() => auth.activeBranchId ?? 0)
@@ -330,7 +333,8 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
     <!-- Step: report -->
     <div v-else-if="step === 'report' && report" id="shift-report" class="card max-w-lg mx-auto font-mono text-sm space-y-3">
       <div class="text-center space-y-0.5 font-body">
-        <p class="font-heading text-lg">{{ $t('shifts.reportBrand', { brand: settings.app.receiptHeader || $t('app.brand'), branch: branchName }) }}</p>
+        <BrandLogo class="h-14 max-w-[10rem] mb-1" />
+        <p class="font-heading text-lg">{{ $t('shifts.reportBrand', { brand: settings.app.receiptHeader || branding.shortName, branch: branchName }) }}</p>
         <p class="text-muted">{{ $t('shifts.reportTitle', { till: report.deviceName }) }}</p>
         <p class="text-muted">{{ report.cashierName }}</p>
         <p class="text-muted">{{ formatDateTime(report.openedAt) }} → {{ formatDateTime(report.closedAt) }}</p>

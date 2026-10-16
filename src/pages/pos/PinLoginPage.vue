@@ -2,16 +2,19 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useBrandingStore } from '@/stores/branding'
 import { listPublicTills } from '@/api/settings'
 import { getAccessToken } from '@/api/tokens'
 import NumPad from '@/components/pos/NumPad.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import { t } from '@/i18n'
 import { apiErrorMessage } from '@/i18n/apiErrors'
 import type { PublicTill } from '@/types/domain'
 
 const auth = useAuthStore()
+const branding = useBrandingStore()
 const router = useRouter()
 
 // Active tills come from the server (public endpoint — nobody may be signed in yet).
@@ -119,7 +122,8 @@ async function handleSubmit() {
   <div class="min-h-screen flex items-center justify-center bg-page px-4">
     <div class="w-full max-w-sm space-y-5">
       <div class="text-center">
-        <h1 class="font-heading text-2xl text-ink">{{ $t('pos.signInTitle') }}</h1>
+        <BrandLogo class="h-16 max-w-[12rem] mb-2" />
+        <h1 class="font-heading text-2xl text-ink">{{ $t('pos.signInTitle', { brand: branding.shortName }) }}</h1>
         <p class="text-muted text-sm mt-1">{{ sessionMode ? $t('pos.chooseTillSubtitle') : $t('pos.signInSubtitle') }}</p>
       </div>
 
