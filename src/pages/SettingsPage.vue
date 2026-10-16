@@ -23,6 +23,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
 import { formatDateTime } from '@/utils/format'
 import { label, t } from '@/i18n'
+import DiningTablesPanel from '@/components/settings/DiningTablesPanel.vue'
 
 const auth = useAuthStore()
 const settings = useSettingsStore()
@@ -31,12 +32,13 @@ const route = useRoute()
 const toast = useToast()
 // Defaults to Branches when the router sent us here for having none (see
 // router/index.ts) — otherwise the usual first tab.
-const activeTab = ref(route.query.tab === 'branches' ? 'branches' : 'rate')
+const activeTab = ref(['branches', 'tables'].includes(String(route.query.tab)) ? String(route.query.tab) : 'rate')
 const canManageSystem = auth.hasPermission('system.manage')
 const canResetSystem = auth.hasPermission('system.reset')
 const tabs = computed(() => [
   { key: 'rate', label: t('settings.tabRate') },
   { key: 'branches', label: t('settings.tabBranches') },
+  ...(canManage ? [{ key: 'tables', label: t('tables.tab') }] : []),
   { key: 'payments', label: t('settings.tabPayments') },
   { key: 'receipt', label: t('settings.tabReceipt') },
   ...(canManageSystem ? [{ key: 'alerts', label: t('alerts.tab') }] : []),
@@ -556,6 +558,8 @@ async function submitReset() {
         </div>
       </div>
     </div>
+
+    <DiningTablesPanel v-else-if="activeTab === 'tables'" />
 
     <div v-else-if="activeTab === 'payments'" class="card max-w-2xl">
       <div class="flex items-center justify-between mb-3">

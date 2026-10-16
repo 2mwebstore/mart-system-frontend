@@ -30,6 +30,10 @@ export interface HeldSale {
   discountType: 'percent' | 'amount'
   discountValue: number
   customerId: number | null
+  // Held QR table orders keep their link, so resuming still pays them.
+  tableOrderIds?: number[]
+  tableOrderId?: number | null // held before whole-table payment existed
+  tableOrderLabel?: string
 }
 
 const heldKey = (deviceKey: string) => `com-mart-pos-held-${deviceKey}`

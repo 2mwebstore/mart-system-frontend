@@ -28,6 +28,10 @@ const lines = reactive<CartLine[]>([])
 const cartDiscountType = ref<DiscountType>('amount')
 const cartDiscountValue = ref(0)
 const customerId = ref<number | null>(null)
+// Set when the cart was loaded from QR table orders — one order, or a whole
+// table's open orders in one bill; paying the sale pays all of them.
+const tableOrderIds = ref<number[]>([])
+const tableOrderLabel = ref('')
 
 function lineGrossCents(line: CartLine) {
   return line.unitPriceCents * line.qty
@@ -104,6 +108,8 @@ export function useCart() {
     cartDiscountType.value = 'amount'
     cartDiscountValue.value = 0
     customerId.value = null
+    tableOrderIds.value = []
+    tableOrderLabel.value = ''
   }
 
   const subtotalCents = computed(() => lines.reduce((sum, l) => sum + lineGrossCents(l), 0))
@@ -125,6 +131,8 @@ export function useCart() {
     cartDiscountType,
     cartDiscountValue,
     customerId,
+    tableOrderIds,
+    tableOrderLabel,
     addProduct,
     incQty,
     decQty,

@@ -315,6 +315,91 @@ export interface CreateSaleInput {
   items: { productId: number; qty: number; discountCents: number; note: string }[]
   discountCents: number
   payment: { method: 'CASH' | 'KHQR' | 'CARD'; receivedUsdCents: number; receivedKhrRiel: number; reference: string }
+  // Payment for QR table orders (one, or a whole table): the server marks them PAID.
+  tableOrderIds?: number[]
+}
+
+// ---- QR table ordering -------------------------------------------------------
+
+export type TableOrderStatus = 'NEW' | 'ACCEPTED' | 'PAID' | 'CANCELLED'
+
+export interface DiningTable {
+  id: number
+  branchId: number
+  name: string
+  token: string // the only thing in the printed QR
+  active: boolean
+  openOrders: number
+}
+
+// A table as the POS Tables board sees it (no QR token).
+export interface TableBoardEntry {
+  id: number
+  name: string
+  active: boolean
+}
+
+export interface TableOrderItem {
+  productId: number
+  nameEn: string
+  nameKm: string
+  qty: number
+  unitPriceCents: number
+  note: string
+}
+
+export interface TableOrder {
+  id: number
+  branchId: number
+  tableId: number | null
+  tableName: string
+  status: TableOrderStatus
+  note: string
+  totalCents: number
+  saleId: number | null
+  receiptNo: string
+  handledBy: string
+  cancelReason: string
+  acceptedAt: string | null
+  closedAt: string | null
+  createdAt: string
+  items: TableOrderItem[]
+}
+
+// What a customer sees on the table's QR menu (no cost or stock counts).
+export interface MenuItem {
+  id: number
+  parentProductId: number | null
+  variantName: string
+  variantCount: number
+  nameEn: string
+  nameKm: string
+  categoryId: number | null
+  categoryName: string | null
+  categoryNameKm: string | null
+  imageUrl: string
+  unit: string
+  priceCents: number
+  available: boolean
+}
+
+export interface TableMenu {
+  table: { name: string }
+  branch: { name: string }
+  storeName: string
+  exchangeRate: number
+  items: MenuItem[]
+}
+
+export interface PublicTableOrder {
+  token: string
+  tableName: string
+  status: TableOrderStatus
+  note: string
+  totalCents: number
+  cancelReason: string
+  createdAt: string
+  items: { nameEn: string; nameKm: string; qty: number; unitPriceCents: number; note: string }[]
 }
 
 // ---- Reports ---------------------------------------------------------------

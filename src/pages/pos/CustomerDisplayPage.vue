@@ -175,7 +175,7 @@ onUnmounted(() => {
         <p v-if="cart.customerName" class="text-lg">{{ $t('customerDisplay.customer', { name: cart.customerName }) }}</p>
         <div class="space-y-2 text-lg">
           <div class="flex justify-between">
-            <span class="text-muted">{{ $t('customerDisplay.items', { n: cart.itemCount }) }}</span>
+            <span class="text-muted">{{ $t('customerDisplay.items', { n: cart.itemCount }, cart.itemCount) }}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-muted">{{ $t('pos.subtotal') }}</span>

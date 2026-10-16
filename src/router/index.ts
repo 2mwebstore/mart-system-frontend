@@ -25,6 +25,20 @@ const router = createRouter({
       component: () => import('@/pages/pos/PinLoginPage.vue'),
       meta: { public: true },
     },
+    // A table's QR code opens this: the menu, ordering and order status for a
+    // customer's phone. Public — the table token in the URL is the access key.
+    {
+      path: '/t/:token',
+      name: 'table-menu',
+      component: () => import('@/pages/TableMenuPage.vue'),
+      meta: { public: true },
+    },
+    // Printable QR sheet for a branch's tables (signed-in, no app chrome).
+    {
+      path: '/print/table-qr',
+      name: 'table-qr-print',
+      component: () => import('@/pages/TableQrPrintPage.vue'),
+    },
     // Customer-facing second screen. Public: it makes no API calls and only
     // shows what the POS tab in this same browser sends it.
     {

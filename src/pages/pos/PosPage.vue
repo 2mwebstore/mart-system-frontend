@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { Minus, Monitor, MoreVertical, Pencil, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-vue-next'
+import { LayoutGrid, Minus, Monitor, MoreVertical, Package, Pencil, Plus, Search, ShoppingCart, Trash2, UtensilsCrossed, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useShiftStore, type HeldSale } from '@/stores/shift'
 import { useCart, type DiscountType } from '@/composables/useCart'
 import * as catalogApi from '@/api/catalog'
 import { listCustomers } from '@/api/people'
-import type { Category, CreateSaleInput, Customer, Product, Sale } from '@/types/domain'
+import type { Category, CreateSaleInput, Customer, Product, Sale, TableBoardEntry, TableOrder } from '@/types/domain'
 import { formatUSD, initialsOf } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
 import SearchableSelect from '@/components/SearchableSelect.vue'
@@ -17,6 +17,10 @@ import ReceiptModal from '@/components/pos/ReceiptModal.vue'
 import CashMovementModal from '@/components/pos/CashMovementModal.vue'
 import RecentSalesModal from '@/components/pos/RecentSalesModal.vue'
 import HeldSalesModal from '@/components/pos/HeldSalesModal.vue'
+import TableOrdersModal from '@/components/pos/TableOrdersModal.vue'
+import TablesBoard, { type BoardTile } from '@/components/pos/TablesBoard.vue'
+import { getTableBoard } from '@/api/tableOrders'
+import { useTableOrders } from '@/composables/useTableOrders'
 import VariantPickerModal from '@/components/pos/VariantPickerModal.vue'
 import LineEditModal from '@/components/pos/LineEditModal.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
@@ -218,12 +222,14 @@ async function onPaid(payment: CreateSaleInput['payment']) {
       items: cart.lines.map((l) => ({ productId: l.productId, qty: l.qty, discountCents: cart.lineDiscountCents(l), note: l.note })),
       discountCents: cart.cartDiscountCents.value,
       payment,
+      tableOrderIds: cart.tableOrderIds.value,
     })
     showPayment.value = false
     cart.clear()
     completedSale.value = sale
     // Stock changed and the customer may have earned points.
     void Promise.all([loadProducts(), listCustomers().then((c) => (customers.value = c))]).catch(() => {})
+    void tableOrders.refresh()
   } catch {
     // the API client already toasted the reason (e.g. not enough stock); the
     // payment modal stays open so the cashier can adjust
@@ -234,6 +240,133 @@ async function onPaid(payment: CreateSaleInput['payment']) {
 
 function closeReceipt() {
   completedSale.value = null
+}
+
+// --- QR table orders ------------------------------------------------------
+// Polled for this till's branch; a new one chimes and shows a toast. Loading
+// one fills the cart (and accepts it, so the customer sees it's being made);
+// paying then marks it PAID. See composables/useTableOrders.ts.
+const tableOrders = useTableOrders(() => shift.branchId)
+const showTableOrders = ref(false)
+function loadTableOrder(o: TableOrder) {
+  return loadTableOrders([o])
+}
+// One order, or a whole table's open orders in one bill. The cart holds each
+// product once, so the same product across orders becomes one line with the
+// quantities added and the notes joined. NEW orders are accepted on load (the
+// customer then sees "Being prepared").
+async function loadTableOrders(list: TableOrder[]) {
+  if (list.length === 0) return
+  const ids = list.map((o) => o.id)
+  const current = cart.tableOrderIds.value
+  const same = current.length === ids.length && ids.every((id) => current.includes(id))
+  if (cart.lines.length > 0 && !same && !window.confirm(t('pos.replaceCartForTableOrder'))) return
+  cart.clear()
+  const merged = new Map<number, { qty: number; notes: string[]; name: string }>()
+  for (const o of [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    for (const it of o.items) {
+      const m = merged.get(it.productId) ?? { qty: 0, notes: [], name: localName(it.nameEn, it.nameKm) }
+      m.qty += it.qty
+      if (it.note && !m.notes.includes(it.note)) m.notes.push(it.note)
+      merged.set(it.productId, m)
+    }
+  }
+  const missing: string[] = []
+  // addProduct puts each item on top, so walk backwards to keep the order.
+  for (const [productId, m] of [...merged].reverse()) {
+    const product = products.value.find((p) => p.id === productId)
+    if (!product) {
+      missing.push(m.name)
+      continue
+    }
+    for (let i = 0; i < m.qty; i++) cart.addProduct(product)
+    if (m.notes.length) cart.setLineNote(product.id, m.notes.join('; '))
+  }
+  const table = list[0].tableName
+  cart.tableOrderIds.value = ids
+  cart.tableOrderLabel.value = table
+  showTableOrders.value = false
+  boardTileKey.value = null
+  cartOpen.value = true
+  if (missing.length) toast.error(t('pos.tableOrderMissingItems', { items: missing.join(', ') }))
+  else toast.success(ids.length > 1 ? t('pos.tableLoaded', { table, n: ids.length }) : t('pos.tableOrderLoaded', { table }))
+  for (const o of list) if (o.status === 'NEW') void tableOrders.accept(o.id).catch(() => {})
+}
+// --- Tables board (the browsing area's "Tables" view) -------------------------
+// Remembered per till, like the till itself: a café till may live on Tables.
+const BROWSE_KEY = 'com-mart-pos-browse'
+function readBrowse(): 'products' | 'tables' {
+  try {
+    return localStorage.getItem(BROWSE_KEY) === 'tables' ? 'tables' : 'products'
+  } catch {
+    return 'products'
+  }
+}
+const browse = ref<'products' | 'tables'>(readBrowse())
+const boardTables = ref<TableBoardEntry[]>([])
+const boardLoading = ref(false)
+async function loadBoard() {
+  if (!shift.branchId) return
+  boardLoading.value = true
+  try {
+    boardTables.value = await getTableBoard(shift.branchId)
+  } catch {
+    // keep what's shown; tiles still update from the order poll
+  } finally {
+    boardLoading.value = false
+  }
+}
+function setBrowse(mode: 'products' | 'tables') {
+  browse.value = mode
+  try {
+    localStorage.setItem(BROWSE_KEY, mode)
+  } catch {
+    // not remembered — fine
+  }
+  if (mode === 'tables') void loadBoard()
+}
+onMounted(() => {
+  if (browse.value === 'tables') void loadBoard()
+})
+// The table whose orders are open; its list follows the live poll.
+const boardTileKey = ref<string | null>(null)
+const boardTileName = ref('')
+const boardTileTableId = ref<number | null>(null)
+function openTile(x: BoardTile) {
+  boardTileKey.value = x.key
+  boardTileName.value = x.name
+  boardTileTableId.value = x.tableId
+}
+const boardTileOrders = computed(() =>
+  tableOrders.orders.value.filter((o) => (boardTileTableId.value !== null ? o.tableId === boardTileTableId.value : o.tableName === boardTileName.value)),
+)
+
+// Move a table's open orders to another table (the party changed seats).
+// Only free tables are offered: taking orders, with nothing open on them.
+// The server checks the same thing when the move happens.
+const moveTargets = computed(() => {
+  const busy = new Set(tableOrders.orders.value.map((o) => o.tableId))
+  return boardTables.value.filter((x) => x.id !== boardTileTableId.value && x.active && !busy.has(x.id)).map((x) => ({ value: x.id, label: x.name }))
+})
+async function moveBoardTable(toId: number) {
+  const ids = boardTileOrders.value.map((o) => o.id)
+  const target = boardTables.value.find((x) => x.id === toId)
+  if (!target || ids.length === 0) return
+  const from = boardTileName.value
+  if (!window.confirm(t('tableBoard.moveConfirm', { n: ids.length, from, to: target.name }, ids.length))) return
+  try {
+    await tableOrders.move(ids, toId)
+    if (cart.tableOrderIds.value.some((id) => ids.includes(id))) cart.tableOrderLabel.value = target.name
+    toast.success(t('tableBoard.moved', { from, to: target.name }))
+    boardTileKey.value = null
+  } catch {
+    // toasted by the API client
+  }
+}
+
+function unlinkTableOrder() {
+  cart.tableOrderIds.value = []
+  cart.tableOrderLabel.value = ''
 }
 
 // --- Customer display (second window facing the customer) -------------------
@@ -310,6 +443,8 @@ function holdCurrentSale() {
     discountType: cart.cartDiscountType.value,
     discountValue: cart.cartDiscountValue.value,
     customerId: cart.customerId.value,
+    tableOrderIds: [...cart.tableOrderIds.value],
+    tableOrderLabel: cart.tableOrderLabel.value,
   })
   cart.clear()
   toast.success(t('pos.saleHeld'))
@@ -338,6 +473,8 @@ function onResumeHeld(held: HeldSale) {
   cart.cartDiscountType.value = held.discountType
   cart.cartDiscountValue.value = held.discountValue
   cart.customerId.value = held.customerId
+  cart.tableOrderIds.value = held.tableOrderIds ?? (held.tableOrderId ? [held.tableOrderId] : [])
+  cart.tableOrderLabel.value = held.tableOrderLabel ?? ''
   showHeldSales.value = false
   toast.info(t('pos.heldResumed'))
 }
@@ -362,6 +499,12 @@ function goToCloseShift() {
             {{ shift.heldSales.length }}
           </span>
         </button>
+        <button type="button" class="btn-secondary text-sm px-3 py-1.5 relative flex items-center gap-1.5" @click="showTableOrders = true">
+          <UtensilsCrossed :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.tableOrders') }}
+          <span v-if="tableOrders.newCount.value" class="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-danger-strong text-white text-[10px]">
+            {{ tableOrders.newCount.value }}
+          </span>
+        </button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="showRecentSales = true">{{ $t('pos.sales') }}</button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="showCashMovement = true">{{ $t('shifts.cashMovement') }}</button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="goToCloseShift">{{ $t('shifts.closeShift') }}</button>
@@ -372,6 +515,20 @@ function goToCloseShift() {
       </div>
       <!-- Narrower screens: held sales stays one tap away, the rest go in a menu -->
       <div class="flex xl:hidden items-center gap-2 shrink-0">
+        <button
+          type="button"
+          class="btn-secondary text-sm px-2.5 sm:px-3 py-1.5 relative flex items-center gap-1.5"
+          :aria-label="$t('pos.tableOrders')"
+          @click="showTableOrders = true"
+        >
+          <UtensilsCrossed :stroke-width="1.8" class="w-4 h-4" /><span class="hidden sm:inline">{{ $t('pos.tableOrders') }}</span>
+          <span
+            v-if="tableOrders.newCount.value"
+            class="absolute -top-1.5 -right-1.5 sm:static inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-danger-strong text-white text-[10px]"
+          >
+            {{ tableOrders.newCount.value }}
+          </span>
+        </button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5 relative" @click="showHeldSales = true">
           {{ $t('pos.heldSales') }}<span v-if="shift.heldSales.length" class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-ink text-[10px]">
             {{ shift.heldSales.length }}
@@ -410,6 +567,21 @@ function goToCloseShift() {
           <p class="font-heading text-lg">{{ $t('pos.cartTitle', { n: cart.itemCount.value }) }}</p>
           <button type="button" class="p-2 -mr-2 text-muted hover:text-ink" :aria-label="$t('pos.backToProducts')" @click="cartOpen = false">
             <X class="w-5 h-5" />
+          </button>
+        </div>
+        <div v-if="cart.tableOrderIds.value.length" class="flex items-center justify-between gap-2 px-4 py-2 bg-primary-tint text-primary-text text-sm border-b border-line">
+          <span class="flex items-center gap-2 min-w-0">
+            <UtensilsCrossed :stroke-width="1.8" class="w-4 h-4 shrink-0" />
+            <span class="truncate">
+              {{
+                cart.tableOrderIds.value.length > 1
+                  ? $t('pos.tableOrdersBanner', { table: cart.tableOrderLabel.value, n: cart.tableOrderIds.value.length })
+                  : $t('pos.tableOrderBanner', { table: cart.tableOrderLabel.value, id: cart.tableOrderIds.value[0] })
+              }}
+            </span>
+          </span>
+          <button type="button" class="p-1 hover:text-ink" :aria-label="$t('pos.unlinkTableOrder')" :title="$t('pos.unlinkTableOrder')" @click="unlinkTableOrder">
+            <X class="w-4 h-4" />
           </button>
         </div>
         <div class="p-4 border-b border-line">
@@ -504,8 +676,47 @@ function goToCloseShift() {
           </button>
         </div>
       </div>
-      <!-- Product browsing -->
+      <!-- Product browsing / Tables board -->
       <div class="flex-1 flex flex-col min-w-0 p-3 sm:p-4 gap-3">
+        <div class="flex rounded-control border border-line bg-surface p-0.5 self-start" role="tablist" :aria-label="$t('pos.browseLabel')">
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="browse === 'products'"
+            class="px-3 py-1.5 rounded-control text-sm flex items-center gap-1.5"
+            :class="browse === 'products' ? 'bg-primary text-primary-ink' : 'text-muted hover:text-ink'"
+            @click="setBrowse('products')"
+          >
+            <Package :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.browseProducts') }}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="browse === 'tables'"
+            class="px-3 py-1.5 rounded-control text-sm flex items-center gap-1.5"
+            :class="browse === 'tables' ? 'bg-primary text-primary-ink' : 'text-muted hover:text-ink'"
+            @click="setBrowse('tables')"
+          >
+            <LayoutGrid :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.browseTables') }}
+            <span
+              v-if="tableOrders.newCount.value"
+              class="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-danger-strong text-white text-[10px]"
+            >
+              {{ tableOrders.newCount.value }}
+            </span>
+          </button>
+        </div>
+
+        <TablesBoard
+          v-if="browse === 'tables'"
+          :tables="boardTables"
+          :orders="tableOrders.orders.value"
+          :cart-table-order-ids="cart.tableOrderIds.value"
+          :loading="boardLoading"
+          @open="openTile"
+        />
+
+        <template v-else>
         <div class="relative">
           <Search :stroke-width="1.8" class="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -554,6 +765,7 @@ function goToCloseShift() {
           </div>
           <p v-if="filteredProducts.length === 0" class="col-span-full text-center text-muted py-8">{{ $t('pos.noProducts') }}</p>
         </div>
+        </template>
       </div>
 
       <!-- Phones: cart summary bar; tap to open the cart -->
@@ -566,7 +778,7 @@ function goToCloseShift() {
         >
           <span class="flex items-center gap-2">
             <ShoppingCart :stroke-width="1.8" class="w-5 h-5" />
-            {{ $t('pos.itemsCount', { n: cart.itemCount.value }) }}
+            {{ $t('pos.itemsCount', { n: cart.itemCount.value }, cart.itemCount.value) }}
           </span>
           <span class="font-mono text-lg">{{ formatUSD(cart.totalCents.value) }}</span>
         </button>
@@ -602,5 +814,27 @@ function goToCloseShift() {
     <CashMovementModal v-if="showCashMovement" @close="showCashMovement = false" />
     <RecentSalesModal v-if="showRecentSales" @close="showRecentSales = false" @voided="loadProducts" />
     <HeldSalesModal v-if="showHeldSales" @close="showHeldSales = false" @resume="onResumeHeld" />
+    <TableOrdersModal
+      v-if="boardTileKey"
+      :orders="boardTileOrders"
+      :title="$t('pos.tableLabel', { table: boardTileName })"
+      :empty-text="$t('tableBoard.noOpenOrders')"
+      :move-targets="moveTargets"
+      pay-all
+      @close="boardTileKey = null"
+      @load-all="loadTableOrders(boardTileOrders)"
+      @move="moveBoardTable"
+      @accept="(id) => tableOrders.accept(id).catch(() => {})"
+      @reject="(id, reason) => tableOrders.reject(id, reason).catch(() => {})"
+      @load="loadTableOrder"
+    />
+    <TableOrdersModal
+      v-if="showTableOrders"
+      :orders="tableOrders.orders.value"
+      @close="showTableOrders = false"
+      @accept="(id) => tableOrders.accept(id).catch(() => {})"
+      @reject="(id, reason) => tableOrders.reject(id, reason).catch(() => {})"
+      @load="loadTableOrder"
+    />
   </div>
 </template>
