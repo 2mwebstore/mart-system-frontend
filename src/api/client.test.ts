@@ -3,6 +3,8 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios'
 import axios from 'axios'
 import { getAccessToken, getRefreshToken, setTokens } from './tokens'
 import { ACTIVE_BRANCH_KEY, BRANCH_HEADER } from './activeBranch'
+import { toasts } from '@/composables/useToast'
+import { useInUseAlert } from '@/composables/useInUseAlert'
 
 // Answers requests the way the server would, without a server: one current
 // access token and one current refresh token.
@@ -190,5 +192,39 @@ describe('apiClient requests', () => {
     }
     await apiClient.get('/public/tables/abc/menu')
     expect(seen).toEqual([undefined])
+  })
+})
+
+describe('apiClient on a refused delete', () => {
+  const tea = { entity: 'product', name: 'Tea', uses: [{ what: 'sales', count: 12 }], hint: 'switch_off' }
+  const refuse = (code: string, details?: unknown) => {
+    handle = (config) => respond(config, 409, { success: false, error: { code, message: `"Tea" can't be deleted`, details } })
+  }
+
+  beforeEach(() => {
+    setTokens('current', 'refresh-0')
+    toasts.splice(0)
+    useInUseAlert().close()
+  })
+
+  it('opens the in-use alert instead of a toast', async () => {
+    refuse('PRODUCT_IN_USE', tea)
+    await expect(apiClient.delete('/products/3')).rejects.toBeTruthy()
+    expect(useInUseAlert().shown.value).toEqual([{ ...tea, nameKm: undefined }])
+    expect(toasts).toEqual([])
+  })
+
+  it('shows neither for a silent call, whose caller says what happened', async () => {
+    refuse('PRODUCT_IN_USE', tea)
+    await expect(apiClient.delete('/products/3', { silent: true } as object)).rejects.toBeTruthy()
+    expect(useInUseAlert().shown.value).toEqual([])
+    expect(toasts).toEqual([])
+  })
+
+  it('toasts any other conflict as before', async () => {
+    refuse('DUPLICATE_SKU')
+    await expect(apiClient.delete('/products/3')).rejects.toBeTruthy()
+    expect(useInUseAlert().shown.value).toEqual([])
+    expect(toasts.map((t) => t.type)).toEqual(['error'])
   })
 })

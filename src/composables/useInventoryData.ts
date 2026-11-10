@@ -3,6 +3,7 @@ import * as catalogApi from '@/api/catalog'
 import type { Category, Product, ProductInput, ProductType, PurchaseOrder, PurchaseOrderInput, Supplier } from '@/types/domain'
 import { initialsOf } from '@/utils/format'
 import { useDebounced, usePagedList } from '@/composables/usePagedList'
+import { inUseFrom, type InUseInfo } from '@/utils/inUse'
 
 // 'service' isn't a stock level — a SERVICE product is never stocked, so it
 // never runs low or out; this just tells the table/badge to show something
@@ -16,12 +17,27 @@ export function stockStatusOf(qty: number, reorderPoint: number, type: ProductTy
   return 'in_stock'
 }
 
+// What a bulk delete did: the ids deleted, the ids that failed for some other
+// reason, and what the server said about each record it refused to delete
+// because other records still use it (shown together in the in-use alert).
+export interface BulkRemoved {
+  ok: number[]
+  failed: number[]
+  blocked: InUseInfo[]
+}
+
+function noteFailure(out: BulkRemoved, id: number, err: unknown) {
+  const inUse = inUseFrom(err)
+  if (inUse) out.blocked.push(inUse)
+  else out.failed.push(id)
+}
+
 // Inventory screen state, loaded from and written to the API. Each tab's table
 // is one server page (products also filter server-side); categories and
 // suppliers are additionally loaded whole because forms and filters pick from
 // them. Every write helper resolves to true on success and false on failure
-// (the API client has already shown the reason in a toast), so callers can
-// decide whether to close their modal.
+// (the API client has already shown the reason, in a toast or the in-use
+// alert), so callers can decide whether to close their modal.
 //
 // `can` is the permission check: a list is fetched only for someone who may
 // see it (Products need product.view, Categories category.view, and so on),
@@ -144,21 +160,20 @@ export function useInventoryData(branchId: Ref<number>, can: (key: string) => bo
   const removeCategory = (id: number) =>
     attempt(() => catalogApi.deleteCategory(id), [loadCategories, categoryList.reload, refreshProducts])
   // Same shape as removeProducts below: one API call per id (silent — no
-  // per-row error toast), one refresh at the end, counts handed back so the
-  // caller can show a single summary toast.
-  async function removeCategories(ids: number[]): Promise<{ ok: number[]; failed: number[] }> {
-    const ok: number[] = []
-    const failed: number[] = []
+  // per-row error toast), one refresh at the end, results handed back so the
+  // caller can show a single summary.
+  async function removeCategories(ids: number[]): Promise<BulkRemoved> {
+    const out: BulkRemoved = { ok: [], failed: [], blocked: [] }
     for (const id of ids) {
       try {
         await catalogApi.deleteCategory(id, { silent: true })
-        ok.push(id)
-      } catch {
-        failed.push(id)
+        out.ok.push(id)
+      } catch (err) {
+        noteFailure(out, id, err)
       }
     }
     await Promise.all([loadCategories(), categoryList.reload(), refreshProducts()])
-    return { ok, failed }
+    return out
   }
 
   // --- Suppliers ---------------------------------------------------------------
@@ -178,21 +193,20 @@ export function useInventoryData(branchId: Ref<number>, can: (key: string) => bo
 
   // Deletes several products in one go — a single refresh at the end rather
   // than one per row. Each call is silent (no per-row error toast, which
-  // would spam the screen on a big selection); the caller gets counts back
-  // and shows one summary toast instead.
-  async function removeProducts(ids: number[]): Promise<{ ok: number[]; failed: number[] }> {
-    const ok: number[] = []
-    const failed: number[] = []
+  // would spam the screen on a big selection); the caller gets the results
+  // back and shows one summary instead.
+  async function removeProducts(ids: number[]): Promise<BulkRemoved> {
+    const out: BulkRemoved = { ok: [], failed: [], blocked: [] }
     for (const id of ids) {
       try {
         await catalogApi.deleteProduct(branchId.value, id, { silent: true })
-        ok.push(id)
-      } catch {
-        failed.push(id)
+        out.ok.push(id)
+      } catch (err) {
+        noteFailure(out, id, err)
       }
     }
     await Promise.all([refreshProducts(), loadCategories(), categoryList.reload(), supplierList.reload()])
-    return { ok, failed }
+    return out
   }
 
   // --- CSV import ------------------------------------------------------------

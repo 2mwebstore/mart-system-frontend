@@ -3,7 +3,9 @@ import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './token
 import { BRANCH_HEADER, storedActiveBranch } from './activeBranch'
 import type { ApiEnvelope } from './types'
 import { useToast } from '@/composables/useToast'
+import { useInUseAlert } from '@/composables/useInUseAlert'
 import { apiErrorMessage } from '@/i18n/apiErrors'
+import { inUseFrom } from '@/utils/inUse'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
 // For URLs the browser loads itself (the company logo as an <img>).
@@ -98,7 +100,11 @@ apiClient.interceptors.response.use(
     // Prefer the first field-level message (e.g. "That username is already
     // taken.") over the generic "One or more fields are invalid."
     const message = apiErrorMessage(error)
-    if (status !== 401 && !silent) {
+    // A delete refused because other records still use the record gets an
+    // alert listing them, not a toast.
+    const inUse = inUseFrom(error)
+    if (inUse && !silent) useInUseAlert().show([inUse])
+    else if (status !== 401 && !silent) {
       useToast().error(message)
     }
     return Promise.reject(error)

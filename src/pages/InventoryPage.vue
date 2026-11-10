@@ -25,6 +25,7 @@ import RichText from '@/components/RichText.vue'
 import DiscountInput from '@/components/DiscountInput.vue'
 import type { DiscountType } from '@/composables/useCart'
 import { useToast } from '@/composables/useToast'
+import { useInUseAlert } from '@/composables/useInUseAlert'
 import { useRouteSection } from '@/composables/useRouteSection'
 import { canOpen } from '@/utils/pageAccess'
 import { categoryName, label, localName, t } from '@/i18n'
@@ -363,11 +364,12 @@ async function bulkDeleteCategories() {
   const ids = [...selectedCategoryIds.value]
   if (ids.length === 0) return
   bulkDeletingCategories.value = true
-  const { ok, failed } = await removeCategories(ids)
+  const { ok, failed, blocked } = await removeCategories(ids)
   bulkDeletingCategories.value = false
   selectedCategoryIds.value = new Set()
   if (ok.length > 0) toast.success(t('inventory.bulkCategoriesDeleted', { n: ok.length }))
   if (failed.length > 0) toast.error(t('inventory.bulkCategoriesDeleteFailed', { n: failed.length }))
+  if (blocked.length > 0) useInUseAlert().show(blocked)
 }
 
 // --- Products (full CRUD, with image link/upload) ---------------------------
@@ -579,11 +581,12 @@ async function bulkDeleteProducts() {
   const ids = [...selectedProductIds.value]
   if (ids.length === 0) return
   bulkDeleting.value = true
-  const { ok, failed } = await removeProducts(ids)
+  const { ok, failed, blocked } = await removeProducts(ids)
   bulkDeleting.value = false
   selectedProductIds.value = new Set()
   if (ok.length > 0) toast.success(t('inventory.bulkDeleted', { n: ok.length }))
   if (failed.length > 0) toast.error(t('inventory.bulkDeleteFailed', { n: failed.length }))
+  if (blocked.length > 0) useInUseAlert().show(blocked)
 }
 
 // --- Suppliers (full CRUD) -------------------------------------------------

@@ -12,6 +12,9 @@ export interface ApiError {
   code: string
   message: string
   fields?: Record<string, string>
+  // More about a refusal, e.g. what still uses a record that can't be
+  // deleted (utils/inUse.ts).
+  details?: unknown
 }
 
 export interface ApiEnvelope<T> {

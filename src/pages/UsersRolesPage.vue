@@ -140,7 +140,7 @@ async function deleteUser(u: StaffUser) {
     toast.success(t('users.deleted'))
     await Promise.all([usersList.reload(), loadRoles()])
   } catch {
-    // the API client already toasted the reason (e.g. USER_IN_USE)
+    // the API client already showed why (USER_IN_USE opens the in-use alert)
   }
 }
 

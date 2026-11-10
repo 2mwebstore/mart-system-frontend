@@ -89,7 +89,7 @@ async function remove() {
     toast.success(t('users.deleted'))
     back()
   } catch {
-    // the API client already toasted the reason (e.g. USER_IN_USE)
+    // the API client already showed why (USER_IN_USE opens the in-use alert)
   }
 }
 
