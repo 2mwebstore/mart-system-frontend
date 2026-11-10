@@ -1,10 +1,65 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationRaw, type RouteRecordRaw, type RouteRecordSingleView } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useShiftStore } from '@/stores/shift'
 import { useSettingsStore } from '@/stores/settings'
 import { getAccessToken } from '@/api/tokens'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    public?: boolean
+    pos?: boolean
+    platform?: boolean
+    // A page split into several (Inventory > Products, > Stock moves…): which
+    // one, and which part of it. See composables/useRouteSection.ts.
+    page?: string
+    section?: string
+  }
+}
+
 const DefaultLayout = () => import('@/layouts/DefaultLayout.vue')
+const PlatformLayout = () => import('@/layouts/PlatformLayout.vue')
+const InventoryPage = () => import('@/pages/InventoryPage.vue')
+const UsersRolesPage = () => import('@/pages/UsersRolesPage.vue')
+const SettingsPage = () => import('@/pages/SettingsPage.vue')
+
+// Each part of a split page is a route of its own: [path, route name, section].
+const inventorySections = [
+  ['inventory/products', 'inventory-products', 'products'],
+  ['inventory/categories', 'inventory-categories', 'categories'],
+  ['inventory/stock-moves', 'inventory-moves', 'moves'],
+  ['inventory/purchase-orders', 'inventory-po', 'po'],
+  ['inventory/sales', 'inventory-sales', 'sales'],
+  ['inventory/suppliers', 'inventory-suppliers', 'suppliers'],
+] as const
+const usersRolesSections = [
+  ['users', 'users', 'users'],
+  ['roles', 'roles', 'roles'],
+] as const
+const settingsSections = [
+  ['settings/exchange-rate', 'settings-rate', 'rate'],
+  ['settings/branches', 'settings-branches', 'branches'],
+  ['settings/tables', 'settings-tables', 'tables'],
+  ['settings/payment-methods', 'settings-payments', 'payments'],
+  ['settings/tax-rates', 'settings-tax', 'tax'],
+  ['settings/company', 'settings-company', 'company'],
+  ['settings/receipt', 'settings-receipt', 'receipt'],
+  ['settings/alerts', 'settings-alerts', 'alerts'],
+  ['settings/system', 'settings-system', 'system'],
+] as const
+
+type Sections = readonly (readonly [string, string, string])[]
+
+function sectionRoutes(page: string, component: RouteRecordSingleView['component'], sections: Sections): RouteRecordRaw[] {
+  return sections.map(([path, name, section]) => ({ path, name, component, meta: { page, section } }))
+}
+
+// The page's old address (/inventory, /settings?tab=branches…) opens the part
+// it used to show as a tab, else the first.
+function sectionRedirect(sections: Sections) {
+  return (to: { query: Record<string, unknown> }): RouteLocationRaw => ({
+    name: (sections.find(([, , section]) => section === to.query.tab) ?? sections[0])[1],
+  })
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -56,6 +111,19 @@ const router = createRouter({
     { path: '/pos/open-shift', name: 'pos-open-shift', component: () => import('@/pages/pos/OpenShiftPage.vue'), meta: { pos: true } },
     { path: '/pos/close-shift', name: 'pos-close-shift', component: () => import('@/pages/pos/CloseShiftPage.vue'), meta: { pos: true } },
     { path: '/pos', name: 'pos', component: () => import('@/pages/pos/PosPage.vue'), meta: { pos: true } },
+    // The super admin's pages: the companies, and the tools that cover every
+    // company at once. Nobody else reaches them, and the super admin reaches
+    // nothing else (they work in no company).
+    {
+      path: '/platform',
+      component: PlatformLayout,
+      meta: { platform: true },
+      children: [
+        { path: '', redirect: '/platform/companies' },
+        { path: 'companies', name: 'platform-companies', component: () => import('@/pages/platform/CompaniesPage.vue'), meta: { platform: true } },
+        { path: 'system', name: 'platform-system', component: () => import('@/pages/platform/SystemPage.vue'), meta: { platform: true } },
+      ],
+    },
     {
       path: '/',
       component: DefaultLayout,
@@ -63,17 +131,23 @@ const router = createRouter({
         { path: '', redirect: '/dashboard' },
         { path: 'dashboard', name: 'dashboard', component: () => import('@/pages/DashboardPage.vue') },
         { path: 'shifts', name: 'shifts', component: () => import('@/pages/ShiftsPage.vue') },
-        { path: 'inventory', name: 'inventory', component: () => import('@/pages/InventoryPage.vue') },
+        { path: 'inventory', name: 'inventory', redirect: sectionRedirect(inventorySections) },
+        ...sectionRoutes('inventory', InventoryPage, inventorySections),
+        { path: 'inventory/customers', name: 'customers', component: () => import('@/pages/CustomersPage.vue') },
+        { path: 'customers', redirect: { name: 'customers' } },
         { path: 'invoices', name: 'invoices', component: () => import('@/pages/InvoicesPage.vue') },
         { path: 'invoices/new', name: 'invoice-new', component: () => import('@/pages/InvoiceEditPage.vue') },
         { path: 'invoices/:id/edit', name: 'invoice-edit', component: () => import('@/pages/InvoiceEditPage.vue') },
         { path: 'reports-staff', name: 'reports-staff', component: () => import('@/pages/ReportsStaffPage.vue') },
         { path: 'report-details', name: 'report-details', component: () => import('@/pages/ReportDetailsPage.vue') },
         { path: 'profit-loss', name: 'profit-loss', component: () => import('@/pages/ProfitLossPage.vue') },
-        { path: 'users-roles', name: 'users-roles', component: () => import('@/pages/UsersRolesPage.vue') },
-        { path: 'customers', name: 'customers', component: () => import('@/pages/CustomersPage.vue') },
+        { path: 'users-roles', name: 'users-roles', redirect: sectionRedirect(usersRolesSections) },
+        ...sectionRoutes('users-roles', UsersRolesPage, usersRolesSections),
+        { path: 'users/new', name: 'user-new', component: () => import('@/pages/UserEditPage.vue') },
+        { path: 'users/:id/edit', name: 'user-edit', component: () => import('@/pages/UserEditPage.vue') },
         { path: 'expenses', name: 'expenses', component: () => import('@/pages/ExpensesPage.vue') },
-        { path: 'settings', name: 'settings', component: () => import('@/pages/SettingsPage.vue') },
+        { path: 'settings', name: 'settings', redirect: sectionRedirect(settingsSections) },
+        ...sectionRoutes('settings', SettingsPage, settingsSections),
       ],
     },
   ],
@@ -94,6 +168,15 @@ router.beforeEach(async (to) => {
     }
   }
 
+  // A PIN sign-in only opens the till (the server refuses it everything else),
+  // so the back office asks for a password rather than showing broken pages.
+  if (auth.viaPinLogin && !to.meta.pos) return { name: 'login' }
+
+  // The super admin has the platform pages and nothing else; everyone else
+  // has everything but those.
+  if (auth.isSuperAdmin) return to.meta.platform ? true : { name: 'platform-companies' }
+  if (to.meta.platform) return { name: 'dashboard' }
+
   // Exchange rate + app settings feed every priced screen; loaded once.
   await useSettingsStore().ensureLoaded()
 
@@ -104,8 +187,8 @@ router.beforeEach(async (to) => {
   // request has nothing valid to send as branch_id. Send them straight to
   // where they can fix that instead of letting them hit a confusing error
   // on whatever page they land on first.
-  if (!to.meta.pos && auth.branches.length === 0 && to.name !== 'settings') {
-    return { name: 'settings', query: { tab: 'branches' } }
+  if (!to.meta.pos && auth.branches.length === 0 && to.meta.page !== 'settings') {
+    return { name: 'settings-branches' }
   }
 
   if (!to.meta.pos) return true

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useBrandingStore } from '@/stores/branding'
 import { listPublicTills } from '@/api/settings'
 import { getAccessToken } from '@/api/tokens'
+import { getCompanyCode, normaliseCompanyCode, setCompanyCode } from '@/api/companyCode'
 import NumPad from '@/components/pos/NumPad.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -12,12 +13,15 @@ import SearchableSelect from '@/components/SearchableSelect.vue'
 import { t } from '@/i18n'
 import { apiErrorMessage } from '@/i18n/apiErrors'
 import type { PublicTill } from '@/types/domain'
+import type { AxiosError } from 'axios'
 
 const auth = useAuthStore()
 const branding = useBrandingStore()
 const router = useRouter()
 
-// Active tills come from the server (public endpoint — nobody may be signed in yet).
+// Active tills come from the server (public endpoint — nobody may be signed in
+// yet), one company's at a time: the till asks for the company's code once
+// and remembers it, so the next cashier goes straight to the PIN.
 const activeTills = ref<PublicTill[]>([])
 const deviceKey = ref(auth.deviceKey)
 const loading = ref(true)
@@ -26,23 +30,77 @@ const loading = ref(true)
 const usePin = ref(false)
 const sessionMode = computed(() => auth.canUsePos && !usePin.value)
 
+// The company whose tills are listed; '' until a code is known to be good.
+const companyCode = ref('')
+const codeInput = ref('')
+const askCode = computed(() => !loading.value && !companyCode.value && !sessionMode.value)
+
 onMounted(async () => {
-  try {
-    if (getAccessToken() && !auth.isAuthenticated) {
-      try {
-        await auth.fetchMe()
-      } catch {
-        // no usable session — the PIN form below is the way in
-      }
+  if (getAccessToken() && !auth.isAuthenticated) {
+    try {
+      await auth.fetchMe()
+    } catch {
+      // no usable session — the PIN form below is the way in
     }
-    activeTills.value = await listPublicTills()
-  } catch {
-    errorMessage.value = t('pos.tillsLoadFailed')
-  } finally {
-    loading.value = false
-    pickDefaultTill()
   }
+  // Signed in already: the user's own company. Otherwise the one this till
+  // remembers, if any.
+  const code = auth.company?.code ?? getCompanyCode()
+  if (code) await loadTills(code)
+  loading.value = false
+  pickDefaultTill()
 })
+
+// Lists the company's tills; a code the server doesn't know (or a company
+// that was turned off) is forgotten and asked for again.
+async function loadTills(code: string): Promise<boolean> {
+  errorMessage.value = ''
+  try {
+    activeTills.value = await listPublicTills(code)
+  } catch (err) {
+    if ((err as AxiosError)?.response?.status === 404) {
+      errorMessage.value = apiErrorMessage(err)
+      if (getCompanyCode() === code) forgetCompany()
+    } else {
+      errorMessage.value = t('pos.tillsLoadFailed')
+    }
+    return false
+  }
+  companyCode.value = code
+  setCompanyCode(code)
+  void branding.useCompany(code)
+  return true
+}
+
+async function submitCode() {
+  const code = normaliseCompanyCode(codeInput.value)
+  if (!/^[A-Z0-9]{2,12}$/.test(code)) {
+    errorMessage.value = t('pos.companyCodeInvalid')
+    return
+  }
+  loading.value = true
+  if (await loadTills(code)) pickDefaultTill()
+  loading.value = false
+}
+
+// Another company's tills: the till picked here was this company's, so it's
+// forgotten too.
+function changeCompany() {
+  companyCode.value = ''
+  codeInput.value = ''
+  activeTills.value = []
+  deviceKey.value = ''
+  errorMessage.value = ''
+  auth.forgetTill()
+  forgetCompany()
+}
+
+// No company until a good code is typed: none remembered, and the screen
+// shows the app's own name and no logo instead of the last company's.
+function forgetCompany() {
+  setCompanyCode('')
+  void branding.useCompany('')
+}
 
 // A session can only use tills in its own branches; the PIN form lists every
 // active till (the server checks the cashier's branch on sign-in).
@@ -107,7 +165,7 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
-    await auth.pinLogin(deviceKey.value, tillName.value, username.value.trim(), pin.value)
+    await auth.pinLogin(companyCode.value, deviceKey.value, tillName.value, username.value.trim(), pin.value)
     router.push({ name: 'pos' })
   } catch (err) {
     errorMessage.value = apiErrorMessage(err, 'pos.invalidPin')
@@ -127,8 +185,28 @@ async function handleSubmit() {
         <p class="text-muted text-sm mt-1">{{ sessionMode ? $t('pos.chooseTillSubtitle') : $t('pos.signInSubtitle') }}</p>
       </div>
 
+      <!-- First time at this till (or after "Change company"): which company -->
+      <form v-if="askCode" class="card space-y-4" @submit.prevent="submitCode">
+        <div>
+          <label for="company-code" class="block text-sm text-muted mb-1">{{ $t('pos.companyCode') }}</label>
+          <input
+            id="company-code"
+            v-model="codeInput"
+            type="text"
+            class="input font-mono uppercase"
+            maxlength="12"
+            autocomplete="off"
+            autocapitalize="characters"
+            required
+          />
+          <p class="text-xs text-muted mt-1">{{ $t('pos.companyCodeHint') }}</p>
+        </div>
+        <p v-if="errorMessage" class="text-sm text-danger-strong text-center" role="alert">{{ errorMessage }}</p>
+        <button type="submit" class="btn-primary w-full">{{ $t('pos.continue') }}</button>
+      </form>
+
       <!-- Signed in already: pick a till and go -->
-      <div v-if="sessionMode" class="card space-y-4">
+      <div v-else-if="sessionMode" class="card space-y-4">
         <p class="text-sm">{{ $t('pos.signedInAs', { name: auth.user?.full_name }) }}</p>
         <SearchableSelect
           :model-value="deviceKey || null"
@@ -145,7 +223,7 @@ async function handleSubmit() {
       </div>
 
       <!-- Cashier PIN sign-in -->
-      <form v-else class="card space-y-4" @submit.prevent="handleSubmit">
+      <form v-else-if="companyCode" class="card space-y-4" @submit.prevent="handleSubmit">
         <SearchableSelect
           :model-value="deviceKey || null"
           :label="$t('common.till')"
@@ -181,6 +259,10 @@ async function handleSubmit() {
         <button v-if="auth.canUsePos" type="button" class="text-sm text-muted hover:text-ink block mx-auto" @click="switchToSession">
           {{ $t('pos.continueAs', { name: auth.user?.full_name }) }}
         </button>
+        <p class="text-xs text-muted text-center">
+          {{ $t('pos.companyCodeShown', { code: companyCode }) }}
+          <button type="button" class="text-primary hover:underline ml-1" @click="changeCompany">{{ $t('pos.changeCompany') }}</button>
+        </p>
       </form>
 
       <div class="flex justify-center"><LanguageSwitch /></div>

@@ -1,8 +1,16 @@
+# Hashed build assets never change: cache them for a year. Everything else,
+# above all index.html, has to be revalidated so a deploy reaches people.
+map $uri $cache_control {
+    ~^/assets/ "public, immutable";
+    default    "no-cache";
+}
+
 server {
     # IPv4 and IPv6: Railway's private network is IPv6.
     listen ${PORT};
     listen [::]:${PORT};
     server_name _;
+    server_tokens off;
 
     root /usr/share/nginx/html;
     index index.html;
@@ -11,16 +19,23 @@ server {
     gzip_types text/css application/javascript application/json image/svg+xml;
     gzip_min_length 1024;
 
-    # Hashed build assets never change: cache them for a year.
+    # A location with an add_header of its own would drop every one of these, so
+    # they all live here and the locations below have none.
+    add_header Cache-Control $cache_control always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' ${CSP_CONNECT_SRC}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
     location /assets/ {
         try_files $uri =404;
         expires 1y;
-        add_header Cache-Control "public, immutable";
     }
 
     # Single-page app: any other path (/pos, /inventory, ...) is the app shell.
     location / {
         try_files $uri /index.html;
-        add_header Cache-Control "no-cache";
     }
 }

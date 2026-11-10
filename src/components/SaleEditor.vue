@@ -3,11 +3,13 @@
 // sends the sale's full desired state; the server re-prices it and owns the
 // final totals and change. The numbers shown here use the same maths as the
 // server (calculateChange mirrors CalculateChange) so the cashier sees the
-// result before saving.
+// result before saving. Tax stays at the sale's own kept percent (an edit never
+// re-prices it), and the sale's note is rich text.
 import { computed, onMounted, ref } from 'vue'
 import SearchAddInput from '@/components/SearchAddInput.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import DiscountInput from '@/components/DiscountInput.vue'
+import RichTextEditor from '@/components/RichTextEditor.vue'
 import { listPaymentMethods } from '@/api/settings'
 import type { EditSaleInput } from '@/api/pos'
 import { useAuthStore } from '@/stores/auth'
@@ -15,6 +17,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { localName, seededLabel } from '@/i18n'
 import { calculateChange, usdCentsToRiel } from '@/utils/money'
 import { formatKHR, formatUSD } from '@/utils/format'
+import { formatPercent, taxCents } from '@/utils/tax'
 import { X } from 'lucide-vue-next'
 import type { Product, Sale } from '@/types/domain'
 import type { DiscountType } from '@/composables/useCart'
@@ -24,7 +27,8 @@ const emit = defineEmits<{ save: [EditSaleInput]; cancel: [] }>()
 
 const auth = useAuthStore()
 const settings = useSettingsStore()
-const rate = computed(() => settings.rate)
+// The sale's own rate, as the server uses on save — not today's.
+const rate = computed(() => props.sale.exchangeRate || settings.rate)
 const canDiscount = auth.hasPermission('pos.discount')
 
 // --- Lines -----------------------------------------------------------------
@@ -53,6 +57,10 @@ const lines = ref<EditLine[]>(
     note: i.note,
   })),
 )
+// A product already on the sale keeps the price it was sold at (the server
+// does the same), even if it's removed and added back; only a product new to
+// the sale takes today's catalog price.
+const soldPrice = new Map(props.sale.items.map((i) => [i.productId, i.unitPriceCents]))
 // The sale stores line and cart discounts together; the cart part is what's left.
 const lineDiscountsStored = props.sale.items.reduce((n, i) => n + i.discountCents, 0)
 const cartDiscountType = ref<DiscountType>('amount')
@@ -76,7 +84,7 @@ function addItem(productId: string | number) {
     name: localName(product.nameEn, product.nameKm),
     sku: product.sku,
     qty: 1,
-    unitPriceCents: product.priceCents,
+    unitPriceCents: soldPrice.get(product.id) ?? product.priceCents,
     discountType: 'amount',
     discountValue: 0,
     note: '',
@@ -114,6 +122,7 @@ const isCash = computed(() => methodType.value === 'CASH')
 const tenderUSD = ref(props.sale.payment.receivedUsdCents / 100)
 const tenderKHR = ref(props.sale.payment.receivedKhrRiel)
 const reference = ref(props.sale.payment.reference)
+const note = ref(props.sale.note ?? '')
 
 // --- Totals (preview; the server is authoritative) --------------------------
 function toCents(dollars: number) {
@@ -132,7 +141,10 @@ function lineDiscount(l: EditLine) {
 const lineDiscountTotal = computed(() => lines.value.reduce((n, l) => n + lineDiscount(l), 0))
 const afterLines = computed(() => itemsSubtotal.value - lineDiscountTotal.value)
 const cartDiscountCents = computed(() => discountOf(afterLines.value, cartDiscountType.value, cartDiscountValue.value))
-const totalCents = computed(() => afterLines.value - cartDiscountCents.value)
+const beforeTaxCents = computed(() => afterLines.value - cartDiscountCents.value)
+const taxPercent = props.sale.taxPercent || 0
+const saleTaxCents = computed(() => taxCents(beforeTaxCents.value, taxPercent))
+const totalCents = computed(() => beforeTaxCents.value + saleTaxCents.value)
 const totalRiel = computed(() => usdCentsToRiel(totalCents.value, rate.value))
 
 const tenderUSDCents = computed(() => toCents(tenderUSD.value))
@@ -158,6 +170,7 @@ function save() {
       note: l.note.trim(),
     })),
     discountCents: cartDiscountCents.value,
+    note: note.value,
     payment: {
       method: methodType.value,
       receivedUsdCents: isCash.value ? tenderUSDCents.value : 0,
@@ -225,6 +238,10 @@ function save() {
         <span class="text-muted">{{ $t('pos.discount') }}</span>
         <span class="font-mono">−{{ formatUSD(lineDiscountTotal + cartDiscountCents) }}</span>
       </div>
+      <div v-if="taxPercent > 0" class="flex justify-between" data-tax-line>
+        <span class="text-muted">{{ $t('tax.line', { name: `${sale.taxName} ${formatPercent(taxPercent)}` }) }}</span>
+        <span class="font-mono">{{ formatUSD(saleTaxCents) }}</span>
+      </div>
       <div class="flex justify-between font-medium">
         <span>{{ $t('col.total') }}</span>
         <span class="font-mono">{{ formatUSD(totalCents) }} ({{ formatKHR(totalRiel) }})</span>
@@ -250,6 +267,11 @@ function save() {
     <div v-else>
       <label class="block text-sm text-muted mb-1">{{ $t('col.reference') }}</label>
       <input v-model="reference" type="text" maxlength="120" class="input" :placeholder="$t('pos.noteHintKhqr')" />
+    </div>
+
+    <div>
+      <span class="block text-sm text-muted mb-1">{{ $t('pos.saleNote') }}</span>
+      <RichTextEditor id="sale-edit-note" v-model="note" :label="$t('pos.saleNote')" />
     </div>
 
     <p class="text-xs text-muted">{{ $t('inventory.saleEditHint') }}</p>

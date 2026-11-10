@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useBrandingStore } from '@/stores/branding'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { apiErrorMessage } from '@/i18n/apiErrors'
 
 const { t } = useI18n()
@@ -23,7 +24,7 @@ async function handleSubmit() {
   submitting.value = true
   try {
     await auth.login(username.value, password.value)
-    router.push({ name: 'dashboard' })
+    router.push({ name: auth.isSuperAdmin ? 'platform-companies' : 'dashboard' })
   } catch (err) {
     errorMessage.value = apiErrorMessage(err, 'auth.invalidCredentials')
   } finally {
@@ -50,14 +51,7 @@ async function handleSubmit() {
 
         <div>
           <label for="password" class="block text-sm text-muted mb-1">{{ t('auth.password') }}</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            class="input"
-            autocomplete="current-password"
-            required
-          />
+          <PasswordInput id="password" v-model="password" autocomplete="current-password" required />
         </div>
 
         <p v-if="errorMessage" class="text-sm text-danger-strong" role="alert">{{ errorMessage }}</p>

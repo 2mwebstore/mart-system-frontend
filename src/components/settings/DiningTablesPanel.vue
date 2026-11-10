@@ -7,6 +7,9 @@ import * as tableApi from '@/api/tableOrders'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import SearchInput from '@/components/SearchInput.vue'
+import Pagination from '@/components/Pagination.vue'
+import { useLocalList } from '@/composables/useLocalList'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import Modal from '@/components/Modal.vue'
@@ -15,11 +18,29 @@ import type { DiningTable } from '@/types/domain'
 
 const auth = useAuthStore()
 const toast = useToast()
+// Adding, editing (and new QR codes) and deleting tables: one permission each.
+const canCreate = auth.hasPermission('table.create')
+const canEdit = auth.hasPermission('table.update')
+const canDelete = auth.hasPermission('table.delete')
 
 const branchId = ref<number | null>(auth.activeBranchId ?? auth.branches[0]?.id ?? null)
 const branchOptions = computed(() => auth.branches.map((b) => ({ value: b.id, label: b.name, sub: b.code })))
 const tables = ref<DiningTable[]>([])
 const loading = ref(false)
+// Search, active/paused and pages, worked out here (the branch's whole list
+// comes at once; the QR sheet prints all of it).
+const statusFilter = ref<'all' | 'active' | 'paused'>('all')
+const statusFilterOptions = computed(() => [
+  { value: 'all', label: t('common.allStatuses') },
+  { value: 'active', label: t('common.active') },
+  { value: 'paused', label: t('tables.paused') },
+])
+const tableList = useLocalList(() => tables.value, {
+  text: (tbl) => tbl.name,
+  filter: (tbl) => statusFilter.value === 'all' || tbl.active === (statusFilter.value === 'active'),
+  deps: [statusFilter, branchId],
+  perPage: 15,
+})
 
 async function load() {
   if (!branchId.value) return
@@ -114,11 +135,15 @@ async function remove(tbl: DiningTable) {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-    <div class="card lg:col-span-2 space-y-4">
-      <div class="flex flex-wrap items-end justify-between gap-3">
-        <SearchableSelect v-model="branchId" class="w-full sm:w-56" :label="$t('common.branch')" :options="branchOptions" :clearable="false" />
-        <button type="button" class="btn-primary flex items-center gap-2" :disabled="tables.length === 0" @click="printSheet()">
+  <div class="grid grid-cols-1 gap-4 items-start" :class="canCreate ? 'lg:grid-cols-3' : ''">
+    <div class="card space-y-4" :class="canCreate ? 'lg:col-span-2' : ''">
+      <div class="list-toolbar">
+        <div class="list-filters">
+          <SearchableSelect v-model="branchId" class="w-full sm:w-56" :label="$t('common.branch')" :options="branchOptions" :clearable="false" />
+          <SearchInput v-model="tableList.search" :label="$t('common.searchLabel')" :placeholder="$t('tables.searchPlaceholder')" class="sm:w-52" />
+          <SearchableSelect v-model="statusFilter" class="w-full sm:w-40" :label="$t('common.status')" :options="statusFilterOptions" :searchable="false" :clearable="false" />
+        </div>
+        <button type="button" class="btn-primary flex items-center justify-center gap-2" :disabled="tables.length === 0" @click="printSheet()">
           <Printer :stroke-width="1.8" class="w-4 h-4" /> {{ $t('tables.printAll') }}
         </button>
       </div>
@@ -133,7 +158,7 @@ async function remove(tbl: DiningTable) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="tbl in tables" :key="tbl.id" class="border-b border-line last:border-0">
+            <tr v-for="tbl in tableList.rows" :key="tbl.id" class="border-b border-line last:border-0">
               <td class="py-2 font-medium">{{ tbl.name }}</td>
               <td class="py-2">
                 <StatusBadge :tone="tbl.active ? 'success' : 'neutral'" :label="tbl.active ? $t('common.active') : $t('tables.paused')" />
@@ -147,23 +172,24 @@ async function remove(tbl: DiningTable) {
                   <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('tables.printOne', { name: tbl.name })" :title="$t('tables.printOne', { name: tbl.name })" @click="printSheet([tbl.id])">
                     <Printer :stroke-width="1.8" class="w-4 h-4" />
                   </button>
-                  <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('tables.edit', { name: tbl.name })" @click="edit(tbl)">
+                  <button v-if="canEdit" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('tables.edit', { name: tbl.name })" @click="edit(tbl)">
                     <Pencil :stroke-width="1.8" class="w-4 h-4" />
                   </button>
-                  <ConfirmDelete :item-label="$t('tables.table')" :item-name="tbl.name" @confirm="remove(tbl)" />
+                  <ConfirmDelete v-if="canDelete" :item-label="$t('tables.table')" :item-name="tbl.name" @confirm="remove(tbl)" />
                 </div>
               </td>
             </tr>
-            <tr v-if="!loading && tables.length === 0">
-              <td colspan="4" class="py-6 text-center text-muted">{{ $t('tables.none') }}</td>
+            <tr v-if="!loading && tableList.total === 0">
+              <td colspan="4" class="py-6 text-center text-muted">{{ tables.length === 0 ? $t('tables.none') : $t('common.noMatches') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
+      <Pagination v-model:page="tableList.page" :total-pages="tableList.totalPages" :total="tableList.total" :per-page="tableList.perPage" :noun="$t('tables.noun')" />
       <p class="text-xs text-muted">{{ $t('tables.urlHint', { url: exampleUrl }) }}</p>
     </div>
 
-    <div class="space-y-4">
+    <div v-if="canCreate" class="space-y-4">
       <form class="card space-y-3" @submit.prevent="addOne">
         <h2 class="font-heading text-base">{{ $t('tables.addOne') }}</h2>
         <div>

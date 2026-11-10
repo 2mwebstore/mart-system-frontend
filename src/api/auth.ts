@@ -5,6 +5,10 @@ export interface BranchSummary {
   id: number
   name: string
   code: string
+  // The role the user holds at this branch, and what it lets them do there.
+  role_id?: number
+  role_name?: string
+  permissions?: string[]
 }
 
 export interface UserSummary {
@@ -15,18 +19,29 @@ export interface UserSummary {
   role_name: string
 }
 
+// The company the user works for. A super admin has none.
+export interface CompanySummary {
+  id: number
+  name: string
+  code: string
+}
+
 export interface AuthResponse {
   access_token: string
   refresh_token: string
   user: UserSummary
   permissions: string[]
   branches: BranchSummary[]
+  company: CompanySummary | null
+  is_super_admin: boolean
 }
 
 export interface MeResponse {
   user: UserSummary
   permissions: string[]
   branches: BranchSummary[]
+  company: CompanySummary | null
+  is_super_admin: boolean
 }
 
 export async function login(username: string, password: string) {
@@ -34,8 +49,9 @@ export async function login(username: string, password: string) {
   return data.data
 }
 
-export async function pinLogin(deviceKey: string, username: string, pin: string) {
+export async function pinLogin(companyCode: string, deviceKey: string, username: string, pin: string) {
   const { data } = await apiClient.post<ApiEnvelope<AuthResponse>>('/auth/pin-login', {
+    company_code: companyCode,
     device_key: deviceKey,
     username,
     pin,

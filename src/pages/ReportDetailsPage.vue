@@ -7,6 +7,8 @@ import { useDateRangeQuery } from '@/composables/useDateRangeQuery'
 import { reportTypes, useReportDetails } from '@/composables/useReportDetails'
 import { formatDateTime, formatKHR, formatUSD } from '@/utils/format'
 import { drawerStatus } from '@/utils/money'
+import { formatPercent } from '@/utils/tax'
+import { plainText } from '@/utils/richText'
 import * as posApi from '@/api/pos'
 import * as reportsApi from '@/api/reports'
 import type {
@@ -72,8 +74,9 @@ function poItemCount(po: PurchaseOrder) {
 function poItemsCostCents(po: PurchaseOrder) {
   return po.items.reduce((sum, i) => sum + i.qtyOrdered * i.unitCostCents - (i.discountCents || 0), 0)
 }
+// What the PO costs to pay, tax included (stock cost stays before tax).
 function poTotalCostCents(po: PurchaseOrder) {
-  return poItemsCostCents(po) + po.shippingCents
+  return poItemsCostCents(po) + po.shippingCents + (po.taxCents || 0)
 }
 const t = i18n.global.t
 const reportName = (id: string) => t(`reportDetails.types.${id}.label`)
@@ -545,16 +548,20 @@ function shiftStatus(s: Shift) {
                   <th class="py-2 font-medium">{{ $t('col.category') }}</th>
                   <th class="py-2 font-medium">{{ $t('col.note') }}</th>
                   <th class="py-2 font-medium">{{ $t('col.addedBy') }}</th>
-                  <th class="py-2 pr-4 font-medium text-right">{{ $t('col.amount') }}</th>
+                  <th class="py-2 font-medium text-right">{{ $t('col.amount') }}</th>
+                  <th class="py-2 font-medium text-right">{{ $t('tax.label') }}</th>
+                  <th class="py-2 pr-4 font-medium text-right">{{ $t('col.total') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="e in expenseRows" :key="e.id" class="border-b border-line last:border-0 cursor-pointer hover:bg-surface-subtle" @click="openExpenseDetail(e)">
                   <td class="py-2 font-mono text-xs">{{ e.expenseDate }}</td>
                   <td class="py-2">{{ label('expenseCat', e.category) }}</td>
-                  <td class="py-2 text-muted">{{ e.note }}</td>
+                  <td class="py-2 text-muted max-w-xs truncate" :title="plainText(e.note)">{{ plainText(e.note) }}</td>
                   <td class="py-2">{{ e.user }}</td>
-                  <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(e.amountCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ formatUSD(e.amountCents) }}</td>
+                  <td class="py-2 text-right font-mono text-muted" :title="e.taxName">{{ e.taxCents ? formatUSD(e.taxCents) : '—' }}</td>
+                  <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(e.totalCents) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -624,7 +631,16 @@ function shiftStatus(s: Shift) {
           <div v-if="detailSale.discountCents > 0" class="flex justify-between">
             <span class="text-muted">{{ $t('pos.discount') }}</span><span class="font-mono">-{{ formatUSD(detailSale.discountCents) }}</span>
           </div>
+          <div v-if="detailSale.taxCents" class="flex justify-between" data-tax-line>
+            <span class="text-muted">{{ $t('tax.line', { name: `${detailSale.taxName} ${formatPercent(detailSale.taxPercent)}` }) }}</span>
+            <span class="font-mono">{{ formatUSD(detailSale.taxCents) }}</span>
+          </div>
           <div class="flex justify-between font-medium"><span>{{ $t('pos.total') }}</span><span class="font-mono">{{ formatUSD(detailSale.totalCents) }} ({{ formatKHR(detailSale.totalRiel) }})</span></div>
+        </div>
+
+        <div v-if="detailSale.note" class="border-t border-line pt-3" data-sale-note>
+          <p class="text-muted mb-1">{{ $t('pos.saleNote') }}</p>
+          <RichText :html="detailSale.note" />
         </div>
 
         <div class="border-t border-line pt-3 space-y-1">
@@ -730,7 +746,7 @@ function shiftStatus(s: Shift) {
       <!-- Purchase order, with line items -->
       <div v-else-if="detailMode === 'invoice'" class="text-sm">
         <p v-if="detailLoading || !detailInvoice" class="py-6 text-center text-muted">{{ $t('tableMenu.loading') }}</p>
-        <InvoiceDetail v-else :invoice="detailInvoice" :payment-methods="[]" :can-manage="false" @print="printInvoice(detailInvoice.id)" />
+        <InvoiceDetail v-else :invoice="detailInvoice" :payment-methods="[]" @print="printInvoice(detailInvoice.id)" />
       </div>
       <div v-else-if="detailMode === 'po' && detailPO" class="space-y-4 text-sm">
         <div class="flex items-center justify-between text-muted">
@@ -761,6 +777,10 @@ function shiftStatus(s: Shift) {
         <div class="space-y-1 pt-2 border-t border-line">
           <div class="flex justify-between"><span class="text-muted">{{ $t('inventory.items') }}</span><span class="font-mono">{{ formatUSD(poItemsCostCents(detailPO)) }}</span></div>
           <div class="flex justify-between"><span class="text-muted">{{ $t('inventory.shipping') }}</span><span class="font-mono">{{ formatUSD(detailPO.shippingCents) }}</span></div>
+          <div v-if="detailPO.taxCents" class="flex justify-between" data-tax-line>
+            <span class="text-muted">{{ $t('tax.line', { name: `${detailPO.taxName} ${formatPercent(detailPO.taxPercent)}` }) }}</span>
+            <span class="font-mono">{{ formatUSD(detailPO.taxCents) }}</span>
+          </div>
           <div class="flex justify-between items-center"><span class="text-muted">{{ $t('inventory.totalCost') }}</span><span class="font-mono font-medium">{{ formatUSD(poTotalCostCents(detailPO)) }}</span></div>
         </div>
       </div>
@@ -769,11 +789,16 @@ function shiftStatus(s: Shift) {
       <div v-else-if="detailMode === 'expense' && detailExpense" class="space-y-2 text-sm">
         <div class="flex justify-between"><span class="text-muted">{{ $t('col.date') }}</span><span class="font-mono">{{ detailExpense.expenseDate }}</span></div>
         <div class="flex justify-between"><span class="text-muted">{{ $t('common.category') }}</span><span>{{ label('expenseCat', detailExpense.category) }}</span></div>
-        <div class="flex justify-between"><span class="text-muted">{{ $t('common.amount') }}</span><span class="font-mono">{{ formatUSD(detailExpense.amountCents) }}</span></div>
+        <div class="flex justify-between"><span class="text-muted">{{ $t('tax.amountBeforeTax') }}</span><span class="font-mono">{{ formatUSD(detailExpense.amountCents) }}</span></div>
+        <div v-if="detailExpense.taxCents" class="flex justify-between" data-tax-line>
+          <span class="text-muted">{{ $t('tax.line', { name: `${detailExpense.taxName} ${formatPercent(detailExpense.taxPercent)}` }) }}</span>
+          <span class="font-mono">{{ formatUSD(detailExpense.taxCents) }}</span>
+        </div>
+        <div class="flex justify-between font-medium"><span>{{ $t('tax.totalWithTax') }}</span><span class="font-mono">{{ formatUSD(detailExpense.totalCents) }}</span></div>
         <div class="flex justify-between"><span class="text-muted">{{ $t('col.addedBy') }}</span><span>{{ detailExpense.user }}</span></div>
         <div v-if="detailExpense.note" class="pt-2 border-t border-line">
           <p class="text-muted">{{ $t('common.note') }}</p>
-          <p>{{ detailExpense.note }}</p>
+          <RichText :html="detailExpense.note" />
         </div>
       </div>
 

@@ -31,6 +31,9 @@ export interface EditSaleInput {
   items: { productId: number; qty: number; discountCents: number; note: string }[]
   discountCents: number
   payment: { method: 'CASH' | 'KHQR' | 'CARD'; receivedUsdCents: number; receivedKhrRiel: number; reference: string }
+  // The sale's note (rich text); left out, it stays as it was. The sale keeps
+  // its own tax rate: an edit works the tax out again at that percent.
+  note?: string
 }
 export const editSale = (id: number, input: EditSaleInput) => put<Sale>(`/sales/${id}`, input)
 export const voidSale = (id: number, reason: string) => post<Sale>(`/sales/${id}/void`, { reason })

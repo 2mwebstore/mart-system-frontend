@@ -16,10 +16,14 @@ ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
-FROM nginx:1.27-alpine
+# The unprivileged build runs as a non-root user. It's otherwise the same image.
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 # nginx's entrypoint runs envsubst over /etc/nginx/templates/*.template, which
 # is how the listen port follows $PORT (Railway assigns it; 8080 locally).
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 ENV PORT=8080
+# What the app's Content-Security-Policy lets it call. Set this to the API's
+# origin (https://<backend>.up.railway.app) to narrow it down.
+ENV CSP_CONNECT_SRC=https:
 EXPOSE 8080

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { LayoutGrid, Minus, Monitor, MoreVertical, Package, Pencil, Plus, Search, ShoppingCart, Trash2, UtensilsCrossed, X } from 'lucide-vue-next'
+import { LayoutGrid, Minus, Monitor, MoreVertical, NotebookPen, Package, Pencil, Plus, Search, ShoppingCart, Trash2, UtensilsCrossed, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useBrandingStore } from '@/stores/branding'
@@ -25,6 +25,11 @@ import { useTableOrders } from '@/composables/useTableOrders'
 import VariantPickerModal from '@/components/pos/VariantPickerModal.vue'
 import LineEditModal from '@/components/pos/LineEditModal.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import Modal from '@/components/Modal.vue'
+import RichTextEditor from '@/components/RichTextEditor.vue'
+import TaxSelect from '@/components/TaxSelect.vue'
+import { formatPercent, startingRate } from '@/utils/tax'
+import { plainText } from '@/utils/richText'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { i18n, localName, t } from '@/i18n'
 import { usdCentsToRiel } from '@/utils/money'
@@ -69,13 +74,41 @@ const customers = ref<Customer[]>([])
 const loadProducts = async () => void (products.value = await catalogApi.listProducts(shift.branchId))
 onMounted(async () => {
   try {
-    const [cats, custs] = await Promise.all([catalogApi.listCategories(), listCustomers(), loadProducts()])
+    const [cats, custs] = await Promise.all([catalogApi.listCategories(), listCustomers(), loadProducts(), settings.refreshApp()])
     categories.value = cats
     customers.value = custs
   } catch {
     // the API client already toasted the reason
   }
 })
+// The company's default customer (Customers page): each new sale starts with
+// them; the cashier can still pick another, or walk-in, for a sale.
+watch(() => settings.app.defaultCustomerId, (id) => cart.setDefaultCustomer(id), { immediate: true })
+// The same for the tax: each new sale starts with the POS's starting rate
+// (Settings › Tax rates); the cashier can pick another, or No tax, for a sale.
+const rateById = (id: number | null | undefined) => settings.taxRates.find((r) => r.id === id && r.active) ?? null
+watch(
+  () => rateById(startingRate(settings.app.taxDefaults?.pos, settings.taxRates)),
+  (rate) => cart.setDefaultTaxRate(rate),
+  { immediate: true },
+)
+const cartTaxRateId = computed({
+  get: () => cart.taxRate.value?.id ?? null,
+  set: (id: number | null) => (cart.taxRate.value = rateById(id)),
+})
+const taxLabel = computed(() => (cart.taxRate.value ? `${cart.taxRate.value.name} ${formatPercent(cart.taxRate.value.percent)}` : ''))
+
+// The sale's own note (rich text), shown in the sale's details afterwards.
+const showNote = ref(false)
+const noteDraft = ref('')
+function openNote() {
+  noteDraft.value = cart.note.value
+  showNote.value = true
+}
+function saveNote() {
+  cart.note.value = noteDraft.value
+  showNote.value = false
+}
 
 const search = ref('')
 const categoryFilter = ref<number | 'all'>('all')
@@ -226,12 +259,15 @@ async function onPaid(payment: CreateSaleInput['payment']) {
       discountCents: cart.cartDiscountCents.value,
       payment,
       tableOrderIds: cart.tableOrderIds.value,
+      taxRateId: cart.taxRate.value?.id ?? null,
+      note: cart.note.value,
     })
     showPayment.value = false
     cart.clear()
     completedSale.value = sale
-    // Stock changed and the customer may have earned points.
-    void Promise.all([loadProducts(), listCustomers().then((c) => (customers.value = c))]).catch(() => {})
+    // Stock changed and the customer may have earned points; and the default
+    // customer may have been changed on the Customers page since.
+    void Promise.all([loadProducts(), listCustomers().then((c) => (customers.value = c)), settings.refreshApp()]).catch(() => {})
     void tableOrders.refresh()
   } catch {
     // the API client already toasted the reason (e.g. not enough stock); the
@@ -414,6 +450,8 @@ function displayState(): CartMessage | PaidMessage {
     lineDiscountsCents: cart.discountCentsCapped.value - cart.cartDiscountCents.value,
     cartDiscountCents: cart.cartDiscountCents.value,
     cartDiscountPercent: cart.cartDiscountType.value === 'percent' && cart.cartDiscountCents.value > 0 ? cart.cartDiscountValue.value : null,
+    taxLabel: taxLabel.value,
+    taxCents: cart.taxCents.value,
     totalCents: cart.totalCents.value,
     totalRiel: usdCentsToRiel(cart.totalCents.value, settings.rate),
     customerName: customers.value.find((c) => c.id === cart.customerId.value)?.name ?? '',
@@ -424,7 +462,7 @@ const customerDisplay = useCustomerDisplaySender(displayState)
 watchEffect(() => customerDisplay.send(displayState()))
 onUnmounted(() => {
   // Leaving the sale screen (close shift, back office): show the welcome screen.
-  customerDisplay.send({ ...(displayState() as CartMessage), type: 'cart', lines: [], itemCount: 0, subtotalCents: 0, lineDiscountsCents: 0, cartDiscountCents: 0, cartDiscountPercent: null, totalCents: 0, totalRiel: 0, customerName: '', payment: null })
+  customerDisplay.send({ ...(displayState() as CartMessage), type: 'cart', lines: [], itemCount: 0, subtotalCents: 0, lineDiscountsCents: 0, cartDiscountCents: 0, cartDiscountPercent: null, taxLabel: '', taxCents: 0, totalCents: 0, totalRiel: 0, customerName: '', payment: null })
   customerDisplay.close()
 })
 
@@ -448,6 +486,8 @@ function holdCurrentSale() {
     customerId: cart.customerId.value,
     tableOrderIds: [...cart.tableOrderIds.value],
     tableOrderLabel: cart.tableOrderLabel.value,
+    taxRateId: cart.taxRate.value?.id ?? null,
+    note: cart.note.value,
   })
   cart.clear()
   toast.success(t('pos.saleHeld'))
@@ -478,6 +518,10 @@ function onResumeHeld(held: HeldSale) {
   cart.customerId.value = held.customerId
   cart.tableOrderIds.value = held.tableOrderIds ?? (held.tableOrderId ? [held.tableOrderId] : [])
   cart.tableOrderLabel.value = held.tableOrderLabel ?? ''
+  // A sale held before tax existed starts with today's rate (clear() set it);
+  // one whose rate has since been switched off or deleted gets no tax.
+  if (held.taxRateId !== undefined) cart.taxRate.value = rateById(held.taxRateId)
+  cart.note.value = held.note ?? ''
   showHeldSales.value = false
   toast.info(t('pos.heldResumed'))
 }
@@ -663,9 +707,27 @@ function goToCloseShift() {
             />
           </div>
 
+          <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+            <TaxSelect v-model="cartTaxRateId" />
+            <button
+              type="button"
+              class="btn-secondary flex items-center gap-1.5 text-sm py-2"
+              :class="cart.note.value ? 'border-primary text-primary-text' : ''"
+              :aria-label="cart.note.value ? $t('pos.saleNoteEdit') : $t('pos.saleNoteAdd')"
+              :title="cart.note.value ? plainText(cart.note.value) : $t('pos.saleNoteHint')"
+              data-action="sale-note"
+              @click="openNote"
+            >
+              <NotebookPen :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.saleNote') }}
+            </button>
+          </div>
+
           <div class="space-y-1 text-sm">
             <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ formatUSD(cart.subtotalCents.value) }}</span></div>
             <div v-if="cart.discountCentsCapped.value > 0" class="flex justify-between"><span class="text-muted">{{ $t('pos.discount') }}</span><span class="font-mono">-{{ formatUSD(cart.discountCentsCapped.value) }}</span></div>
+            <div v-if="cart.taxRate.value" class="flex justify-between" data-tax-line>
+              <span class="text-muted">{{ $t('tax.line', { name: taxLabel }) }}</span><span class="font-mono">{{ formatUSD(cart.taxCents.value) }}</span>
+            </div>
             <div class="flex justify-between text-lg font-medium border-t border-line pt-2"><span>{{ $t('pos.total') }}</span><span class="font-mono">{{ formatUSD(cart.totalCents.value) }}</span></div>
           </div>
 
@@ -809,12 +871,24 @@ function goToCloseShift() {
     <PaymentModal
       v-if="showPayment"
       :total-cents="cart.totalCents.value"
+      :tax-cents="cart.taxCents.value"
+      :tax-label="taxLabel"
       :submitting="submitting"
       @close="showPayment = false"
       @paid="onPaid"
       @draft="paymentDraft = $event"
     />
     <ReceiptModal v-if="completedSale" :sale="completedSale" @close="closeReceipt" />
+    <Modal v-if="showNote" :title="$t('pos.saleNote')" wide @close="showNote = false">
+      <form class="space-y-4" @submit.prevent="saveNote">
+        <p class="text-sm text-muted">{{ $t('pos.saleNoteHint') }}</p>
+        <RichTextEditor id="sale-note" v-model="noteDraft" :label="$t('pos.saleNote')" />
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary" @click="showNote = false">{{ $t('common.cancel') }}</button>
+          <button type="submit" class="btn-primary">{{ $t('common.save') }}</button>
+        </div>
+      </form>
+    </Modal>
     <CashMovementModal v-if="showCashMovement" @close="showCashMovement = false" />
     <RecentSalesModal v-if="showRecentSales" @close="showRecentSales = false" @voided="loadProducts" />
     <HeldSalesModal v-if="showHeldSales" @close="showHeldSales = false" @resume="onResumeHeld" />

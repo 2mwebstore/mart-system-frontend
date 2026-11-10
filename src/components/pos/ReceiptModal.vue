@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useBrandingStore } from '@/stores/branding'
 import type { Sale } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
+import { formatPercent } from '@/utils/tax'
 import { label, localName } from '@/i18n'
 
 defineProps<{ sale: Sale }>()
@@ -41,6 +42,9 @@ function printReceipt() {
       <div class="border-t border-line pt-2 space-y-1">
         <div class="flex justify-between"><span>{{ $t('pos.subtotal') }}</span><span>{{ formatUSD(sale.subtotalCents) }}</span></div>
         <div v-if="sale.discountCents > 0" class="flex justify-between"><span>{{ $t('pos.discount') }}</span><span>-{{ formatUSD(sale.discountCents) }}</span></div>
+        <div v-if="sale.taxCents > 0" class="flex justify-between" data-tax-line>
+          <span>{{ $t('tax.line', { name: `${sale.taxName} ${formatPercent(sale.taxPercent)}` }) }}</span><span>{{ formatUSD(sale.taxCents) }}</span>
+        </div>
         <div class="flex justify-between font-medium"><span>{{ $t('pos.total') }}</span><span>{{ formatUSD(sale.totalCents) }}</span></div>
         <div class="flex justify-between text-muted"><span></span><span>{{ formatKHR(sale.totalRiel) }}</span></div>
       </div>

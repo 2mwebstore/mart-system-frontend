@@ -15,6 +15,7 @@ import Pagination from '@/components/Pagination.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import SearchInput from '@/components/SearchInput.vue'
 import InvoiceDetail from '@/components/invoices/InvoiceDetail.vue'
 import InvoicePaymentForm from '@/components/invoices/InvoicePaymentForm.vue'
 import { t } from '@/i18n'
@@ -25,7 +26,12 @@ const auth = useAuthStore()
 const toast = useToast()
 const branchId = computed(() => auth.activeBranchId ?? auth.branches[0]?.id ?? 1)
 const branchName = computed(() => auth.branches.find((b) => b.id === branchId.value)?.name ?? '')
-const canManage = auth.hasPermission('invoice.manage')
+// Create, edit (and take payments), cancel (and remove payments): one
+// permission each.
+const canCreate = auth.hasPermission('invoice.create')
+const canUpdate = auth.hasPermission('invoice.update')
+const canDelete = auth.hasPermission('invoice.delete')
+const hasRowActions = canUpdate || canDelete
 
 // ---- List ---------------------------------------------------------------------
 type Filter = 'open' | 'DUE' | 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'all'
@@ -129,9 +135,9 @@ function cancelInvoice(reason: string) {
   void act(() => invoiceApi.cancelInvoice(inv.id, reason), t('invoices.cancelled', { code: inv.code }))
 }
 // ---- Row buttons: Payment / Edit / Cancel ---------------------------------------
-const canPay = (i: Invoice) => canManage && i.status === 'OPEN' && i.balanceCents > 0
-const canEdit = (i: Invoice) => canManage && i.status === 'OPEN'
-const canCancel = (i: Invoice) => canManage && i.status === 'OPEN' && i.paidCents === 0
+const canPay = (i: Invoice) => canUpdate && i.status === 'OPEN' && i.balanceCents > 0
+const canEdit = (i: Invoice) => canUpdate && i.status === 'OPEN'
+const canCancel = (i: Invoice) => canDelete && i.status === 'OPEN' && i.paidCents === 0
 const paying = ref<Invoice | null>(null)
 async function openPayment(i: Invoice) {
   try {
@@ -180,7 +186,7 @@ function printInvoice() {
         <h1 class="font-heading text-2xl">{{ $t('invoices.title') }}</h1>
         <p class="text-muted text-sm">{{ branchName }} · {{ $t('invoices.subtitle') }}</p>
       </div>
-      <button v-if="canManage" type="button" class="btn-primary flex items-center gap-2" @click="newInvoice">
+      <button v-if="canCreate" type="button" class="btn-primary flex items-center gap-2" @click="newInvoice">
         <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('invoices.new') }}
       </button>
     </div>
@@ -206,8 +212,8 @@ function printInvoice() {
     </div>
 
     <div class="card space-y-3">
-      <div class="flex flex-wrap items-end gap-3">
-        <input v-model="search" type="search" class="input max-w-xs" :placeholder="$t('invoices.searchPlaceholder')" />
+      <div class="list-filters">
+        <SearchInput v-model="search" :label="$t('common.searchLabel')" :placeholder="$t('invoices.searchPlaceholder')" class="sm:w-72" />
         <SearchableSelect
           :model-value="filter"
           class="w-full sm:w-52"
@@ -216,8 +222,8 @@ function printInvoice() {
           :clearable="false"
           @update:model-value="(v) => (filter = (v ?? 'open') as Filter)"
         />
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('invoices.invoiceDate') }}</label>
+        <div class="w-full sm:w-auto">
+          <span class="block text-sm text-muted mb-1">{{ $t('invoices.invoiceDate') }}</span>
           <DateRangePicker v-model="range" clearable @clear="range = null" />
         </div>
       </div>
@@ -235,7 +241,7 @@ function printInvoice() {
               <th class="py-2 font-medium text-right">{{ $t('invoices.paid') }}</th>
               <th class="py-2 font-medium text-right">{{ $t('invoices.balance') }}</th>
               <th class="py-2 font-medium">{{ $t('col.status') }}</th>
-              <th v-if="canManage" class="py-2 font-medium"><span class="sr-only">{{ $t('invoices.actions') }}</span></th>
+              <th v-if="hasRowActions" class="py-2 font-medium"><span class="sr-only">{{ $t('invoices.actions') }}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -251,7 +257,7 @@ function printInvoice() {
               <td class="py-2 text-right font-mono text-success-text">{{ formatUSD(i.paidCents) }}</td>
               <td class="py-2 text-right font-mono font-medium">{{ i.status === 'OPEN' ? formatUSD(i.balanceCents) : '—' }}</td>
               <td class="py-2"><StatusBadge :tone="tone(i)" :label="statusLabel(i)" /></td>
-              <td v-if="canManage" class="py-2" @click.stop>
+              <td v-if="hasRowActions" class="py-2" @click.stop>
                 <div class="flex items-center justify-end gap-1">
                   <button
                     v-if="canPay(i)"
@@ -287,7 +293,7 @@ function printInvoice() {
               </td>
             </tr>
             <tr v-if="!list.loading && list.rows.length === 0">
-              <td :colspan="canManage ? 9 : 8" class="py-6 text-center text-muted">{{ $t('invoices.none') }}</td>
+              <td :colspan="hasRowActions ? 9 : 8" class="py-6 text-center text-muted">{{ $t('invoices.none') }}</td>
             </tr>
           </tbody>
         </table>
@@ -312,7 +318,8 @@ function printInvoice() {
       <InvoiceDetail
         :invoice="detail"
         :payment-methods="paymentMethods"
-        :can-manage="canManage"
+        :can-update="canUpdate"
+        :can-delete="canDelete"
         :busy="busy"
         @edit="editInvoice(detail)"
         @cancel="cancelInvoice"

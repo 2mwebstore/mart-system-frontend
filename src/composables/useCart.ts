@@ -1,5 +1,6 @@
 import { computed, reactive, ref } from 'vue'
-import type { Product } from '@/types/domain'
+import type { Product, TaxRate } from '@/types/domain'
+import { taxCents as taxOn } from '@/utils/tax'
 
 export type DiscountType = 'percent' | 'amount'
 
@@ -28,10 +29,21 @@ const lines = reactive<CartLine[]>([])
 const cartDiscountType = ref<DiscountType>('amount')
 const cartDiscountValue = ref(0)
 const customerId = ref<number | null>(null)
+// The company's default customer (picked on the Customers page): every new
+// sale starts with them. The cashier can still pick another, or walk-in.
+const defaultCustomerId = ref<number | null>(null)
 // Set when the cart was loaded from QR table orders — one order, or a whole
 // table's open orders in one bill; paying the sale pays all of them.
 const tableOrderIds = ref<number[]>([])
 const tableOrderLabel = ref('')
+// The tax added on top of the sale (null: none). It starts as the POS's
+// starting rate (Settings › Tax rates); the cashier can change it or pick No
+// tax for this sale.
+const taxRate = ref<TaxRate | null>(null)
+const defaultTaxRate = ref<TaxRate | null>(null)
+// The sale's own note (rich text). It shows in the sale's details, not on the
+// printed receipt.
+const note = ref('')
 
 function lineGrossCents(line: CartLine) {
   return line.unitPriceCents * line.qty
@@ -103,13 +115,31 @@ export function useCart() {
     if (line) line.note = note
   }
 
+  // A sale not started yet (empty, still on the old default) takes a new
+  // default at once; one under way, or switched to someone else, keeps its own.
+  function setDefaultCustomer(id: number | null) {
+    const previous = defaultCustomerId.value
+    defaultCustomerId.value = id
+    if (lines.length === 0 && customerId.value === previous) customerId.value = id
+  }
+
+  // The same for the starting tax: an empty sale still on the old one takes
+  // the new one; a sale under way, or switched by the cashier, keeps its own.
+  function setDefaultTaxRate(rate: TaxRate | null) {
+    const previous = defaultTaxRate.value
+    defaultTaxRate.value = rate
+    if (lines.length === 0 && taxRate.value?.id === previous?.id) taxRate.value = rate
+  }
+
   function clear() {
     lines.splice(0, lines.length)
     cartDiscountType.value = 'amount'
     cartDiscountValue.value = 0
-    customerId.value = null
+    customerId.value = defaultCustomerId.value
     tableOrderIds.value = []
     tableOrderLabel.value = ''
+    taxRate.value = defaultTaxRate.value
+    note.value = ''
   }
 
   const subtotalCents = computed(() => lines.reduce((sum, l) => sum + lineGrossCents(l), 0))
@@ -123,7 +153,10 @@ export function useCart() {
   // Combined discount (every line's own discount plus the cart-level one) —
   // this is the single number the receipt and shift accounting care about.
   const discountCentsCapped = computed(() => lineDiscountsCents.value + cartDiscountCents.value)
-  const totalCents = computed(() => afterLineDiscountsCents.value - cartDiscountCents.value)
+  // Tax on top of the amount after every discount, as the server works it out.
+  const beforeTaxCents = computed(() => afterLineDiscountsCents.value - cartDiscountCents.value)
+  const taxCents = computed(() => taxOn(beforeTaxCents.value, taxRate.value?.percent ?? 0))
+  const totalCents = computed(() => beforeTaxCents.value + taxCents.value)
   const itemCount = computed(() => lines.reduce((sum, l) => sum + l.qty, 0))
 
   return {
@@ -131,8 +164,12 @@ export function useCart() {
     cartDiscountType,
     cartDiscountValue,
     customerId,
+    setDefaultCustomer,
     tableOrderIds,
     tableOrderLabel,
+    taxRate,
+    setDefaultTaxRate,
+    note,
     addProduct,
     incQty,
     decQty,
@@ -148,6 +185,9 @@ export function useCart() {
     // `discount_cents` (line discounts travel on each item).
     cartDiscountCents,
     discountCentsCapped,
+    beforeTaxCents,
+    taxCents,
+    // With the tax: what the customer pays.
     totalCents,
     itemCount,
   }

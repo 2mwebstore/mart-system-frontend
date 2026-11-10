@@ -90,7 +90,7 @@ const shiftTone: Record<string, 'success' | 'neutral' | 'warning'> = { Open: 'su
       <div class="card">
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-heading text-base">{{ t('staffReport.rolesPermissions') }}</h2>
-          <RouterLink :to="{ name: 'users-roles' }" class="text-sm text-primary-text hover:underline">{{ t('staffReport.manage') }}</RouterLink>
+          <RouterLink :to="{ name: 'users' }" class="text-sm text-primary-text hover:underline">{{ t('staffReport.manage') }}</RouterLink>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">

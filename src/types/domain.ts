@@ -36,6 +36,35 @@ export interface PaymentMethodRow {
   enabled: boolean
 }
 
+// ---- Tax rates ----------------------------------------------------------------
+// Added on top of a POS sale, an invoice, a purchase order or an expense (prices
+// are before tax). Settings › Tax rates lists them and where each place starts.
+
+export interface TaxRate {
+  id: number
+  name: string
+  percent: number // 0–100, two decimals
+  active: boolean
+}
+
+// The rate a new POS sale, invoice, purchase order or expense starts with
+// (null: no tax). Staff can change it on each one.
+export interface TaxDefaults {
+  pos: number | null
+  invoice: number | null
+  purchase: number | null
+  expense: number | null
+}
+
+// What a document keeps of the rate it used, so changing or deleting the rate
+// later never changes it. taxCents is the tax it came to.
+export interface TaxSnapshot {
+  taxRateId: number | null
+  taxName: string
+  taxPercent: number
+  taxCents: number
+}
+
 export interface AppSettings {
   receiptHeader: string
   receiptFooter: string
@@ -44,6 +73,13 @@ export interface AppSettings {
   // sale can go through at 0/negative stock. Read-only here; written via
   // updateStockPolicy, not updateAppSettings.
   allowOutOfStockSale: boolean
+  // The customer the POS starts every sale with (null: walk-in). Read-only
+  // here too; set from the Customers page via updateDefaultCustomer.
+  defaultCustomerId: number | null
+  defaultCustomerName: string
+  // Where each place's tax starts. Read-only here too; set from Settings ›
+  // Tax rates via updateTaxDefaults.
+  taxDefaults: TaxDefaults
 }
 
 // The company's name and logo (Settings > Company).
@@ -156,7 +192,9 @@ export interface PurchaseOrderItem {
   discountCents: number // on the whole line (qty × unit cost)
 }
 
-export interface PurchaseOrder {
+// taxCents: on the items after their discounts plus shipping. It's owed the
+// supplier but never part of the stock's cost.
+export interface PurchaseOrder extends TaxSnapshot {
   id: number
   code: string
   branchId: number
@@ -175,6 +213,7 @@ export interface PurchaseOrderInput {
   status: string
   note: string
   shippingCents: number
+  taxRateId: number | null
   items: { productId: number; qty: number; unitCostCents: number; discountCents: number }[]
 }
 
@@ -187,13 +226,15 @@ export interface Customer {
   lastVisit: string | null
 }
 
-export interface Expense {
+export interface Expense extends TaxSnapshot {
   id: number
+  code: string
   branchId: number
   category: string
-  amountCents: number
+  amountCents: number // before tax
+  totalCents: number // with tax: what was paid
   expenseDate: string
-  note: string
+  note: string // rich text (HTML)
   user: string
 }
 
@@ -204,17 +245,30 @@ export interface StaffUser {
   fullName: string
   username: string
   phone: string
+  // Their main role: the one they hold at every branch not in branchRoles.
   roleId: number
   roleName: string
+  // Only the branches the viewer can see; hasOtherBranches says there are more.
   branchIds: number[]
+  branchRoles: BranchRole[]
+  hasOtherBranches: boolean
   active: boolean
   lastActiveAt: string | null
+}
+
+// A role a user holds at one branch instead of their main role.
+export interface BranchRole {
+  branchId: number
+  roleId: number
+  roleName: string
 }
 
 export interface Role {
   id: number
   name: string
   description: string
+  // The branch the role belongs to; null when every branch shares it.
+  branchId: number | null
   isLocked: boolean
   maxDiscountPercent: number
   refundWithoutApprovalCents: number
@@ -288,7 +342,8 @@ export interface SaleItem {
   lineTotalCents: number
 }
 
-export interface Sale {
+// taxCents: on the lines after every discount; totalCents includes it.
+export interface Sale extends TaxSnapshot {
   id: number
   receiptNo: string
   shiftId: number
@@ -302,9 +357,11 @@ export interface Sale {
   discountCents: number
   totalCents: number
   totalRiel: number
+  exchangeRate: number // the sale's own riel rate; an edit keeps it
   pointsEarned: number
   soldAt: string
   voidReason?: string
+  note: string // the sale's own note, rich text (HTML)
   items: SaleItem[]
   payment: {
     method: 'CASH' | 'KHQR' | 'CARD'
@@ -325,6 +382,9 @@ export interface CreateSaleInput {
   payment: { method: 'CASH' | 'KHQR' | 'CARD'; receivedUsdCents: number; receivedKhrRiel: number; reference: string }
   // Payment for QR table orders (one, or a whole table): the server marks them PAID.
   tableOrderIds?: number[]
+  // Added on top of the discounted amount; null for no tax.
+  taxRateId: number | null
+  note: string // rich text (HTML)
 }
 
 // ---- Invoices (back-office sales, paid over time) ---------------------------
@@ -356,7 +416,8 @@ export interface InvoicePayment {
   createdAt: string
 }
 
-export interface Invoice {
+// taxCents: on the lines after discounts plus shipping; totalCents includes it.
+export interface Invoice extends TaxSnapshot {
   id: number
   code: string
   branchId: number
@@ -400,6 +461,7 @@ export interface InvoiceInput {
   items: { productId: number; qty: number; unitPriceCents: number; discountCents: number; note: string }[]
   discountCents: number
   shippingCents: number
+  taxRateId: number | null
   note: string // rich text (HTML)
   payment?: InvoicePaymentInput // money received now (create only)
 }
@@ -546,6 +608,9 @@ export interface ProfitLossReport {
   posSalesCents: number
   invoiceSalesCents: number
   invoiceCount: number
+  // Tax added on top, kept out of every figure above: collected on sales and
+  // invoices, paid on expenses and purchase orders received in the period.
+  tax: { collectedCents: number; posCents: number; invoiceCents: number; paidCents: number; expenseCents: number; purchaseCents: number }
 }
 
 export interface TransactionRow {
@@ -631,8 +696,10 @@ export interface DateRangeParams {
 
 // ---- Alerts & backups --------------------------------------------------------
 
-// Keep in sync with backend/internal/services/notify_service.go's AllAlertTypes.
-export const ALERT_TYPES = [
+// What a company can be told about its own branches: backend's
+// CompanyAlertTypes (notify_service.go), less table_order, which this list
+// has never offered.
+export const COMPANY_ALERT_TYPES = [
   'low_stock',
   'shift_opened',
   'shift_closed',
@@ -640,10 +707,10 @@ export const ALERT_TYPES = [
   'void_refund',
   'expense_added',
   'po_received',
-  'backup_success',
-  'backup_failed',
 ] as const
-export type AlertType = (typeof ALERT_TYPES)[number]
+// ...and PlatformAlertTypes: the super admin's, about the whole install.
+export const PLATFORM_ALERT_TYPES = ['backup_success', 'backup_failed'] as const
+export type AlertType = (typeof COMPANY_ALERT_TYPES)[number] | (typeof PLATFORM_ALERT_TYPES)[number]
 
 export interface NotifySettings {
   enabled: boolean
@@ -671,6 +738,51 @@ export interface BackupRow {
 export interface BackupSettings {
   autoEnabled: boolean
   retentionDays: number
+}
+
+// ---- Companies (the super admin's platform pages) --------------------------
+
+export interface CompanyOwner {
+  id: number
+  fullName: string
+  username: string
+  active: boolean
+}
+
+export interface Company {
+  id: number
+  name: string
+  code: string
+  active: boolean
+  // Not deleted, and of those the active ones, which the limits count.
+  branchCount: number
+  activeBranchCount: number
+  // The most active branches and user accounts; null is no limit.
+  maxBranches: number | null
+  userCount: number
+  activeUserCount: number
+  maxUsers: number | null
+  // How long the company keeps its activity log. The super admin sets it.
+  retentionMonths: number
+  owners: CompanyOwner[]
+  createdAt: string
+}
+
+// One of a company's branches or user accounts, as the super admin switches
+// it on and off.
+export interface CompanyBranch {
+  id: number
+  code: string
+  name: string
+  active: boolean
+}
+
+export interface CompanyUser {
+  id: number
+  fullName: string
+  username: string
+  roleName: string
+  active: boolean
 }
 
 // ---- Document numbering ----------------------------------------------------

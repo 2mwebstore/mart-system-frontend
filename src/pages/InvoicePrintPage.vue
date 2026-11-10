@@ -11,6 +11,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useBrandingStore } from '@/stores/branding'
 import { localName, seededLabel, t } from '@/i18n'
 import { formatKHR, formatUSD } from '@/utils/format'
+import { formatPercent } from '@/utils/tax'
 import { usdCentsToRiel } from '@/utils/money'
 import type { Invoice } from '@/types/domain'
 
@@ -103,6 +104,9 @@ function printNow() {
         <div v-if="invoice.lineDiscountCents" class="flex justify-between"><span>{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ formatUSD(invoice.lineDiscountCents) }}</span></div>
         <div v-if="invoice.discountCents" class="flex justify-between"><span>{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ formatUSD(invoice.discountCents) }}</span></div>
         <div v-if="invoice.shippingCents" class="flex justify-between"><span>{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ formatUSD(invoice.shippingCents) }}</span></div>
+        <div v-if="invoice.taxCents || invoice.taxRateId" class="flex justify-between">
+          <span>{{ $t('tax.line', { name: `${invoice.taxName} ${formatPercent(invoice.taxPercent)}` }) }}</span><span class="font-mono">{{ formatUSD(invoice.taxCents) }}</span>
+        </div>
         <div class="flex justify-between font-medium border-t-2 border-black pt-1 text-base">
           <span>{{ $t('col.total') }}</span><span class="font-mono">{{ formatUSD(invoice.totalCents) }}</span>
         </div>

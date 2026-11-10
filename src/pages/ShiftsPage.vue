@@ -49,10 +49,16 @@ const cashMovementTypeOptions = computed(() => [
 
 const current = ref<Shift | null>(null)
 const report = ref<Shift | null>(null)
-// Shift history: one server page at a time, filterable by till, cashier and
-// the date the shift was opened (null range = all dates).
+// Shift history: one server page at a time, filterable by till, cashier,
+// open/closed and the date the shift was opened (null range = all dates).
 const historyTill = ref<'all' | string>('all')
 const historyCashier = ref<'all' | number>('all')
+const historyStatusFilter = ref<'all' | 'OPEN' | 'CLOSED'>('all')
+const historyStatusOptions = computed(() => [
+  { value: 'all', label: t('common.allStatuses') },
+  { value: 'OPEN', label: label('shiftStatus', 'OPEN') },
+  { value: 'CLOSED', label: label('shiftStatus', 'CLOSED') },
+])
 const historyRange = ref<{ from: string; to: string } | null>(null)
 const historyList = reactive(
   usePagedList(
@@ -62,10 +68,11 @@ const historyList = reactive(
         perPage,
         deviceKey: historyTill.value === 'all' ? null : historyTill.value,
         userId: historyCashier.value === 'all' ? null : historyCashier.value,
+        status: historyStatusFilter.value === 'all' ? null : historyStatusFilter.value,
         dateFrom: historyRange.value?.from,
         dateTo: historyRange.value?.to,
       }),
-    { deps: [branchId, historyTill, historyCashier, historyRange] },
+    { deps: [branchId, historyTill, historyCashier, historyStatusFilter, historyRange] },
   ),
 )
 const historyTillOptions = computed(() => [{ value: 'all', label: t('shifts.allTills') }, ...tillOptions.value])
@@ -371,11 +378,12 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
     <!-- Shift history -->
     <div class="card overflow-x-auto">
       <h2 class="font-heading text-base mb-3">{{ $t('shifts.history') }}</h2>
-      <div class="flex flex-wrap items-end gap-3 mb-4">
+      <div class="list-filters mb-4">
         <SearchableSelect v-model="historyTill" :label="$t('common.till')" class="w-full sm:w-44" :options="historyTillOptions" :searchable="false" :clearable="false" />
         <SearchableSelect v-model="historyCashier" :label="$t('common.cashier')" class="w-full sm:w-52" :options="historyCashierOptions" :clearable="false" />
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('shifts.openedFilter') }}</label>
+        <SearchableSelect v-model="historyStatusFilter" :label="$t('common.status')" class="w-full sm:w-40" :options="historyStatusOptions" :searchable="false" :clearable="false" />
+        <div class="w-full sm:w-auto">
+          <span class="block text-sm text-muted mb-1">{{ $t('shifts.openedFilter') }}</span>
           <DateRangePicker v-model="historyRange" clearable @clear="historyRange = null" />
         </div>
       </div>

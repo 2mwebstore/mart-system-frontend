@@ -92,9 +92,11 @@ function calcDropStyle() {
   const spaceBelow = boundaryBottom - r.bottom
   const above = spaceBelow < 280
 
+  // Wider than a narrow trigger near the right edge, so kept on screen.
+  const width = Math.max(r.width, 220)
   dropStyle.value = {
-    width: Math.max(r.width, 220) + 'px',
-    left: r.left + 'px',
+    width: width + 'px',
+    left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) + 'px',
     ...(above
       ? { bottom: window.innerHeight - r.top + 4 + 'px', top: 'auto' }
       : { top: r.bottom + 4 + 'px', bottom: 'auto' }),

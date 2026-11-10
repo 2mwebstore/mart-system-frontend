@@ -2,16 +2,19 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { listProducts, type ImportResult } from '@/api/catalog'
 import * as posApi from '@/api/pos'
-import { Download, Eye, Package, PackagePlus, Pencil, Plus, Upload, X } from 'lucide-vue-next'
+import { Download, Eye, Lock, Package, PackagePlus, Pencil, Plus, Upload, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useInventoryData } from '@/composables/useInventoryData'
 import { useDebounced, usePagedList } from '@/composables/usePagedList'
 import { formatDateTime, formatKHR, formatUSD } from '@/utils/format'
+import { formatPercent, nameFor, percentFor, startingRate, taxCents } from '@/utils/tax'
+import { useSettingsStore } from '@/stores/settings'
+import TaxSelect from '@/components/TaxSelect.vue'
 import { PRODUCT_TYPES, type Category, type Product, type ProductType, type PurchaseOrder, type Sale, type Supplier } from '@/types/domain'
-import Tabs from '@/components/Tabs.vue'
 import Modal from '@/components/Modal.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import SearchInput from '@/components/SearchInput.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import Pagination from '@/components/Pagination.vue'
 import DateRangePicker from '@/components/DateRangePicker.vue'
@@ -22,19 +25,30 @@ import RichText from '@/components/RichText.vue'
 import DiscountInput from '@/components/DiscountInput.vue'
 import type { DiscountType } from '@/composables/useCart'
 import { useToast } from '@/composables/useToast'
+import { useRouteSection } from '@/composables/useRouteSection'
+import { canOpen } from '@/utils/pageAccess'
 import { categoryName, label, localName, t } from '@/i18n'
 
 const auth = useAuthStore()
 const toast = useToast()
 const branchId = computed(() => auth.activeBranchId ?? auth.branches[0]?.id ?? 1)
 
-const canCatalog = auth.hasPermission('inventory.adjust') || auth.hasPermission('inventory.edit_price')
-// Products split into their own create/edit permissions (categories and
-// suppliers still just use canCatalog above).
-const canCreateProduct = auth.hasPermission('inventory.product_create')
-const canEditProduct = auth.hasPermission('inventory.product_edit')
-const canPo = auth.hasPermission('inventory.purchase_order')
-const canReceive = auth.hasPermission('inventory.receive')
+// What this person may do on each part: products, categories, suppliers and
+// purchase orders each have their own create / edit / delete permissions.
+const can = (key: string) => auth.hasPermission(key)
+const canCreateProduct = can('product.create')
+const canEditProduct = can('product.update')
+const canDeleteProduct = can('product.delete')
+const canCreateCategory = can('category.create')
+const canEditCategory = can('category.update')
+const canDeleteCategory = can('category.delete')
+const canCreateSupplier = can('supplier.create')
+const canEditSupplier = can('supplier.update')
+const canDeleteSupplier = can('supplier.delete')
+const canCreatePo = can('purchase_order.create')
+const canEditPo = can('purchase_order.update')
+const canDeletePo = can('purchase_order.delete')
+const canReceive = can('purchase_order.receive')
 
 const {
   search,
@@ -43,10 +57,13 @@ const {
   typeFilter,
   categorySearch,
   supplierSearch,
+  moveSearch,
   moveType,
   moveProduct,
   moveRange,
   poRange,
+  poSearch,
+  poStatusFilter,
   poSupplierFilter,
   rows,
   summary,
@@ -71,23 +88,29 @@ const {
   poList,
   poItemsGrossCents,
   poItemsDiscountCents,
-  poItemsCostCents,
   poTotalCostCents,
   poItemCount,
   savePurchaseOrder,
   removePurchaseOrder,
   receivePurchaseOrder,
-} = useInventoryData(branchId)
+} = useInventoryData(branchId, can)
 
-const activeTab = ref('products')
-const tabs = computed(() => [
-  { key: 'products', label: t('inventory.tabProducts') },
-  { key: 'categories', label: t('inventory.tabCategories') },
-  { key: 'moves', label: t('inventory.tabMoves') },
-  { key: 'po', label: t('inventory.tabPo') },
-  { key: 'sales', label: t('inventory.tabSales') },
-  { key: 'suppliers', label: t('inventory.tabSuppliers') },
-])
+// Inventory is several pages, each with its own address and sidebar entry
+// (/inventory/products, /inventory/stock-moves…); this one component draws
+// them all, so moving between them keeps what's loaded. Only the parts this
+// person can open are offered (the sidebar lists the same ones).
+const sections = computed(() =>
+  [
+    { key: 'products', route: 'inventory-products', label: t('inventory.tabProducts') },
+    { key: 'categories', route: 'inventory-categories', label: t('inventory.tabCategories') },
+    { key: 'moves', route: 'inventory-moves', label: t('inventory.tabMoves') },
+    { key: 'po', route: 'inventory-po', label: t('inventory.tabPo') },
+    { key: 'sales', route: 'inventory-sales', label: t('inventory.tabSales') },
+    { key: 'suppliers', route: 'inventory-suppliers', label: t('inventory.tabSuppliers') },
+  ].filter((s) => canOpen(s.route, can)),
+)
+const section = useRouteSection(() => sections.value.map((s) => s.key))
+const pageTitle = computed(() => sections.value.find((s) => s.key === section.value)?.label ?? t('inventory.title'))
 
 const categoryOptions = computed(() => categories.value.map((c) => ({ value: c.id, label: localName(c.nameEn, c.nameKm) })))
 const categoryFilterOptions = computed(() => [{ value: 'all', label: t('inventory.allCategories') }, ...categoryOptions.value])
@@ -114,9 +137,13 @@ const moveProductOptions = computed(() => [
     .filter((p) => p.productType !== 'SERVICE')
     .map((p) => ({ value: p.id, label: localName(p.nameEn, p.nameKm), sub: [p.sku, p.nameEn, p.nameKm].filter(Boolean).join(' · ') })),
 ])
-watch(activeTab, (tab) => {
-  if (tab === 'moves' && products.value.length === 0) void loadAllProducts()
-})
+watch(
+  section,
+  (tab) => {
+    if (tab === 'moves' && products.value.length === 0) void loadAllProducts()
+  },
+  { immediate: true },
+)
 const supplierOptions = computed(() => suppliers.value.map((s) => ({ value: s.id, label: s.name, sub: s.phone })))
 const poSupplierFilterOptions = computed(() => [{ value: 'all', label: t('inventory.allSuppliers') }, ...supplierOptions.value])
 const branchOptions = computed(() => auth.branches.map((b) => ({ value: b.id, label: b.name, sub: b.code })))
@@ -129,6 +156,10 @@ const productOptions = computed(() =>
 // RECEIVED is reached only through the Receive action (it moves stock), so
 // it isn't offered as a status to pick by hand.
 const poStatusOptions = computed(() => ['DRAFT', 'SENT', 'PARTIAL', 'CANCELLED'].map((v) => ({ value: v, label: label('poStatus', v) })))
+const poStatusFilterOptions = computed(() => [
+  { value: 'all', label: t('common.allStatuses') },
+  ...['DRAFT', 'SENT', 'PARTIAL', 'RECEIVED', 'CANCELLED'].map((v) => ({ value: v, label: label('poStatus', v) })),
+])
 
 const statusTone: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
   in_stock: 'success',
@@ -597,29 +628,44 @@ interface PoFormItem {
 
 const showPoModal = ref(false)
 const editingPoId = ref<number | null>(null)
+// The order being edited: it keeps its own tax rate as it was.
+const editingPo = ref<PurchaseOrder | null>(null)
+const settingsStore = useSettingsStore()
 const poForm = reactive<{
   supplierId: number | null
   branchId: number | null
   status: string
   note: string
   shippingDollars: number
+  taxRateId: number | null
   items: PoFormItem[]
-}>({ supplierId: null, branchId: branchId.value, status: 'DRAFT', note: '', shippingDollars: 0, items: [] })
+}>({ supplierId: null, branchId: branchId.value, status: 'DRAFT', note: '', shippingDollars: 0, taxRateId: null, items: [] })
 
 function newPo() {
   editingPoId.value = null
-  Object.assign(poForm, { supplierId: null, branchId: branchId.value, status: 'DRAFT', note: '', shippingDollars: 0, items: [] })
+  editingPo.value = null
+  Object.assign(poForm, {
+    supplierId: null,
+    branchId: branchId.value,
+    status: 'DRAFT',
+    note: '',
+    shippingDollars: 0,
+    taxRateId: startingRate(settingsStore.app.taxDefaults?.purchase, settingsStore.taxRates),
+    items: [],
+  })
   void loadAllProducts() // the picker searches every product, not just one page
   showPoModal.value = true
 }
 function editPo(po: PurchaseOrder) {
   editingPoId.value = po.id
+  editingPo.value = po
   Object.assign(poForm, {
     supplierId: po.supplierId,
     branchId: po.branchId,
     status: po.status,
     note: po.note,
     shippingDollars: po.shippingCents / 100,
+    taxRateId: po.taxRateId,
     items: po.items.map((i) => ({
       productId: i.productId,
       name: localName(i.productName, i.productNameKm),
@@ -674,7 +720,11 @@ function poLineDiscountCents(i: PoFormItem) {
 const poFormDiscountCents = computed(() => poForm.items.reduce((sum, i) => sum + poLineDiscountCents(i), 0))
 const poFormItemsCents = computed(() => poForm.items.reduce((sum, i) => sum + poLineGrossCents(i) - poLineDiscountCents(i), 0))
 const poFormShippingCents = computed(() => Math.round(poForm.shippingDollars * 100))
-const poFormTotalCents = computed(() => poFormItemsCents.value + poFormShippingCents.value)
+// Tax on the items after discounts plus shipping, as the server works it out.
+const poFormTaxPercent = computed(() => percentFor(poForm.taxRateId, settingsStore.taxRates, editingPo.value))
+const poFormTaxName = computed(() => nameFor(poForm.taxRateId, settingsStore.taxRates, editingPo.value))
+const poFormTaxCents = computed(() => taxCents(poFormItemsCents.value + poFormShippingCents.value, poFormTaxPercent.value))
+const poFormTotalCents = computed(() => poFormItemsCents.value + poFormShippingCents.value + poFormTaxCents.value)
 
 async function submitPo() {
   if (poForm.supplierId === null || poForm.branchId === null || poForm.items.length === 0) {
@@ -690,6 +740,7 @@ async function submitPo() {
       status: poForm.status,
       note: poForm.note,
       shippingCents: poFormShippingCents.value,
+      taxRateId: poForm.taxRateId,
       items: poForm.items.map((i) => ({
         productId: i.productId,
         qty: Number(i.qty),
@@ -724,6 +775,11 @@ const canVoidSale = auth.hasPermission('pos.void')
 const saleSearch = ref('')
 const debouncedSaleSearch = useDebounced(saleSearch)
 const saleRange = ref<{ from: string; to: string } | null>(null)
+const saleStatus = ref<'all' | string>('all')
+const saleStatusOptions = computed(() => [
+  { value: 'all', label: t('common.allStatuses') },
+  ...['PAID', 'PARTIAL_REFUND', 'REFUNDED', 'VOIDED'].map((v) => ({ value: v, label: label('saleStatus', v) })),
+])
 // 'all' by default; the filter is local to this tab and doesn't change the
 // header's active branch.
 const saleBranch = ref<number | 'all'>('all')
@@ -741,19 +797,24 @@ const saleList = reactive(
         page,
         perPage,
         q: debouncedSaleSearch.value.trim(),
+        status: saleStatus.value === 'all' ? null : saleStatus.value,
         dateFrom: saleRange.value?.from,
         dateTo: saleRange.value?.to,
       }),
-    { deps: [saleBranch, debouncedSaleSearch, saleRange] },
+    { deps: [saleBranch, debouncedSaleSearch, saleStatus, saleRange], enabled: () => canOpen('inventory-sales', can) },
   ),
 )
 function branchName(id: number) {
   const b = auth.branches.find((x) => x.id === id)
   return b ? b.name : `#${id}`
 }
-watch(activeTab, (tab) => {
-  if ((tab === 'moves' || tab === 'sales') && products.value.length === 0) void loadAllProducts()
-})
+watch(
+  section,
+  (tab) => {
+    if ((tab === 'moves' || tab === 'sales') && products.value.length === 0) void loadAllProducts()
+  },
+  { immediate: true },
+)
 // Unlike the PO item picker, a sale can include SERVICE products.
 const showSaleModal = ref(false)
 const saleModalMode = ref<'view' | 'edit'>('view')
@@ -845,12 +906,13 @@ function viewPoDetail(po: PurchaseOrder) {
   <div class="p-4 sm:p-8 space-y-6">
     <div class="flex items-center justify-between flex-wrap gap-3">
       <div>
-        <h1 class="font-heading text-2xl">{{ $t('inventory.title') }}</h1>
+        <h1 class="font-heading text-2xl">{{ pageTitle }}</h1>
         <p class="text-muted text-sm">{{ auth.branches.find((b) => b.id === branchId)?.name }}</p>
       </div>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+    <!-- The stock summary belongs with the products it counts. -->
+    <div v-if="section === 'products'" class="grid grid-cols-2 sm:grid-cols-5 gap-4">
       <div class="card">
         <p class="text-sm text-muted">{{ $t('inventory.stockValue') }}</p>
         <p class="font-mono text-xl mt-1">{{ formatUSD(summary.stockValueCents) }}</p>
@@ -873,17 +935,15 @@ function viewPoDetail(po: PurchaseOrder) {
       </div>
     </div>
 
-    <Tabs v-model="activeTab" :tabs="tabs" />
-
-    <div v-if="activeTab === 'products'" class="card space-y-4">
-      <div class="flex flex-wrap items-end justify-between gap-2 mb-3">
-        <div class="flex flex-wrap gap-2">
-          <input v-model="search" type="search" :placeholder="$t('inventory.searchPlaceholder')" class="input max-w-xs" />
+    <div v-if="section === 'products'" class="card space-y-4">
+      <div class="list-toolbar">
+        <div class="list-filters">
+          <SearchInput v-model="search" :placeholder="$t('inventory.searchPlaceholder')" class="sm:w-72" />
           <SearchableSelect v-model="categoryFilter" class="w-full sm:w-52" :options="categoryFilterOptions" :clearable="false" />
           <SearchableSelect v-model="typeFilter" class="w-full sm:w-40" :options="typeFilterOptions" :searchable="false" :clearable="false" />
           <SearchableSelect v-model="statusFilter" class="w-full sm:w-44" :options="statusFilterOptions" :searchable="false" :clearable="false" />
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="list-actions">
           <button v-if="canCreateProduct" type="button" class="btn-secondary flex items-center gap-2" @click="openImport('products')">
             <Upload :stroke-width="1.8" class="w-4 h-4" /> {{ $t('inventory.import') }}
           </button>
@@ -896,7 +956,7 @@ function viewPoDetail(po: PurchaseOrder) {
         </div>
       </div>
 
-      <div v-if="canEditProduct && selectedProductIds.size > 0" class="flex items-center gap-3 rounded-control bg-primary-tint px-3 py-2 text-sm">
+      <div v-if="canDeleteProduct && selectedProductIds.size > 0" class="flex items-center gap-3 rounded-control bg-primary-tint px-3 py-2 text-sm">
         <span class="text-primary-tint-text">{{ $t('inventory.selectedProducts', { n: selectedProductIds.size }) }}</span>
         <ConfirmDelete :item-label="$t('inventory.selectedProducts', { n: selectedProductIds.size })" size="md" @confirm="bulkDeleteProducts" />
         <span v-if="bulkDeleting" class="text-xs text-muted">{{ $t('common.loading') }}</span>
@@ -907,7 +967,7 @@ function viewPoDetail(po: PurchaseOrder) {
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left text-muted border-b border-line">
-              <th v-if="canEditProduct" class="py-2 pr-1 font-medium w-6">
+              <th v-if="canDeleteProduct" class="py-2 pr-1 font-medium w-6">
                 <input type="checkbox" class="rounded" :checked="allVisibleSelected" :aria-label="$t('inventory.selectAll')" @change="toggleSelectAllProducts" />
               </th>
               <th class="py-2 font-medium">{{ $t('col.sku') }}</th>
@@ -925,7 +985,7 @@ function viewPoDetail(po: PurchaseOrder) {
           </thead>
           <tbody>
             <tr v-for="r in rows" :key="r.id" class="border-b border-line last:border-0 hover:bg-surface-subtle">
-              <td v-if="canEditProduct" class="py-2 pr-1">
+              <td v-if="canDeleteProduct" class="py-2 pr-1">
                 <input
                   type="checkbox"
                   class="rounded"
@@ -966,7 +1026,7 @@ function viewPoDetail(po: PurchaseOrder) {
               <td class="py-2 pr-4 text-right font-mono text-muted">{{ r.productType === 'SERVICE' ? '—' : r.reorderPoint }}</td>
               <td class="py-2"><StatusBadge :tone="statusTone[r.status]" :label="$t('stockStatus.' + r.status)" /></td>
               <td class="py-2">
-                <div v-if="canCreateProduct || canEditProduct" class="flex items-center gap-1">
+                <div v-if="canCreateProduct || canEditProduct || canDeleteProduct" class="flex items-center gap-1">
                   <button
                     v-if="canCreateProduct && !r.parentProductId"
                     type="button"
@@ -980,7 +1040,7 @@ function viewPoDetail(po: PurchaseOrder) {
                   <button v-if="canEditProduct" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.editProductAria')" @click="editProduct(r)">
                     <Pencil :stroke-width="1.8" class="w-4 h-4" />
                   </button>
-                  <ConfirmDelete v-if="canEditProduct" :item-label="$t('entity.product')" :item-name="r.nameEn" @confirm="deleteProduct(r.id)" />
+                  <ConfirmDelete v-if="canDeleteProduct" :item-label="$t('entity.product')" :item-name="r.nameEn" @confirm="deleteProduct(r.id)" />
                 </div>
               </td>
             </tr>
@@ -991,23 +1051,23 @@ function viewPoDetail(po: PurchaseOrder) {
       <Pagination v-model:page="productList.page" :total-pages="productList.totalPages" :total="productList.total" :per-page="productList.perPage" :noun="$t('inventory.productsNoun')" />
     </div>
 
-    <div v-else-if="activeTab === 'categories'" class="card overflow-x-auto">
-      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <input v-model="categorySearch" type="search" :placeholder="$t('inventory.searchCategoriesPlaceholder')" class="input max-w-xs" />
-        <div class="flex flex-wrap gap-2">
-          <button v-if="canCatalog" type="button" class="btn-secondary flex items-center gap-2" @click="openImport('categories')">
+    <div v-else-if="section === 'categories'" class="card overflow-x-auto">
+      <div class="list-toolbar mb-3">
+        <SearchInput v-model="categorySearch" :placeholder="$t('inventory.searchCategoriesPlaceholder')" />
+        <div class="list-actions">
+          <button v-if="canCreateCategory" type="button" class="btn-secondary flex items-center gap-2" @click="openImport('categories')">
             <Upload :stroke-width="1.8" class="w-4 h-4" /> {{ $t('inventory.import') }}
           </button>
           <button type="button" class="btn-secondary flex items-center gap-2" @click="exportCategoriesCsv">
             <Download :stroke-width="1.8" class="w-4 h-4" /> {{ $t('inventory.exportCsv') }}
           </button>
-          <button v-if="canCatalog" type="button" class="btn-primary flex items-center gap-2" @click="newCategory">
+          <button v-if="canCreateCategory" type="button" class="btn-primary flex items-center gap-2" @click="newCategory">
             <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('inventory.newCategory') }}
           </button>
         </div>
       </div>
 
-      <div v-if="canCatalog && selectedCategoryIds.size > 0" class="flex items-center gap-3 rounded-control bg-primary-tint px-3 py-2 text-sm mb-3">
+      <div v-if="canDeleteCategory && selectedCategoryIds.size > 0" class="flex items-center gap-3 rounded-control bg-primary-tint px-3 py-2 text-sm mb-3">
         <span class="text-primary-tint-text">{{ $t('inventory.selectedCategories', { n: selectedCategoryIds.size }) }}</span>
         <ConfirmDelete :item-label="$t('inventory.selectedCategories', { n: selectedCategoryIds.size })" size="md" @confirm="bulkDeleteCategories" />
         <span v-if="bulkDeletingCategories" class="text-xs text-muted">{{ $t('common.loading') }}</span>
@@ -1017,7 +1077,7 @@ function viewPoDetail(po: PurchaseOrder) {
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-muted border-b border-line">
-            <th v-if="canCatalog" class="py-2 pr-1 font-medium w-6">
+            <th v-if="canDeleteCategory" class="py-2 pr-1 font-medium w-6">
               <input type="checkbox" class="rounded" :checked="allVisibleCategoriesSelected" :aria-label="$t('inventory.selectAll')" @change="toggleSelectAllCategories" />
             </th>
             <th class="py-2 font-medium">{{ $t('col.id') }}</th>
@@ -1029,7 +1089,7 @@ function viewPoDetail(po: PurchaseOrder) {
         </thead>
         <tbody>
           <tr v-for="c in categoryList.rows" :key="c.id" class="border-b border-line last:border-0">
-            <td v-if="canCatalog" class="py-2 pr-1">
+            <td v-if="canDeleteCategory" class="py-2 pr-1">
               <input
                 type="checkbox"
                 class="rounded"
@@ -1043,11 +1103,11 @@ function viewPoDetail(po: PurchaseOrder) {
             <td class="py-2">{{ c.nameKm }}</td>
             <td class="py-2 pr-4 text-right font-mono">{{ c.productCount }}</td>
             <td class="py-2">
-              <div v-if="canCatalog" class="flex items-center gap-1">
-                <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.editCategoryAria')" @click="editCategory(c)">
+              <div v-if="canEditCategory || canDeleteCategory" class="flex items-center gap-1">
+                <button v-if="canEditCategory" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.editCategoryAria')" @click="editCategory(c)">
                   <Pencil :stroke-width="1.8" class="w-4 h-4" />
                 </button>
-                <ConfirmDelete :item-label="$t('entity.category')" :item-name="c.nameEn" @confirm="deleteCategory(c.id)" />
+                <ConfirmDelete v-if="canDeleteCategory" :item-label="$t('entity.category')" :item-name="c.nameEn" @confirm="deleteCategory(c.id)" />
               </div>
             </td>
           </tr>
@@ -1056,12 +1116,13 @@ function viewPoDetail(po: PurchaseOrder) {
       <Pagination v-model:page="categoryList.page" :total-pages="categoryList.totalPages" :total="categoryList.total" :per-page="categoryList.perPage" :noun="$t('inventory.categoriesNoun')" />
     </div>
 
-    <div v-else-if="activeTab === 'moves'" class="card overflow-x-auto space-y-3">
-      <div class="flex flex-wrap items-end gap-3">
+    <div v-else-if="section === 'moves'" class="card overflow-x-auto space-y-3">
+      <div class="list-filters">
+        <SearchInput v-model="moveSearch" :label="$t('common.searchLabel')" :placeholder="$t('inventory.searchMovesPlaceholder')" />
         <SearchableSelect v-model="moveProduct" :label="$t('common.product')" class="w-full sm:w-60" :options="moveProductOptions" :clearable="false" />
         <SearchableSelect v-model="moveType" :label="$t('common.type')" class="w-full sm:w-44" :options="moveTypeOptions" :searchable="false" :clearable="false" />
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('inventory.dateRange') }}</label>
+        <div class="w-full sm:w-auto">
+          <span class="block text-sm text-muted mb-1">{{ $t('inventory.dateRange') }}</span>
           <DateRangePicker v-model="moveRange" clearable @clear="moveRange = null" />
         </div>
       </div>
@@ -1099,16 +1160,18 @@ function viewPoDetail(po: PurchaseOrder) {
       <Pagination v-model:page="moveList.page" :total-pages="moveList.totalPages" :total="moveList.total" :per-page="moveList.perPage" :noun="$t('inventory.movementsNoun')" />
     </div>
 
-    <div v-else-if="activeTab === 'po'" class="card overflow-x-auto">
-      <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
-        <div class="flex flex-wrap items-end gap-3">
-          <div>
-            <label class="block text-sm text-muted mb-1">{{ $t('inventory.created') }}</label>
+    <div v-else-if="section === 'po'" class="card overflow-x-auto">
+      <div class="list-toolbar mb-3">
+        <div class="list-filters">
+          <SearchInput v-model="poSearch" :label="$t('common.searchLabel')" :placeholder="$t('inventory.searchPoPlaceholder')" />
+          <SearchableSelect v-model="poSupplierFilter" :label="$t('col.supplier')" class="w-full sm:w-52" :options="poSupplierFilterOptions" :clearable="false" />
+          <SearchableSelect v-model="poStatusFilter" :label="$t('common.status')" class="w-full sm:w-44" :options="poStatusFilterOptions" :searchable="false" :clearable="false" />
+          <div class="w-full sm:w-auto">
+            <span class="block text-sm text-muted mb-1">{{ $t('inventory.created') }}</span>
             <DateRangePicker v-model="poRange" clearable @clear="poRange = null" />
           </div>
-          <SearchableSelect v-model="poSupplierFilter" :label="$t('col.supplier')" class="w-full sm:w-52" :options="poSupplierFilterOptions" :clearable="false" />
         </div>
-        <button v-if="canPo" type="button" class="btn-primary flex items-center gap-2" @click="newPo">
+        <button v-if="canCreatePo" type="button" class="btn-primary flex items-center gap-2" @click="newPo">
           <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('inventory.newPo') }}
         </button>
       </div>
@@ -1137,7 +1200,7 @@ function viewPoDetail(po: PurchaseOrder) {
                 <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.viewItemsAria')" @click="viewPoDetail(po)">
                   <Eye :stroke-width="1.8" class="w-4 h-4" />
                 </button>
-                <button v-if="canPo && po.status !== 'RECEIVED'" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.editPoAria')" @click="editPo(po)">
+                <button v-if="canEditPo && po.status !== 'RECEIVED'" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.editPoAria')" @click="editPo(po)">
                   <Pencil :stroke-width="1.8" class="w-4 h-4" />
                 </button>
                 <button
@@ -1148,7 +1211,7 @@ function viewPoDetail(po: PurchaseOrder) {
                 >
                   <PackagePlus :stroke-width="1.8" class="w-3.5 h-3.5" /> {{ $t('inventory.receive') }}
                 </button>
-                <ConfirmDelete v-if="canPo && po.status !== 'RECEIVED' && po.status !== 'PARTIAL'" :item-label="$t('entity.purchaseOrder')" :item-name="po.code" @confirm="deletePo(po.id)" />
+                <ConfirmDelete v-if="canDeletePo && po.status !== 'RECEIVED' && po.status !== 'PARTIAL'" :item-label="$t('entity.purchaseOrder')" :item-name="po.code" @confirm="deletePo(po.id)" />
               </div>
             </td>
           </tr>
@@ -1157,15 +1220,13 @@ function viewPoDetail(po: PurchaseOrder) {
       <Pagination v-model:page="poList.page" :total-pages="poList.totalPages" :total="poList.total" :per-page="poList.perPage" :noun="$t('inventory.posNoun')" />
     </div>
 
-    <div v-else-if="activeTab === 'sales'" class="card overflow-x-auto space-y-3">
-      <div class="flex flex-wrap items-end gap-3">
-        <input v-model="saleSearch" type="search" :placeholder="$t('inventory.searchSalesPlaceholder')" class="input max-w-xs" />
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('col.branch') }}</label>
-          <SearchableSelect :model-value="saleBranch" class="w-full sm:w-52" :options="saleBranchOptions" :clearable="false" @update:model-value="pickSaleBranch" />
-        </div>
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('inventory.dateRange') }}</label>
+    <div v-else-if="section === 'sales'" class="card overflow-x-auto space-y-3">
+      <div class="list-filters">
+        <SearchInput v-model="saleSearch" :label="$t('common.searchLabel')" :placeholder="$t('inventory.searchSalesPlaceholder')" />
+        <SearchableSelect :model-value="saleBranch" :label="$t('col.branch')" class="w-full sm:w-52" :options="saleBranchOptions" :clearable="false" @update:model-value="pickSaleBranch" />
+        <SearchableSelect v-model="saleStatus" :label="$t('common.status')" class="w-full sm:w-44" :options="saleStatusOptions" :searchable="false" :clearable="false" />
+        <div class="w-full sm:w-auto">
+          <span class="block text-sm text-muted mb-1">{{ $t('inventory.dateRange') }}</span>
           <DateRangePicker v-model="saleRange" clearable @clear="saleRange = null" />
         </div>
       </div>
@@ -1197,9 +1258,13 @@ function viewPoDetail(po: PurchaseOrder) {
             <td class="py-2 text-right font-mono">{{ formatUSD(s.totalCents) }}</td>
             <td class="py-2"><StatusBadge :tone="saleStatusTone[s.status]" :label="label('saleStatus', s.status)" /></td>
             <td class="py-2" @click.stop>
-              <div v-if="canVoidSale && s.status === 'PAID'" class="flex items-center gap-1">
+              <div v-if="canVoidSale && s.status === 'PAID' && s.shiftStatus === 'OPEN'" class="flex items-center gap-1">
                 <ConfirmDelete :item-label="$t('entity.sale')" :item-name="s.receiptNo" @confirm="deleteSaleRow(s)" />
               </div>
+              <!-- A closed shift's sales are locked: no edit, no delete -->
+              <span v-else-if="s.shiftStatus === 'CLOSED'" class="inline-flex p-1.5 text-muted" :title="$t('inventory.saleLocked')" :aria-label="$t('inventory.saleLocked')" data-sale-locked>
+                <Lock :stroke-width="1.8" class="w-4 h-4" />
+              </span>
             </td>
           </tr>
           <tr v-if="!saleList.loading && saleList.rows.length === 0">
@@ -1210,10 +1275,10 @@ function viewPoDetail(po: PurchaseOrder) {
       <Pagination v-model:page="saleList.page" :total-pages="saleList.totalPages" :total="saleList.total" :per-page="saleList.perPage" :noun="$t('inventory.salesNoun')" />
     </div>
 
-    <div v-else-if="activeTab === 'suppliers'" class="card overflow-x-auto">
-      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <input v-model="supplierSearch" type="search" :placeholder="$t('inventory.searchSuppliersPlaceholder')" class="input max-w-xs" />
-        <button v-if="canCatalog" type="button" class="btn-primary flex items-center gap-2" @click="newSupplier">
+    <div v-else-if="section === 'suppliers'" class="card overflow-x-auto">
+      <div class="list-toolbar mb-3">
+        <SearchInput v-model="supplierSearch" :placeholder="$t('inventory.searchSuppliersPlaceholder')" />
+        <button v-if="canCreateSupplier" type="button" class="btn-primary flex items-center gap-2" @click="newSupplier">
           <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('inventory.newSupplier') }}
         </button>
       </div>
@@ -1239,11 +1304,11 @@ function viewPoDetail(po: PurchaseOrder) {
             <td class="py-2 text-muted">{{ s.paymentTerms }}</td>
             <td class="py-2 text-right font-mono">{{ s.productCount ?? 0 }}</td>
             <td class="py-2">
-              <div v-if="canCatalog" class="flex items-center gap-1">
-                <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.editSupplierAria')" @click="editSupplier(s)">
+              <div v-if="canEditSupplier || canDeleteSupplier" class="flex items-center gap-1">
+                <button v-if="canEditSupplier" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.editSupplierAria')" @click="editSupplier(s)">
                   <Pencil :stroke-width="1.8" class="w-4 h-4" />
                 </button>
-                <ConfirmDelete :item-label="$t('entity.supplier')" :item-name="s.name" @confirm="deleteSupplier(s.id)" />
+                <ConfirmDelete v-if="canDeleteSupplier" :item-label="$t('entity.supplier')" :item-name="s.name" @confirm="deleteSupplier(s.id)" />
               </div>
             </td>
           </tr>
@@ -1500,12 +1565,18 @@ function viewPoDetail(po: PurchaseOrder) {
           <p class="text-sm text-right font-mono mt-2">{{ $t('inventory.itemsTotal', { amount: formatUSD(poFormItemsCents) }) }}</p>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 items-end">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <div>
             <label class="block text-sm text-muted mb-1">{{ $t('inventory.shippingUsd') }}</label>
             <input v-model.number="poForm.shippingDollars" type="number" min="0" step="0.01" class="input" />
           </div>
-          <p class="text-sm text-right font-mono font-medium">{{ $t('inventory.totalLine', { amount: formatUSD(poFormTotalCents) }) }}</p>
+          <TaxSelect v-model="poForm.taxRateId" :kept="editingPo" />
+        </div>
+        <div class="space-y-1 text-right">
+          <p v-if="poForm.taxRateId" class="text-sm font-mono text-muted" data-tax-line>
+            {{ $t('tax.line', { name: `${poFormTaxName} ${formatPercent(poFormTaxPercent)}` }) }}: {{ formatUSD(poFormTaxCents) }}
+          </p>
+          <p class="text-sm font-mono font-medium">{{ $t('inventory.totalLine', { amount: formatUSD(poFormTotalCents) }) }}</p>
         </div>
 
         <RichTextEditor id="po-note" v-model="poForm.note" :label="$t('common.note')" :placeholder="$t('inventory.poNoteHint')" />
@@ -1571,6 +1642,10 @@ function viewPoDetail(po: PurchaseOrder) {
           <div class="flex justify-between text-sm">
             <span class="text-muted">{{ $t('inventory.shipping') }}</span>
             <span class="font-mono">{{ formatUSD(detailPo.shippingCents) }}</span>
+          </div>
+          <div v-if="detailPo.taxCents || detailPo.taxRateId" class="flex justify-between text-sm" data-tax-line>
+            <span class="text-muted">{{ $t('tax.line', { name: `${detailPo.taxName} ${formatPercent(detailPo.taxPercent)}` }) }}</span>
+            <span class="font-mono">{{ formatUSD(detailPo.taxCents) }}</span>
           </div>
           <div class="flex justify-between items-center">
             <span class="text-sm text-muted">{{ $t('inventory.totalCost') }}</span>
@@ -1638,10 +1713,18 @@ function viewPoDetail(po: PurchaseOrder) {
                 <span class="text-xs text-muted">{{ percentOf(saleCartDiscountCents(activeSale), activeSale.subtotalCents - saleLineDiscountCents(activeSale)) }}</span>
               </span>
             </div>
+            <div v-if="activeSale.taxCents" class="flex justify-between" data-tax-line>
+              <span class="text-muted">{{ $t('tax.line', { name: `${activeSale.taxName} ${formatPercent(activeSale.taxPercent)}` }) }}</span>
+              <span class="font-mono">{{ formatUSD(activeSale.taxCents) }}</span>
+            </div>
             <div class="flex justify-between font-medium">
               <span>{{ $t('col.total') }}</span>
               <span class="font-mono">{{ formatUSD(activeSale.totalCents) }} ({{ formatKHR(activeSale.totalRiel) }})</span>
             </div>
+          </div>
+          <div v-if="activeSale.note" class="rounded-control bg-surface-subtle px-3 py-2 text-sm" data-sale-note>
+            <p class="text-xs text-muted mb-1">{{ $t('pos.saleNote') }}</p>
+            <RichText :html="activeSale.note" />
           </div>
           <div class="flex justify-between text-sm text-muted">
             <span>{{ $t('pos.paidBy') }}</span>
@@ -1661,7 +1744,10 @@ function viewPoDetail(po: PurchaseOrder) {
             <span>{{ $t('col.reference') }}</span>
             <span>{{ activeSale.payment.reference }}</span>
           </div>
-          <p v-if="!canEditSaleRow(activeSale)" class="text-xs text-muted">{{ $t('inventory.saleNotEditableHint') }}</p>
+          <p v-if="activeSale.shiftStatus === 'CLOSED'" class="text-xs text-muted flex items-center gap-1.5" data-sale-locked-hint>
+            <Lock :stroke-width="1.8" class="w-3.5 h-3.5 shrink-0" /> {{ $t('inventory.saleLockedHint') }}
+          </p>
+          <p v-else-if="!canEditSaleRow(activeSale)" class="text-xs text-muted">{{ $t('inventory.saleNotEditableHint') }}</p>
           <div class="flex justify-end gap-2 pt-2">
             <button type="button" class="btn-secondary" @click="closeSaleModal">{{ $t('common.close') }}</button>
             <button v-if="canEditSaleRow(activeSale)" type="button" class="btn-primary flex items-center gap-2" @click="startEditSale">

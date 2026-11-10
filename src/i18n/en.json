@@ -5,6 +5,7 @@
   },
   "nav": {
     "dashboard": "Dashboard",
+    "branch": "Branch",
     "pos": "POS / Cashier",
     "shifts": "Shifts",
     "inventory": "Inventory",
@@ -15,12 +16,26 @@
     "customers": "Customers",
     "expenses": "Expenses",
     "settings": "Settings",
-    "invoices": "Invoices"
+    "invoices": "Invoices",
+    "reports": "Reports",
+    "groupOperations": "Operations",
+    "groupFinance": "Finance",
+    "groupManage": "Manage",
+    "mainNav": "Main navigation",
+    "breadcrumb": "Breadcrumb",
+    "tagline": "Back office",
+    "showDataFor": "Show data for",
+    "changeBranch": "Showing {branch}. Change branch",
+    "searchBranches": "Search branches…",
+    "account": "Your account",
+    "language": "Language"
   },
   "auth": {
     "signIn": "Sign in",
     "username": "Username",
     "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "signInCta": "Sign in",
     "invalidCredentials": "Invalid username or password.",
     "signedInAs": "Signed in as",
@@ -89,7 +104,10 @@
     "uncategorised": "Uncategorised",
     "address": "Address",
     "pay": "Pay",
-    "clear": "Clear"
+    "clear": "Clear",
+    "allStatuses": "All statuses",
+    "noMatches": "Nothing matches your search.",
+    "searchLabel": "Search"
   },
   "entity": {
     "product": "product",
@@ -122,7 +140,9 @@
     "prev": "Prev",
     "next": "Next",
     "first": "First page",
-    "last": "Last page"
+    "last": "Last page",
+    "label": "Pagination",
+    "goTo": "Page {page}"
   },
   "dateRange": {
     "allDates": "All dates",
@@ -151,6 +171,32 @@
     }
   },
   "apiErrors": {
+    "rateLimited": "Too many requests. Please wait a moment and try again.",
+    "payloadTooLarge": "That request is too large.",
+    "ownerOnly": "Only an Owner can change an Owner account or give someone the Owner role.",
+    "roleAboveYours": "You can't assign or change a role that has permissions you don't hold.",
+    "discountAboveYours": "You can't set or assign a discount limit higher than your own role's.",
+    "refundAboveYours": "You can't set or assign a refund limit higher than your own role's.",
+    "cannotEditOwnRole": "You can't change your own role's permissions.",
+    "cannotChangeOwnAccess": "You can't change your own role or branches.",
+    "branchOutOfScope": "You can only assign branches you have access to.",
+    "branchRequired": "Pick at least one branch for this user.",
+    "userOutOfScope": "That user works at a branch you don't have access to.",
+    "lastOwner": "This is the only active Owner. Make someone else an Owner first.",
+    "tillNotAllowed": "This till belongs to a branch you aren't assigned to.",
+    "idempotencyConflict": "This sale's reference is already in use. Please try again.",
+    "backupFailed": "The backup couldn't be completed. Check the server logs.",
+    "passwordTooLong": "Password must be at most 72 characters.",
+    "roleNotValid": "Role is not valid.",
+    "roleShared": "Only an Owner can change a shared role.",
+    "roleOutOfScope": "That role belongs to a branch you don't have access to.",
+    "roleBranchRequired": "Pick the branch this role is for.",
+    "roleWrongBranch": "That role belongs to another branch and can only be held there.",
+    "mainRoleUnused": "The main role has to apply at one of this user's branches at least.",
+    "ownerRoleGlobal": "The Owner role covers every branch, so it can't be set per branch.",
+    "branchRoleNotTheirs": "Each per-branch role must be for one of the user's branches.",
+    "branchRoleTwice": "Set one role per branch.",
+    "branchNotValid": "Branch is not valid.",
     "unauthorized": "Invalid credentials or session expired.",
     "forbidden": "You do not have permission to perform this action.",
     "notFound": "The requested resource was not found.",
@@ -192,7 +238,7 @@
     "dateFormat": "Use the format YYYY-MM-DD.",
     "zeroOrMore": "Must be zero or more.",
     "roleNameUsed": "A role with that name already exists.",
-    "passwordShort": "Password must be at least 8 characters.",
+    "passwordShort": "Password must be at least 6 characters.",
     "phoneUsed": "A customer with that phone number already exists.",
     "pinFormat": "PIN must be exactly 4 digits.",
     "usernameUsed": "That username is already taken.",
@@ -223,7 +269,21 @@
     "paymentProof": "The proof must be an image or a web link (up to about 2 MB).",
     "invoiceCancelledPay": "A cancelled invoice can’t take payments.",
     "invoicePaid": "This invoice is already paid in full.",
-    "paymentOverBalance": "That’s more than the {amount} still owed."
+    "paymentOverBalance": "That’s more than the {amount} still owed.",
+    "shiftJustClosed": "This shift has just been closed. Open a new shift to keep selling.",
+    "noCompany": "This page is for a company's staff. A super admin manages companies only.",
+    "notSuperAdmin": "Only a super admin can do this.",
+    "unknownCompany": "No company has that code. Check it with your manager.",
+    "companyDisabled": "This company has been disabled.",
+    "companyCodeTaken": "Another company already has that code.",
+    "companyCodeFormat": "Use 2 to 12 letters and digits.",
+    "notCompanyOwner": "That isn't one of this company's Owners.",
+    "categoryNotFound": "Category not found.",
+    "supplierNotFound": "Supplier not found.",
+    "customerNotFound": "Customer not found.",
+    "productNotFound": "Product not found.",
+    "branchLimit": "This company is at its limit of active branches ({n}).",
+    "userLimit": "This company is at its limit of active user accounts ({n})."
   },
   "fields": {
     "name_en": "Name",
@@ -254,14 +314,22 @@
     "type": "Type",
     "reorder_point": "Reorder point",
     "opening_usd_cents": "Opening amount",
-    "counted_usd_cents": "Counted amount"
+    "counted_usd_cents": "Counted amount",
+    "tax_rate_id": "Tax rate",
+    "percent": "Percent",
+    "note": "Note",
+    "pos": "POS sales",
+    "invoice": "Invoices",
+    "purchase": "Purchase orders",
+    "expense": "Expenses"
   },
   "role": {
     "Owner": "Owner",
     "Manager": "Manager",
     "Cashier": "Cashier",
     "Stock keeper": "Stock keeper",
-    "Accountant": "Accountant"
+    "Accountant": "Accountant",
+    "Super admin": "Super admin"
   },
   "lang": {
     "english": "English",
@@ -614,7 +682,8 @@
       "till": "Till",
       "shift": "Shift",
       "role": "Role",
-      "user": "User"
+      "user": "User",
+      "tax_rate": "Tax rate"
     },
     "verb": {
       "create": "Created",
@@ -625,7 +694,8 @@
       "open": "Opened",
       "close": "Closed",
       "reset_pin": "PIN reset",
-      "cash_movement": "Cash movement"
+      "cash_movement": "Cash movement",
+      "defaults": "Starting rates set"
     }
   },
   "customers": {
@@ -642,7 +712,17 @@
     "updated": "Customer updated.",
     "deleted": "Customer deleted.",
     "addCta": "Add customer",
-    "editAria": "Edit customer"
+    "editAria": "Edit customer",
+    "posDefaultTitle": "Default customer at the POS",
+    "posDefaultIs": "Every new sale at the POS starts with {name}. The cashier can still change it for a sale.",
+    "posDefaultNone": "New sales at the POS start as walk-in. Pick a customer below to start every sale with them instead.",
+    "posDefaultBadge": "POS default",
+    "setPosDefault": "Use {name} as the POS default",
+    "unsetPosDefault": "Stop using {name} as the POS default",
+    "useWalkIn": "Use walk-in",
+    "posDefaultSet": "New POS sales now start with {name}.",
+    "posDefaultCleared": "New POS sales start as walk-in again.",
+    "allTiers": "All tiers"
   },
   "expenses": {
     "title": "Expenses",
@@ -656,7 +736,8 @@
     "updated": "Expense updated.",
     "deleted": "Expense deleted.",
     "amountUsd": "Amount ($)",
-    "editAria": "Edit expense"
+    "editAria": "Edit expense",
+    "searchPlaceholder": "Search code, note or staff"
   },
   "users": {
     "title": "Users & Roles",
@@ -678,7 +759,7 @@
     "noBranchAccess": "No branches — pick at least one",
     "password": "Password",
     "newPassword": "New password (leave blank to keep)",
-    "passwordHint": "At least 8 characters",
+    "passwordHint": "At least 6 characters",
     "pinLabel": "POS PIN (4 digits, optional)",
     "resetPin": "Reset POS PIN",
     "accountActive": "Account active",
@@ -709,7 +790,48 @@
     "roleCreated": "{name} role created.",
     "roleCopy": "{name} copy",
     "roleDuplicated": "Duplicated as \"{name}\".",
-    "roleDeleted": "{name} deleted."
+    "roleDeleted": "{name} deleted.",
+    "showingBranch": "Showing {branch}. Switch branch at the top of the page.",
+    "mainRole": "Main role",
+    "roleAtEachBranch": "Role at each branch",
+    "roleAtEachBranchHint": "Leave a branch on the main role, or pick a different role for it.",
+    "moreBranches": "+ others",
+    "otherBranchesNote": "Also works at branches you don't manage, so only someone who manages all of them can change this account.",
+    "shared": "Shared",
+    "sharedRoleHint": "Every branch uses this role, so only an Owner can change it.",
+    "roleFor": "Used at",
+    "roleForAll": "Every branch (shared)",
+    "roleForBranch": "{branch} only",
+    "newRoleAtBranch": "It will belong to {branch} and can only be held there.",
+    "searchRolesPlaceholder": "Search roles",
+    "rolesNoun": "roles",
+    "permissionsTitle": "Permissions",
+    "permHint": "Grouped like the sidebar: each main menu, then its sub-menus. Tick what this role can do; a checkbox on a menu or sub-menu gives or removes all of it, and a section's the whole section. A page shows in the sidebar only with the permission marked “Opens the page”.",
+    "permOwnOnly": "You can give only permissions you have yourself.",
+    "permAboveYours": "This role has permissions you don't have, so only someone who has them can change it.",
+    "permSearch": "Search permissions…",
+    "permSelected": "{n} of {total} selected",
+    "permNoMatch": "No permissions match your search.",
+    "permNone": "No permissions to show.",
+    "permSelectGroup": "Select all of {name}",
+    "permAlsoOn": "Also on {pages}",
+    "permOther": "Other",
+    "permSubMenus": "{n} sub-menu | {n} sub-menus",
+    "permOpensPage": "Opens the page",
+    "permOpensWith": "Opens with {names}.",
+    "backToList": "Back to users",
+    "editTitle": "Edit {name}",
+    "accountSection": "Account",
+    "accessSection": "Access",
+    "actions": "Actions",
+    "view": "View user",
+    "editAria": "Edit {name}",
+    "viewAria": "View {name}",
+    "resetPinAria": "Reset the POS PIN of {name}",
+    "resetPinTitle": "Reset POS PIN?",
+    "resetPinConfirm": "{name}'s current PIN stops working at once. A new 4-digit PIN is made and shown to you once.",
+    "loadFailed": "Couldn't load this user.",
+    "you": "you"
   },
   "roleDesc": {
     "Owner": "Full access to all branches and settings.",
@@ -723,6 +845,7 @@
       "sell": "Sell at the till",
       "discount": "Apply a discount",
       "void": "Void a sale",
+      "edit_sale": "Edit a sale's items (still-open shift only)",
       "refund": "Refund a sale",
       "open_drawer": "Open the cash drawer without a sale"
     },
@@ -731,15 +854,53 @@
       "close_others": "Close another cashier's shift",
       "see_expected": "See expected cash before counting"
     },
+    "product": {
+      "view": "View products",
+      "create": "Create products",
+      "update": "Edit products",
+      "delete": "Delete products"
+    },
+    "category": {
+      "view": "View categories",
+      "create": "Create categories",
+      "update": "Edit categories",
+      "delete": "Delete categories"
+    },
+    "supplier": {
+      "view": "View suppliers",
+      "create": "Create suppliers",
+      "update": "Edit suppliers",
+      "delete": "Delete suppliers"
+    },
     "inventory": {
-      "view": "View inventory",
-      "receive": "Receive stock",
+      "view": "View stock movements",
       "adjust": "Adjust/write off/count stock",
-      "edit_price": "Edit product price/cost",
-      "product_create": "Create new products (and add variants)",
-      "product_edit": "Edit or delete existing products",
-      "purchase_order": "Manage purchase orders",
       "transfer": "Transfer stock between branches"
+    },
+    "purchase_order": {
+      "view": "View purchase orders",
+      "create": "Create purchase orders",
+      "update": "Edit purchase orders",
+      "delete": "Delete purchase orders",
+      "receive": "Receive stock on a purchase order"
+    },
+    "customer": {
+      "view": "View customers",
+      "create": "Create customers",
+      "update": "Edit customers",
+      "delete": "Delete customers"
+    },
+    "invoice": {
+      "view": "View invoices",
+      "create": "Create invoices",
+      "update": "Edit invoices and record payments",
+      "delete": "Cancel invoices and remove payments"
+    },
+    "expense": {
+      "view": "View expenses",
+      "create": "Create expenses",
+      "update": "Edit expenses",
+      "delete": "Delete expenses"
     },
     "report": {
       "sales": "View sales reports",
@@ -747,29 +908,47 @@
       "export": "Export reports",
       "activity_log": "View the activity log"
     },
-    "customer": {
-      "view": "View customers",
-      "manage": "Create/edit customers"
-    },
     "user": {
-      "manage": "Manage users"
+      "view": "View users",
+      "create": "Create users",
+      "update": "Edit users and reset their PINs",
+      "delete": "Delete users"
     },
     "role": {
-      "manage": "Manage roles & permissions"
-    },
-    "settings": {
-      "rate": "Change the exchange rate"
+      "view": "View roles & permissions",
+      "create": "Create roles",
+      "update": "Edit roles and their permissions",
+      "delete": "Delete roles"
     },
     "branch": {
-      "manage": "Manage branches"
+      "view": "View every branch and its tills",
+      "create": "Create branches and register tills",
+      "update": "Edit branches and tills",
+      "delete": "Delete branches and tills"
     },
-    "expense": {
-      "manage": "Manage expenses"
+    "table": {
+      "view": "View dining tables",
+      "create": "Create dining tables",
+      "update": "Edit dining tables and their QR codes",
+      "delete": "Delete dining tables"
     },
-    "system.manage": "Manage Telegram alerts and database backups",
-    "system.reset": "Wipe all data for a fresh production setup",
-    "invoice": {
-      "manage": "Create invoices and record their payments"
+    "payment_method": {
+      "create": "Create payment methods",
+      "update": "Edit payment methods",
+      "delete": "Delete payment methods"
+    },
+    "settings": {
+      "rate": "Change the exchange rate",
+      "company": "Change company, receipt and loyalty settings"
+    },
+    "system": {
+      "manage": "Manage the company's alerts, numbering and activity-log retention",
+      "reset": "Wipe all data for a fresh production setup"
+    },
+    "tax_rate": {
+      "create": "Create tax rates",
+      "update": "Edit tax rates and where they start",
+      "delete": "Delete tax rates"
     }
   },
   "settings": {
@@ -862,10 +1041,7 @@
     },
     "retentionTitle": "Audit log retention",
     "retentionIntro": "Activity log entries older than the retention period are purged automatically every night.",
-    "retentionMonths": "Keep for",
     "retentionMonthsOption": "{n} month | {n} months",
-    "retentionSaved": "Retention period saved.",
-    "retentionClearNowTitle": "Clear now",
     "retentionClearNowHint": "Purge activity log entries older than the retention period immediately, instead of waiting for tonight's automatic cleanup.",
     "retentionClearNow": "Clear old entries now",
     "retentionCleared": "Cleared {count} old activity log entries.",
@@ -879,7 +1055,16 @@
     "dangerZoneWipes": "Wiped: every branch, every other user account and all business data. This cannot be undone.",
     "dangerZoneButton": "Set up new system for production",
     "dangerZoneConfirmLabel": "Type RESET to confirm",
-    "resetDone": "System reset. Please sign in again."
+    "resetDone": "System reset. Please sign in again.",
+    "retentionKeptFor": "This company keeps its activity log for {n} month. | This company keeps its activity log for {n} months.",
+    "retentionSetByAdmin": "Your system administrator sets this.",
+    "searchBranchesPlaceholder": "Search name or code",
+    "searchTillsPlaceholder": "Search till or device key",
+    "searchPaymentsPlaceholder": "Search payment method",
+    "branchesNoun": "branches",
+    "tillsNoun": "tills",
+    "paymentsNoun": "payment methods",
+    "rateNoun": "rate changes"
   },
   "shifts": {
     "title": "Shifts",
@@ -1059,7 +1244,7 @@
     "poDeleted": "Purchase order deleted.",
     "editSaleItems": "Edit sale",
     "saleNotEditableHint": "This sale can't be edited — either its shift is closed, or you don't have permission to edit sales.",
-    "saleEditHint": "Changes re-price the sale. Cash must still cover the new total; card and KHQR keep only the reference.",
+    "saleEditHint": "Items already on the sale keep the price they were sold at; items you add use today's price. Cash must still cover the new total; card and KHQR keep only the reference.",
     "saleStillOwed": "Still owed",
     "itemDiscounts": "Item discounts",
     "invoiceDiscount": "Invoice discount",
@@ -1100,7 +1285,11 @@
     "importRow": "Row",
     "importReason": "Reason skipped",
     "selectCategory": "Select a category",
-    "poNoteHint": "e.g. delivery date, terms, contact at the supplier"
+    "poNoteHint": "e.g. delivery date, terms, contact at the supplier",
+    "saleLocked": "Locked — its shift is closed",
+    "saleLockedHint": "Locked: this sale's shift is closed, so it can't be edited or deleted. Its prices, costs and totals stay as they were at closing.",
+    "searchMovesPlaceholder": "Search product or SKU",
+    "searchPoPlaceholder": "Search PO no., supplier or note"
   },
   "stockStatus": {
     "in_stock": "In stock",
@@ -1227,7 +1416,17 @@
     "browseProducts": "Products",
     "browseTables": "Tables",
     "tableLoaded": "Table {table}’s {n} orders are in the cart — take payment when ready.",
-    "tableOrdersBanner": "Table {table} · {n} orders in one bill"
+    "tableOrdersBanner": "Table {table} · {n} orders in one bill",
+    "companyCode": "Company code",
+    "companyCodeHint": "Ask your manager. This till remembers it.",
+    "companyCodeInvalid": "Enter the company code: 2 to 12 letters and digits.",
+    "continue": "Continue",
+    "companyCodeShown": "Company {code}.",
+    "changeCompany": "Change company",
+    "saleNote": "Sale note",
+    "saleNoteAdd": "Add a note to this sale",
+    "saleNoteEdit": "Edit this sale's note",
+    "saleNoteHint": "Kept with the sale and shown in its details. It isn't printed on the receipt."
   },
   "customerDisplay": {
     "waiting": "Waiting for the till…",
@@ -1242,7 +1441,7 @@
     "items": "{n} item | {n} items"
   },
   "alerts": {
-    "tab": "Alerts & Backup",
+    "tab": "Alerts",
     "telegramTitle": "Telegram alerts",
     "telegramIntro": "Get a Telegram message when something in the list below happens. In Telegram, message BotFather to create a bot, then message your new bot and get your chat ID from userinfobot.",
     "enabled": "Enabled",
@@ -1506,6 +1705,106 @@
     "print": "Print",
     "qrLoadFailed": "Couldn’t load the tables.",
     "noneToPrint": "No active tables to print.",
-    "qrAlt": "QR code for table {name}"
+    "qrAlt": "QR code for table {name}",
+    "searchPlaceholder": "Search table name",
+    "noun": "tables"
+  },
+  "platform": {
+    "title": "Super admin",
+    "navCompanies": "Companies",
+    "navSystem": "Backups & system",
+    "companiesTitle": "Companies",
+    "companiesIntro": "Each company has its own branches, staff, products, customers, settings and reports, and sees nothing of any other company's. Create a company with its first Owner, who signs in and sets up the rest.",
+    "newCompany": "New company",
+    "createCompany": "Create company",
+    "editCompany": "Edit company",
+    "company": "Company",
+    "companyName": "Company name",
+    "code": "Code",
+    "codeHint": "2 to 12 letters and digits. Staff type it once at each till to sign in there.",
+    "codeChangeHint": "Tills that remember the old code will ask for the new one.",
+    "branches": "Branches",
+    "staff": "Staff",
+    "owners": "Owners",
+    "owner": "Owner",
+    "noOwner": "No Owner",
+    "noCompanies": "No companies yet. Create the first one.",
+    "firstOwner": "First Owner",
+    "firstOwnerHint": "They sign in with this username and password and set up the company's branches, tills, staff and catalog.",
+    "fullName": "Full name",
+    "newPassword": "New password",
+    "ownerAccounts": "Owner accounts",
+    "ownerAccountsOf": "Owner accounts — {name}",
+    "resetPassword": "Reset a password",
+    "addOwner": "Add an Owner",
+    "resetHint": "The account is turned back on, unlocked and signed out everywhere.",
+    "disableWarning": "Turning the company off signs out all its staff at once, and none of them can sign in until it's turned back on.",
+    "companyCreated": "{name} created. Its Owner can sign in now.",
+    "companySaved": "Company saved.",
+    "ownerReset": "Password reset.",
+    "ownerAdded": "Owner added.",
+    "systemTitle": "Backups & system",
+    "systemIntro": "These cover every company at once. Each company keeps its own alerts, numbering and activity-log retention in its Settings.",
+    "alertsIntro": "Get a Telegram message about backups. In Telegram, message BotFather to create a bot, then message your new bot and get your chat ID from userinfobot.",
+    "resetIntro": "Wipes every company and everything in it (branches, staff, products, customers, sales, shifts, stock, invoices and settings), plus backup records and the activity log, for starting a brand-new production deployment.",
+    "resetKeeps": "Kept: the super admin accounts (you stay signed in) and the backup and alert settings on this page.",
+    "resetWipes": "Wiped: every company, every staff account and all business data. This cannot be undone.",
+    "resetDone": "Every company has been wiped. Create the first real company to begin.",
+    "limits": "Limits",
+    "limitsHint": "The most active branches and active user accounts this company may have. Leave blank for no limit. Switched-off ones don't count.",
+    "maxBranches": "Active branches, at most",
+    "maxUsers": "Active user accounts, at most",
+    "noLimit": "No limit",
+    "limitBelowCount": "It already has {active} active. Nothing is switched off: it just can't switch more on until it's under the limit.",
+    "offCount": "+{n} off",
+    "logKept": "Activity log",
+    "retention": "Keep the activity log for",
+    "retentionHint": "The company's Owner sees this but can't change it.",
+    "partsButton": "Branches and staff",
+    "partsTitle": "Branches and staff of {name}",
+    "partsIntro": "Switch this company's branches and user accounts on or off. An account switched off is signed out at once. The company's limits apply here too.",
+    "activeCount": "{active} active",
+    "activeOf": "{active} active of {max}",
+    "noBranches": "No branches yet.",
+    "usersHeading": "User accounts",
+    "switchedOn": "{name} switched on.",
+    "switchedOff": "{name} switched off.",
+    "searchCompaniesPlaceholder": "Search company name or code",
+    "companiesNoun": "companies",
+    "backupsNoun": "backups"
+  },
+  "tax": {
+    "tab": "Tax rates",
+    "label": "Tax",
+    "none": "No tax",
+    "ratesTitle": "Tax rates",
+    "ratesHint": "Added on top of prices. A sale, invoice, purchase order or expense keeps the rate it used, so changing or deleting one here never changes them.",
+    "new": "New tax rate",
+    "edit": "Edit tax rate",
+    "editAria": "Edit {name}",
+    "activeAria": "{name} in use",
+    "percent": "Percent",
+    "activeLabel": "In use (offered on new documents)",
+    "namePlaceholder": "VAT 10%",
+    "editHint": "Documents already made keep the rate they used.",
+    "entity": "tax rate",
+    "noneYet": "No tax rates yet.",
+    "created": "{name} created.",
+    "saved": "{name} saved.",
+    "deleted": "{name} deleted.",
+    "startingTitle": "Where each starts",
+    "startingHint": "The rate a new one starts with. Staff can change it on each one, or pick No tax.",
+    "placePos": "POS sales",
+    "placeInvoice": "Invoices",
+    "placePurchase": "Purchase orders",
+    "placeExpense": "Expenses",
+    "startingSaved": "Starting rates saved.",
+    "line": "Tax · {name}",
+    "totalWithTax": "Total with tax",
+    "amountBeforeTax": "Amount (before tax)",
+    "collected": "Tax collected",
+    "collectedHint": "On POS sales {pos} and invoices {invoice}. Not in net sales.",
+    "paid": "Tax paid",
+    "paidHint": "On expenses {expense} and purchase orders received {purchase}. Not in expenses or cost."
   }
 }

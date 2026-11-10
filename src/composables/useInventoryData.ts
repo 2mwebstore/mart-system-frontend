@@ -22,7 +22,11 @@ export function stockStatusOf(qty: number, reorderPoint: number, type: ProductTy
 // them. Every write helper resolves to true on success and false on failure
 // (the API client has already shown the reason in a toast), so callers can
 // decide whether to close their modal.
-export function useInventoryData(branchId: Ref<number>) {
+//
+// `can` is the permission check: a list is fetched only for someone who may
+// see it (Products need product.view, Categories category.view, and so on),
+// so a role with part of Inventory isn't shown "no permission" for the rest.
+export function useInventoryData(branchId: Ref<number>, can: (key: string) => boolean = () => true) {
   const search = ref('')
   const categoryFilter = ref<number | 'all'>('all')
   // Stock-level filter — meaningless for SERVICE rows, which never match
@@ -39,10 +43,15 @@ export function useInventoryData(branchId: Ref<number>) {
   const debouncedSupplierSearch = useDebounced(supplierSearch)
   // Stock moves filters. A null range means "all dates".
   type DateRange = { from: string; to: string } | null
+  const moveSearch = ref('') // product name or SKU
+  const debouncedMoveSearch = useDebounced(moveSearch)
   const moveType = ref<'all' | string>('all')
   const moveProduct = ref<'all' | number>('all')
   const moveRange = ref<DateRange>(null)
-  // Purchase-order filters (by created date, and by supplier).
+  // Purchase-order filters: code / supplier / note, status, created date, supplier.
+  const poSearch = ref('')
+  const debouncedPoSearch = useDebounced(poSearch)
+  const poStatusFilter = ref<'all' | string>('all')
   const poRange = ref<DateRange>(null)
   const poSupplierFilter = ref<number | 'all'>('all')
 
@@ -64,17 +73,19 @@ export function useInventoryData(branchId: Ref<number>) {
           status: statusFilter.value === 'all' ? null : statusFilter.value,
           type: typeFilter.value === 'all' ? null : typeFilter.value,
         }),
-      { deps: [branchId, debouncedSearch, categoryFilter, statusFilter, typeFilter] },
+      { deps: [branchId, debouncedSearch, categoryFilter, statusFilter, typeFilter], enabled: () => can('product.view') },
     ),
   )
   const categoryList = reactive(
     usePagedList(({ page, perPage }) => catalogApi.pageCategories({ page, perPage, q: debouncedCategorySearch.value.trim() }), {
       deps: [debouncedCategorySearch],
+      enabled: () => can('category.view'),
     }),
   )
   const supplierList = reactive(
     usePagedList(({ page, perPage }) => catalogApi.pageSuppliers({ page, perPage, q: debouncedSupplierSearch.value.trim() }), {
       deps: [debouncedSupplierSearch],
+      enabled: () => can('supplier.view'),
     }),
   )
   const moveList = reactive(
@@ -83,12 +94,13 @@ export function useInventoryData(branchId: Ref<number>) {
         catalogApi.pageStockMovements(branchId.value, {
           page,
           perPage,
+          q: debouncedMoveSearch.value.trim(),
           type: moveType.value === 'all' ? null : moveType.value,
           productId: moveProduct.value === 'all' ? null : moveProduct.value,
           dateFrom: moveRange.value?.from,
           dateTo: moveRange.value?.to,
         }),
-      { deps: [branchId, moveType, moveProduct, moveRange] },
+      { deps: [branchId, debouncedMoveSearch, moveType, moveProduct, moveRange], enabled: () => can('inventory.view') },
     ),
   )
   const poList = reactive(
@@ -97,18 +109,20 @@ export function useInventoryData(branchId: Ref<number>) {
         catalogApi.pagePurchaseOrders(branchId.value, {
           page,
           perPage,
+          q: debouncedPoSearch.value.trim(),
+          status: poStatusFilter.value === 'all' ? null : poStatusFilter.value,
           dateFrom: poRange.value?.from,
           dateTo: poRange.value?.to,
           supplierId: poSupplierFilter.value === 'all' ? null : poSupplierFilter.value,
         }),
-      { deps: [branchId, poRange, poSupplierFilter] },
+      { deps: [branchId, debouncedPoSearch, poStatusFilter, poRange, poSupplierFilter], enabled: () => can('purchase_order.view') },
     ),
   )
   const loading = computed(() => productList.loading)
 
-  const loadCategories = async () => void (categories.value = await catalogApi.listCategories())
-  const loadSuppliers = async () => void (suppliers.value = await catalogApi.listSuppliers())
-  const loadAllProducts = async () => void (products.value = await catalogApi.listProducts(branchId.value))
+  const loadCategories = async () => void (can('category.view') && (categories.value = await catalogApi.listCategories()))
+  const loadSuppliers = async () => void (can('supplier.view') && (suppliers.value = await catalogApi.listSuppliers()))
+  const loadAllProducts = async () => void (can('product.view') && (products.value = await catalogApi.listProducts(branchId.value)))
   onMounted(() => void Promise.all([loadCategories(), loadSuppliers()]).catch(() => {}))
 
   const productSummary = computed(() => productList.summary)
@@ -221,9 +235,10 @@ export function useInventoryData(branchId: Ref<number>) {
   function poItemsCostCents(po: PurchaseOrder) {
     return poItemsGrossCents(po) - poItemsDiscountCents(po)
   }
-  // Items plus shipping — the actual total cost of the order.
+  // Items plus shipping plus the tax on them: what's owed the supplier. (The
+  // tax is never part of the stock's cost.)
   function poTotalCostCents(po: PurchaseOrder) {
-    return poItemsCostCents(po) + po.shippingCents
+    return poItemsCostCents(po) + po.shippingCents + (po.taxCents || 0)
   }
   function poItemCount(po: PurchaseOrder) {
     return po.items.reduce((sum, i) => sum + i.qtyOrdered, 0)
@@ -253,9 +268,12 @@ export function useInventoryData(branchId: Ref<number>) {
     typeFilter,
     categorySearch,
     supplierSearch,
+    moveSearch,
     moveType,
     moveProduct,
     moveRange,
+    poSearch,
+    poStatusFilter,
     poRange,
     poSupplierFilter,
     rows,

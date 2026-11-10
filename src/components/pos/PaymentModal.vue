@@ -10,7 +10,8 @@ import { formatUSD, formatKHR } from '@/utils/format'
 import type { CreateSaleInput } from '@/types/domain'
 import type { PaymentDraft } from '@/composables/useCustomerDisplay'
 
-const props = defineProps<{ totalCents: number; submitting?: boolean }>()
+// taxCents / taxLabel: the tax already in totalCents, shown under the amount due.
+const props = defineProps<{ totalCents: number; submitting?: boolean; taxCents?: number; taxLabel?: string }>()
 const emit = defineEmits<{
   close: []
   paid: [CreateSaleInput['payment']]
@@ -89,6 +90,9 @@ function confirmOther() {
         <p class="text-muted text-sm">{{ $t('pos.amountDue') }}</p>
         <p class="font-mono text-4xl mt-1">{{ formatUSD(totalCents) }}</p>
         <p class="text-muted text-sm font-mono">{{ formatKHR(usdCentsToRiel(totalCents, rate)) }}</p>
+        <p v-if="taxCents" class="text-muted text-xs mt-1" data-tax-line>
+          {{ $t('tax.line', { name: taxLabel ?? '' }) }} <span class="font-mono">{{ formatUSD(taxCents) }}</span>
+        </p>
       </div>
 
       <SearchableSelect v-model="methodId" :label="$t('pos.paymentMethod')" :options="methodOptions" :searchable="false" :clearable="false" />

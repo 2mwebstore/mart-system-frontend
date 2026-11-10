@@ -17,7 +17,7 @@ const auth = useAuthStore()
 const branding = useBrandingStore()
 const settings = useSettingsStore()
 const toast = useToast()
-const canManage = auth.hasPermission('branch.manage')
+const canManage = auth.hasPermission('settings.company')
 
 const name = ref('')
 const mode = ref<'image' | 'link'>('image')

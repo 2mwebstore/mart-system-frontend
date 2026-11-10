@@ -10,10 +10,13 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import { localName, seededLabel, t } from '@/i18n'
 import { formatKHR, formatUSD } from '@/utils/format'
+import { formatPercent } from '@/utils/tax'
 import { usdCentsToRiel } from '@/utils/money'
 import type { Invoice, InvoicePaymentInput, PaymentMethodRow } from '@/types/domain'
 
-const props = defineProps<{ invoice: Invoice; paymentMethods: PaymentMethodRow[]; canManage: boolean; busy?: boolean }>()
+// canUpdate: edit it and record payments (invoice.update); canDelete: cancel
+// it and remove payments (invoice.delete).
+const props = defineProps<{ invoice: Invoice; paymentMethods: PaymentMethodRow[]; canUpdate?: boolean; canDelete?: boolean; busy?: boolean }>()
 const emit = defineEmits<{ edit: []; cancel: [string]; addPayment: [InvoicePaymentInput]; deletePayment: [number]; print: [] }>()
 
 const open = computed(() => props.invoice.status === 'OPEN')
@@ -88,6 +91,9 @@ const statusLabel = computed(() =>
       <div v-if="invoice.lineDiscountCents" class="flex justify-between"><span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ formatUSD(invoice.lineDiscountCents) }}</span></div>
       <div v-if="invoice.discountCents" class="flex justify-between"><span class="text-muted">{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ formatUSD(invoice.discountCents) }}</span></div>
       <div v-if="invoice.shippingCents" class="flex justify-between"><span class="text-muted">{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ formatUSD(invoice.shippingCents) }}</span></div>
+      <div v-if="invoice.taxCents || invoice.taxRateId" class="flex justify-between" data-tax-line>
+        <span class="text-muted">{{ $t('tax.line', { name: `${invoice.taxName} ${formatPercent(invoice.taxPercent)}` }) }}</span><span class="font-mono">{{ formatUSD(invoice.taxCents) }}</span>
+      </div>
       <div class="flex justify-between font-medium">
         <span>{{ $t('col.total') }}</span>
         <span class="font-mono">{{ formatUSD(invoice.totalCents) }} <span class="text-muted font-normal">({{ formatKHR(usdCentsToRiel(invoice.totalCents, invoice.exchangeRate || 4100)) }})</span></span>
@@ -121,12 +127,12 @@ const statusLabel = computed(() =>
           <a v-else-if="p.attachment" :href="p.attachment" target="_blank" rel="noopener noreferrer" class="p-1.5 text-primary-text hover:underline text-xs flex items-center gap-1">
             <ExternalLink class="w-3.5 h-3.5" /> {{ $t('invoices.viewProof') }}
           </a>
-          <ConfirmDelete v-if="canManage && open" :item-label="$t('invoices.payment')" :item-name="formatUSD(p.amountCents)" @confirm="emit('deletePayment', p.id)" />
+          <ConfirmDelete v-if="canDelete && open" :item-label="$t('invoices.payment')" :item-name="formatUSD(p.amountCents)" @confirm="emit('deletePayment', p.id)" />
         </div>
       </div>
 
       <InvoicePaymentForm
-        v-if="canManage && open && invoice.balanceCents > 0"
+        v-if="canUpdate && open && invoice.balanceCents > 0"
         :balance-cents="invoice.balanceCents"
         :reset-key="invoice.paidCents"
         :payment-methods="paymentMethods"
@@ -137,11 +143,11 @@ const statusLabel = computed(() =>
 
     <div class="flex flex-wrap justify-between gap-2 border-t border-line pt-4">
       <div class="flex gap-2">
-        <button v-if="canManage && open && invoice.paidCents === 0" type="button" class="btn-secondary text-danger-strong" :disabled="busy" @click="cancelInvoice">{{ $t('invoices.cancelInvoice') }}</button>
+        <button v-if="canDelete && open && invoice.paidCents === 0" type="button" class="btn-secondary text-danger-strong" :disabled="busy" @click="cancelInvoice">{{ $t('invoices.cancelInvoice') }}</button>
       </div>
       <div class="flex gap-2">
         <button type="button" class="btn-secondary flex items-center gap-2" @click="emit('print')"><Printer class="w-4 h-4" /> {{ $t('invoices.print') }}</button>
-        <button v-if="canManage && open" type="button" class="btn-primary flex items-center gap-2" :disabled="busy" @click="emit('edit')"><Pencil class="w-4 h-4" /> {{ $t('invoices.edit') }}</button>
+        <button v-if="canUpdate && open" type="button" class="btn-primary flex items-center gap-2" :disabled="busy" @click="emit('edit')"><Pencil class="w-4 h-4" /> {{ $t('invoices.edit') }}</button>
       </div>
     </div>
 

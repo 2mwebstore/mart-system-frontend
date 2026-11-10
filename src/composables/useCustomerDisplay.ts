@@ -47,6 +47,9 @@ export interface CartMessage extends Common {
   lineDiscountsCents: number
   cartDiscountCents: number
   cartDiscountPercent: number | null
+  // Tax added on top ("VAT 10%"; '' and 0 for none); totalCents includes it.
+  taxLabel: string
+  taxCents: number
   totalCents: number
   totalRiel: number
   customerName: string

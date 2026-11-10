@@ -69,7 +69,7 @@ const paymentSegmentsWithColor = computed(() =>
         :delta-label="t('dashboard.vsLastWeek')"
       />
       <KpiCard :label="t('dashboard.avgBasket')" :value="formatUSD(avgBasketCents)" />
-      <KpiCard :label="t('dashboard.lowStock')" :value="String(lowStockCount)" :subvalue="t('dashboard.items')" :to="{ name: 'inventory' }" />
+      <KpiCard :label="t('dashboard.lowStock')" :value="String(lowStockCount)" :subvalue="t('dashboard.items')" :to="{ name: 'inventory-products' }" />
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

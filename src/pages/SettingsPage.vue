@@ -1,54 +1,70 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Download, Pencil, Plus, Send, Trash2 } from 'lucide-vue-next'
+import { Pencil, Plus, Send } from 'lucide-vue-next'
 import * as settingsApi from '@/api/settings'
 import {
-  ALERT_TYPES,
+  COMPANY_ALERT_TYPES,
   type AlertType,
-  type BackupRow,
   type Branch,
   type DocType,
   type NumberSequence,
   type PaymentMethodRow,
   type Till,
 } from '@/types/domain'
-import Tabs from '@/components/Tabs.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import Modal from '@/components/Modal.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import SearchInput from '@/components/SearchInput.vue'
+import Pagination from '@/components/Pagination.vue'
+import { useLocalList } from '@/composables/useLocalList'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
+import { useRouteSection } from '@/composables/useRouteSection'
+import { canOpen } from '@/utils/pageAccess'
 import { formatDateTime } from '@/utils/format'
 import { label, t } from '@/i18n'
 import DiningTablesPanel from '@/components/settings/DiningTablesPanel.vue'
 import CompanyPanel from '@/components/settings/CompanyPanel.vue'
+import TaxRatesPanel from '@/components/settings/TaxRatesPanel.vue'
 
 const auth = useAuthStore()
 const settings = useSettingsStore()
-const router = useRouter()
-const route = useRoute()
 const toast = useToast()
-// Defaults to Branches when the router sent us here for having none (see
-// router/index.ts) — otherwise the usual first tab.
-const activeTab = ref(['branches', 'tables', 'company'].includes(String(route.query.tab)) ? String(route.query.tab) : 'rate')
+// Backups and the production reset cover every company, so they're on the
+// super admin's platform pages, not here.
 const canManageSystem = auth.hasPermission('system.manage')
-const canResetSystem = auth.hasPermission('system.reset')
-const tabs = computed(() => [
-  { key: 'rate', label: t('settings.tabRate') },
-  { key: 'branches', label: t('settings.tabBranches') },
-  ...(canManage ? [{ key: 'tables', label: t('tables.tab') }] : []),
-  { key: 'payments', label: t('settings.tabPayments') },
-  { key: 'company', label: t('settings.tabCompany') },
-  { key: 'receipt', label: t('settings.tabReceipt') },
-  ...(canManageSystem ? [{ key: 'alerts', label: t('alerts.tab') }] : []),
-  ...(canManageSystem || canResetSystem ? [{ key: 'system', label: t('settings.tabSystem') }] : []),
-])
-
-const canManage = auth.hasPermission('branch.manage')
+// Branches and their tills, payment methods: create / edit / delete each.
+const canViewTills = auth.hasPermission('branch.view')
+const canCreateBranch = auth.hasPermission('branch.create')
+const canEditBranch = auth.hasPermission('branch.update')
+const canDeleteBranch = auth.hasPermission('branch.delete')
+const canCreatePayment = auth.hasPermission('payment_method.create')
+const canEditPayment = auth.hasPermission('payment_method.update')
+const canDeletePayment = auth.hasPermission('payment_method.delete')
+// Company, receipt and loyalty settings.
+const canEditCompany = auth.hasPermission('settings.company')
 const canEditRate = auth.hasPermission('settings.rate')
+// Settings is several pages, each with its own address and sidebar entry
+// (/settings/exchange-rate, /settings/branches…), drawn by this one component.
+// Only those this person can open are offered (the sidebar lists the same).
+// The router opens Branches when there are none yet (see router/index.ts).
+const sections = computed(() =>
+  [
+    { key: 'rate', route: 'settings-rate', label: t('settings.tabRate') },
+    { key: 'branches', route: 'settings-branches', label: t('settings.tabBranches') },
+    { key: 'tables', route: 'settings-tables', label: t('tables.tab') },
+    { key: 'payments', route: 'settings-payments', label: t('settings.tabPayments') },
+    { key: 'tax', route: 'settings-tax', label: t('tax.tab') },
+    { key: 'company', route: 'settings-company', label: t('settings.tabCompany') },
+    { key: 'receipt', route: 'settings-receipt', label: t('settings.tabReceipt') },
+    { key: 'alerts', route: 'settings-alerts', label: t('alerts.tab') },
+    { key: 'system', route: 'settings-system', label: t('settings.tabSystem') },
+  ].filter((s) => canOpen(s.route, auth.hasPermission)),
+)
+const section = useRouteSection(() => sections.value.map((s) => s.key))
+const pageTitle = computed(() => sections.value.find((s) => s.key === section.value)?.label ?? t('settings.title'))
 
 // Runs an API call, then a follow-up; the API client already toasts failures,
 // so a catch here just keeps the modal open.
@@ -76,6 +92,13 @@ async function saveRate() {
 const branches = ref<Branch[]>([])
 const tills = ref<Till[]>([])
 const paymentMethodsList = ref<PaymentMethodRow[]>([])
+// These lists come whole (the POS and other pages need them complete), so
+// search and pages are worked out here.
+const branchName = (id: number) => branches.value.find((b) => b.id === id)?.name ?? '—'
+const rateList = useLocalList(() => settings.rateHistory, { text: (h) => `${h.rate} ${h.setBy}` })
+const branchList = useLocalList(() => branches.value, { text: (b) => `${b.name} ${b.code} ${b.address}` })
+const tillList = useLocalList(() => tills.value, { text: (d) => `${d.name} ${d.deviceKey} ${branchName(d.branchId)}` })
+const paymentList = useLocalList(() => paymentMethodsList.value, { text: (p) => `${p.name} ${paymentTypeLabel(p.type)}` })
 
 async function loadBranches() {
   branches.value = await settingsApi.listBranches()
@@ -95,10 +118,9 @@ onMounted(async () => {
   allowOutOfStockSale.value = settings.app.allowOutOfStockSale
   await Promise.allSettled([
     loadBranches(),
-    canManage ? loadTills() : Promise.resolve(),
+    canViewTills ? loadTills() : Promise.resolve(),
     loadPayments(),
     canManageSystem ? loadNotify() : Promise.resolve(),
-    canManageSystem ? loadBackups() : Promise.resolve(),
     canManageSystem ? loadNumberSequences() : Promise.resolve(),
     canManageSystem ? loadRetention() : Promise.resolve(),
   ])
@@ -220,10 +242,13 @@ async function saveReceipt() {
         receiptHeader: receiptForm.header,
         receiptFooter: receiptForm.footer,
         loyaltyPointsPerUsd: Number(receiptForm.loyaltyRate) || 0,
-        // Not editable through this form — PUT /settings never touches it
+        // Not editable through this form — PUT /settings never touches them
         // server-side either (see UpdateSettings) — passed through as-is so
-        // this call satisfies AppSettings without silently resetting it.
+        // this call satisfies AppSettings without silently resetting them.
         allowOutOfStockSale: settings.app.allowOutOfStockSale,
+        defaultCustomerId: settings.app.defaultCustomerId,
+        defaultCustomerName: settings.app.defaultCustomerName,
+        taxDefaults: settings.app.taxDefaults,
       }),
     () => undefined,
   )
@@ -271,58 +296,6 @@ async function sendTest() {
   }
 }
 
-// --- Database backups -----------------------------------------------------------
-
-const backups = ref<BackupRow[]>([])
-const backupSettingsForm = reactive({ autoEnabled: true, retentionDays: 14 })
-const runningBackup = ref(false)
-const savingBackupSettings = ref(false)
-
-async function loadBackups() {
-  const res = await settingsApi.listBackups()
-  backups.value = res.rows
-  Object.assign(backupSettingsForm, res.settings)
-}
-async function saveBackupSettings() {
-  savingBackupSettings.value = true
-  try {
-    Object.assign(backupSettingsForm, await settingsApi.updateBackupSettings({ ...backupSettingsForm }))
-    toast.success(t('alerts.backupSettingsSaved'))
-  } catch {
-    // the API client already toasted the reason
-  } finally {
-    savingBackupSettings.value = false
-  }
-}
-async function backupNow() {
-  runningBackup.value = true
-  try {
-    await settingsApi.runBackupNow()
-    toast.success(t('alerts.backupStarted'))
-  } catch {
-    // the API client already toasted the reason (e.g. the mysqldump error)
-  } finally {
-    runningBackup.value = false
-    await loadBackups()
-  }
-}
-async function downloadBackup(b: BackupRow) {
-  try {
-    await settingsApi.downloadBackup(b.id, b.filename)
-  } catch {
-    // the API client already toasted the reason
-  }
-}
-async function deleteBackup(id: number) {
-  try {
-    await settingsApi.deleteBackup(id)
-    toast.success(t('alerts.deleted'))
-    await loadBackups()
-  } catch {
-    // the API client already toasted the reason
-  }
-}
-
 // --- Document numbering ---------------------------------------------------------
 
 const numberSequences = ref<NumberSequence[]>([])
@@ -362,36 +335,12 @@ async function saveNumberSequence(docType: DocType) {
 }
 const docTypeLabel = (docType: DocType) => t(`settings.docType.${docType}`)
 
-// --- Audit log retention --------------------------------------------------------
+// --- Audit log retention: the system administrator sets it, the company sees it ---
 
-const retentionMonths = ref(3)
-const savingRetention = ref(false)
-const clearingLog = ref(false)
+const retentionMonths = ref(0)
 
 async function loadRetention() {
   retentionMonths.value = (await settingsApi.getActivityLogRetention()).retentionMonths
-}
-async function saveRetention() {
-  savingRetention.value = true
-  try {
-    retentionMonths.value = (await settingsApi.updateActivityLogRetention(retentionMonths.value)).retentionMonths
-    toast.success(t('settings.retentionSaved'))
-  } catch {
-    // the API client already toasted the reason
-  } finally {
-    savingRetention.value = false
-  }
-}
-async function clearActivityLogNow() {
-  clearingLog.value = true
-  try {
-    const res = await settingsApi.clearActivityLogNow()
-    toast.success(t('settings.retentionCleared', { count: res.deleted }))
-  } catch {
-    // the API client already toasted the reason
-  } finally {
-    clearingLog.value = false
-  }
 }
 
 // --- Stock-sale policy: one store-wide switch, not per-product (see docs/DECISIONS.md) ---
@@ -412,38 +361,13 @@ async function saveStockPolicy() {
   }
 }
 
-// --- Danger zone: production reset ------------------------------------------------
-
-const resetConfirmText = ref('')
-const showResetModal = ref(false)
-const resettingSystem = ref(false)
-const resetConfirmReady = computed(() => resetConfirmText.value === 'RESET')
-
-async function submitReset() {
-  if (!resetConfirmReady.value) return
-  resettingSystem.value = true
-  try {
-    await settingsApi.resetForProduction(resetConfirmText.value)
-    toast.success(t('settings.resetDone'))
-    showResetModal.value = false
-    resetConfirmText.value = ''
-    await auth.logout()
-    await router.push({ name: 'login' })
-  } catch {
-    // the API client already toasted the reason
-  } finally {
-    resettingSystem.value = false
-  }
-}
 </script>
 
 <template>
   <div class="p-4 sm:p-8 space-y-6">
-    <h1 class="font-heading text-2xl">{{ $t('settings.title') }}</h1>
+    <h1 class="font-heading text-2xl">{{ pageTitle }}</h1>
 
-    <Tabs v-model="activeTab" :tabs="tabs" />
-
-    <div v-if="activeTab === 'rate'" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div v-if="section === 'rate'" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="card space-y-4">
         <h2 class="font-heading text-base">{{ $t('settings.currentRate') }}</h2>
         <div class="flex items-end gap-3">
@@ -458,6 +382,7 @@ async function submitReset() {
       </div>
       <div class="card">
         <h2 class="font-heading text-base mb-3">{{ $t('settings.history') }}</h2>
+        <SearchInput v-model="rateList.search" :placeholder="$t('common.search')" class="mb-3" />
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -468,7 +393,7 @@ async function submitReset() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="h in settings.rateHistory" :key="h.id" class="border-b border-line last:border-0">
+              <tr v-for="h in rateList.rows" :key="h.id" class="border-b border-line last:border-0">
                 <td class="py-2 font-mono">៛ {{ h.rate.toLocaleString() }}</td>
                 <td class="py-2">{{ h.setBy }}</td>
                 <td class="py-2 font-mono text-xs">{{ formatDateTime(h.effectiveAt) }}</td>
@@ -476,20 +401,22 @@ async function submitReset() {
             </tbody>
           </table>
         </div>
+        <Pagination v-model:page="rateList.page" :total-pages="rateList.totalPages" :total="rateList.total" :per-page="rateList.perPage" :noun="$t('settings.rateNoun')" />
       </div>
     </div>
 
-    <div v-else-if="activeTab === 'branches'" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div v-else-if="section === 'branches'" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <p v-if="auth.branches.length === 0" class="lg:col-span-2 rounded-control bg-primary-tint text-primary-tint-text px-4 py-3 text-sm">
         {{ $t('settings.noBranchesYetHint') }}
       </p>
       <div class="card">
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-heading text-base">{{ $t('settings.branches') }}</h2>
-          <button v-if="canManage" type="button" class="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-sm" @click="newBranch">
+          <button v-if="canCreateBranch" type="button" class="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-sm" @click="newBranch">
             <Plus :stroke-width="1.8" class="w-3.5 h-3.5" /> {{ $t('settings.newBranch') }}
           </button>
         </div>
+        <SearchInput v-model="branchList.search" :placeholder="$t('settings.searchBranchesPlaceholder')" class="mb-3" />
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -501,7 +428,7 @@ async function submitReset() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="b in branches" :key="b.id" class="border-b border-line last:border-0 group">
+              <tr v-for="b in branchList.rows" :key="b.id" class="border-b border-line last:border-0 group">
                 <td class="py-2">
                   <p>{{ b.name }}</p>
                   <p class="text-xs text-muted">{{ b.address }}</p>
@@ -509,25 +436,27 @@ async function submitReset() {
                 <td class="py-2 font-mono">{{ b.code }}</td>
                 <td class="py-2"><StatusBadge :tone="b.active ? 'success' : 'neutral'" :label="b.active ? $t('common.active') : $t('settings.inactive')" /></td>
                 <td class="py-2">
-                  <div v-if="canManage" class="flex items-center gap-1">
-                    <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editBranchAria')" @click="editBranch(b)">
+                  <div v-if="canEditBranch || canDeleteBranch" class="flex items-center gap-1">
+                    <button v-if="canEditBranch" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editBranchAria')" @click="editBranch(b)">
                       <Pencil :stroke-width="1.8" class="w-4 h-4" />
                     </button>
-                    <ConfirmDelete :item-label="$t('entity.branch')" :item-name="b.name" @confirm="deleteBranch(b.id)" />
+                    <ConfirmDelete v-if="canDeleteBranch" :item-label="$t('entity.branch')" :item-name="b.name" @confirm="deleteBranch(b.id)" />
                   </div>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+        <Pagination v-model:page="branchList.page" :total-pages="branchList.totalPages" :total="branchList.total" :per-page="branchList.perPage" :noun="$t('settings.branchesNoun')" />
       </div>
-      <div class="card">
+      <div v-if="canViewTills" class="card">
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-heading text-base">{{ $t('settings.tills') }}</h2>
-          <button v-if="canManage" type="button" class="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-sm" @click="newTill">
+          <button v-if="canCreateBranch" type="button" class="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-sm" @click="newTill">
             <Plus :stroke-width="1.8" class="w-3.5 h-3.5" /> {{ $t('settings.newTill') }}
           </button>
         </div>
+        <SearchInput v-model="tillList.search" :placeholder="$t('settings.searchTillsPlaceholder')" class="mb-3" />
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -541,36 +470,38 @@ async function submitReset() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="d in tills" :key="d.id" class="border-b border-line last:border-0">
+              <tr v-for="d in tillList.rows" :key="d.id" class="border-b border-line last:border-0">
                 <td class="py-2">{{ d.name }}</td>
-                <td class="py-2 text-muted">{{ branches.find((b) => b.id === d.branchId)?.name ?? '—' }}</td>
+                <td class="py-2 text-muted">{{ branchName(d.branchId) }}</td>
                 <td class="py-2 font-mono text-xs">{{ d.deviceKey }}</td>
                 <td class="py-2 font-mono text-xs">{{ formatDateTime(d.lastSeenAt) }}</td>
                 <td class="py-2"><StatusBadge :tone="d.active ? 'success' : 'neutral'" :label="d.active ? $t('common.active') : $t('settings.inactive')" /></td>
                 <td class="py-2">
-                  <div v-if="canManage" class="flex items-center gap-1">
-                    <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editTillAria')" @click="editTill(d)">
+                  <div v-if="canEditBranch || canDeleteBranch" class="flex items-center gap-1">
+                    <button v-if="canEditBranch" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editTillAria')" @click="editTill(d)">
                       <Pencil :stroke-width="1.8" class="w-4 h-4" />
                     </button>
-                    <ConfirmDelete :item-label="$t('entity.till')" :item-name="d.name" @confirm="deleteTill(d.id)" />
+                    <ConfirmDelete v-if="canDeleteBranch" :item-label="$t('entity.till')" :item-name="d.name" @confirm="deleteTill(d.id)" />
                   </div>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+        <Pagination v-model:page="tillList.page" :total-pages="tillList.totalPages" :total="tillList.total" :per-page="tillList.perPage" :noun="$t('settings.tillsNoun')" />
       </div>
     </div>
 
-    <DiningTablesPanel v-else-if="activeTab === 'tables'" />
+    <DiningTablesPanel v-else-if="section === 'tables'" />
 
-    <div v-else-if="activeTab === 'payments'" class="card max-w-2xl">
+    <div v-else-if="section === 'payments'" class="card max-w-2xl">
       <div class="flex items-center justify-between mb-3">
         <h2 class="font-heading text-base">{{ $t('settings.payments') }}</h2>
-        <button v-if="canManage" type="button" class="btn-primary flex items-center gap-2" @click="newPaymentMethod">
+        <button v-if="canCreatePayment" type="button" class="btn-primary flex items-center gap-2" @click="newPaymentMethod">
           <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('settings.newPayment') }}
         </button>
       </div>
+      <SearchInput v-model="paymentList.search" :placeholder="$t('settings.searchPaymentsPlaceholder')" class="mb-3" />
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -583,7 +514,7 @@ async function submitReset() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in paymentMethodsList" :key="p.id" class="border-b border-line last:border-0">
+            <tr v-for="p in paymentList.rows" :key="p.id" class="border-b border-line last:border-0">
               <td class="py-2">{{ p.name }}</td>
               <td class="py-2 text-muted">{{ paymentTypeLabel(p.type) }}</td>
               <td class="py-2 pr-4 text-right font-mono">{{ p.feePercent }}%</td>
@@ -594,29 +525,32 @@ async function submitReset() {
                   :aria-checked="p.enabled"
                   class="w-9 h-5 rounded-full transition-colors relative disabled:opacity-50"
                   :class="p.enabled ? 'bg-primary' : 'bg-line'"
-                  :disabled="!canManage"
+                  :disabled="!canEditPayment"
                   @click="togglePaymentEnabled(p)"
                 >
                   <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" :class="p.enabled ? 'left-4' : 'left-0.5'" />
                 </button>
               </td>
               <td class="py-2">
-                <div v-if="canManage" class="flex items-center gap-1">
-                  <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editPaymentAria')" @click="editPaymentMethod(p)">
+                <div v-if="canEditPayment || canDeletePayment" class="flex items-center gap-1">
+                  <button v-if="canEditPayment" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('settings.editPaymentAria')" @click="editPaymentMethod(p)">
                     <Pencil :stroke-width="1.8" class="w-4 h-4" />
                   </button>
-                  <ConfirmDelete :item-label="$t('entity.paymentMethod')" :item-name="p.name" @confirm="deletePaymentMethod(p.id)" />
+                  <ConfirmDelete v-if="canDeletePayment" :item-label="$t('entity.paymentMethod')" :item-name="p.name" @confirm="deletePaymentMethod(p.id)" />
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <Pagination v-model:page="paymentList.page" :total-pages="paymentList.totalPages" :total="paymentList.total" :per-page="paymentList.perPage" :noun="$t('settings.paymentsNoun')" />
     </div>
 
-    <CompanyPanel v-else-if="activeTab === 'company'" />
+    <TaxRatesPanel v-else-if="section === 'tax'" />
 
-    <div v-else-if="activeTab === 'receipt'" class="card max-w-xl space-y-4">
+    <CompanyPanel v-else-if="section === 'company'" />
+
+    <div v-else-if="section === 'receipt'" class="card max-w-xl space-y-4">
       <div>
         <label class="block text-sm text-muted mb-1">{{ $t('settings.receiptHeader') }}</label>
         <input v-model="receiptForm.header" type="text" class="input" />
@@ -631,11 +565,11 @@ async function submitReset() {
         <input v-model.number="receiptForm.loyaltyRate" type="number" min="0" step="0.5" class="input w-32" />
       </div>
       <div class="flex justify-end">
-        <button type="button" class="btn-primary" :disabled="!canManage" @click="saveReceipt">{{ $t('common.save') }}</button>
+        <button type="button" class="btn-primary" :disabled="!canEditCompany" @click="saveReceipt">{{ $t('common.save') }}</button>
       </div>
     </div>
 
-    <div v-else-if="activeTab === 'alerts'" class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+    <div v-else-if="section === 'alerts'" class="max-w-2xl">
       <div class="card space-y-4">
         <div>
           <h2 class="font-heading text-base">{{ $t('alerts.telegramTitle') }}</h2>
@@ -668,7 +602,7 @@ async function submitReset() {
         <div>
           <label class="block text-sm text-muted mb-2">{{ $t('alerts.alertTypesLabel') }}</label>
           <div class="grid grid-cols-1 gap-1.5">
-            <label v-for="type in ALERT_TYPES" :key="type" class="flex items-center gap-2 text-sm cursor-pointer">
+            <label v-for="type in COMPANY_ALERT_TYPES" :key="type" class="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" class="rounded" :checked="notifyForm.alertTypes.includes(type)" @change="toggleAlertType(type)" />
               {{ $t(`alertType.${type}`) }}
             </label>
@@ -682,90 +616,9 @@ async function submitReset() {
           <button type="button" class="btn-primary" :disabled="savingNotify" @click="saveNotify">{{ $t('common.save') }}</button>
         </div>
       </div>
-
-      <div class="card space-y-4">
-        <h2 class="font-heading text-base">{{ $t('alerts.backupTitle') }}</h2>
-
-        <label class="flex items-center justify-between text-sm">
-          <span>{{ $t('alerts.autoBackup') }}</span>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="backupSettingsForm.autoEnabled"
-            class="w-9 h-5 rounded-full transition-colors relative"
-            :class="backupSettingsForm.autoEnabled ? 'bg-primary' : 'bg-line'"
-            @click="backupSettingsForm.autoEnabled = !backupSettingsForm.autoEnabled"
-          >
-            <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" :class="backupSettingsForm.autoEnabled ? 'left-4' : 'left-0.5'" />
-          </button>
-        </label>
-        <p class="text-xs text-muted -mt-2">{{ $t('alerts.autoBackupHint') }}</p>
-
-        <div class="flex items-end gap-3">
-          <div>
-            <label class="block text-sm text-muted mb-1">{{ $t('alerts.retentionDays') }}</label>
-            <input v-model.number="backupSettingsForm.retentionDays" type="number" min="1" max="365" class="input w-28" />
-          </div>
-          <button type="button" class="btn-secondary" :disabled="savingBackupSettings" @click="saveBackupSettings">{{ $t('common.save') }}</button>
-          <button type="button" class="btn-primary ml-auto" :disabled="runningBackup" @click="backupNow">
-            {{ runningBackup ? $t('alerts.backingUp') : $t('alerts.backupNow') }}
-          </button>
-        </div>
-
-        <div class="border-t border-line pt-3 space-y-2">
-          <h3 class="text-sm font-medium">{{ $t('alerts.history') }}</h3>
-          <div class="max-h-80 overflow-y-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-muted border-b border-line sticky top-0 bg-surface">
-                  <th class="py-2 font-medium">{{ $t('col.date') }}</th>
-                  <th class="py-2 font-medium">{{ $t('common.type') }}</th>
-                  <th class="py-2 font-medium">{{ $t('col.status') }}</th>
-                  <th class="py-2 font-medium text-right">{{ $t('col.size') }}</th>
-                  <th class="py-2 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="b in backups" :key="b.id" class="border-b border-line last:border-0">
-                  <td class="py-2 font-mono text-xs">{{ formatDateTime(b.startedAt) }}</td>
-                  <td class="py-2">{{ $t(`backupTrigger.${b.triggerType}`) }}</td>
-                  <td class="py-2">
-                    <StatusBadge
-                      :tone="b.status === 'SUCCESS' ? 'success' : b.status === 'FAILED' ? 'danger' : 'neutral'"
-                      :label="$t(`backupStatus.${b.status}`)"
-                    />
-                  </td>
-                  <td class="py-2 text-right font-mono text-xs">{{ b.sizeBytes ? `${(b.sizeBytes / 1024 / 1024).toFixed(1)} MB` : '—' }}</td>
-                  <td class="py-2 text-right">
-                    <div class="flex items-center justify-end gap-1">
-                      <span v-if="!b.downloadable && b.error" class="text-xs text-danger-strong mr-1" :title="b.error">{{ b.error.slice(0, 40) }}</span>
-                      <button
-                        v-if="b.downloadable"
-                        type="button"
-                        class="p-1.5 text-muted hover:text-ink"
-                        :aria-label="$t('alerts.download')"
-                        :title="$t('alerts.download')"
-                        @click="downloadBackup(b)"
-                      >
-                        <Download :stroke-width="1.8" class="w-4 h-4" />
-                      </button>
-                      <ConfirmDelete v-if="b.status !== 'RUNNING'" :item-label="$t('entity.backup')" :item-name="b.filename" @confirm="deleteBackup(b.id)" />
-                    </div>
-                  </td>
-                </tr>
-                <tr v-if="backups.length === 0">
-                  <td colspan="5" class="py-6 text-center text-muted">{{ $t('alerts.noBackupsYet') }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <p class="text-xs text-muted border-t border-line pt-3">{{ $t('alerts.diskNote') }}</p>
-      </div>
     </div>
 
-    <div v-else-if="activeTab === 'system'" class="space-y-4">
+    <div v-else-if="section === 'system'" class="space-y-4">
       <div v-if="canManageSystem" class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <div class="card space-y-4">
           <div>
@@ -805,23 +658,9 @@ async function submitReset() {
             <h2 class="font-heading text-base">{{ $t('settings.retentionTitle') }}</h2>
             <p class="text-xs text-muted mt-1">{{ $t('settings.retentionIntro') }}</p>
           </div>
-          <div class="flex items-end gap-3">
-            <div>
-              <label class="block text-sm text-muted mb-1">{{ $t('settings.retentionMonths') }}</label>
-              <select v-model.number="retentionMonths" class="input w-32">
-                <option :value="1">{{ $t('settings.retentionMonthsOption', { n: 1 }, 1) }}</option>
-                <option :value="2">{{ $t('settings.retentionMonthsOption', { n: 2 }, 2) }}</option>
-                <option :value="3">{{ $t('settings.retentionMonthsOption', { n: 3 }, 3) }}</option>
-              </select>
-            </div>
-            <button type="button" class="btn-secondary" :disabled="savingRetention" @click="saveRetention">{{ $t('common.save') }}</button>
-          </div>
-          <div class="border-t border-line pt-3 space-y-2">
-            <h3 class="text-sm font-medium">{{ $t('settings.retentionClearNowTitle') }}</h3>
-            <p class="text-xs text-muted">{{ $t('settings.retentionClearNowHint') }}</p>
-            <button type="button" class="btn-secondary flex items-center gap-2" :disabled="clearingLog" @click="clearActivityLogNow">
-              <Trash2 :stroke-width="1.8" class="w-4 h-4" /> {{ $t('settings.retentionClearNow') }}
-            </button>
+          <div v-if="retentionMonths > 0" class="space-y-1">
+            <p class="text-sm">{{ $t('settings.retentionKeptFor', { n: retentionMonths }, retentionMonths) }}</p>
+            <p class="text-xs text-muted">{{ $t('settings.retentionSetByAdmin') }}</p>
           </div>
         </div>
 
@@ -847,40 +686,8 @@ async function submitReset() {
             <button type="button" class="btn-secondary" :disabled="savingStockPolicy" @click="saveStockPolicy">{{ $t('common.save') }}</button>
           </div>
         </div>
-
-        <div v-if="canResetSystem" class="card border-2 border-danger space-y-4">
-          <div>
-            <h2 class="font-heading text-base text-danger-strong">{{ $t('settings.dangerZoneTitle') }}</h2>
-            <p class="text-xs text-muted mt-1">{{ $t('settings.dangerZoneIntro') }}</p>
-          </div>
-          <ul class="text-xs text-muted list-disc list-inside space-y-0.5">
-            <li>{{ $t('settings.dangerZoneKeeps') }}</li>
-            <li>{{ $t('settings.dangerZoneWipes') }}</li>
-          </ul>
-          <button type="button" class="btn-danger" @click="showResetModal = true">{{ $t('settings.dangerZoneButton') }}</button>
-        </div>
       </div>
     </div>
-
-    <Modal v-if="showResetModal" :title="$t('settings.dangerZoneTitle')" @close="showResetModal = false">
-      <div class="space-y-4">
-        <p class="text-sm">{{ $t('settings.dangerZoneIntro') }}</p>
-        <ul class="text-xs text-muted list-disc list-inside space-y-0.5">
-          <li>{{ $t('settings.dangerZoneKeeps') }}</li>
-          <li>{{ $t('settings.dangerZoneWipes') }}</li>
-        </ul>
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('settings.dangerZoneConfirmLabel') }}</label>
-          <input v-model="resetConfirmText" type="text" class="input font-mono" placeholder="RESET" autocomplete="off" />
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="showResetModal = false">{{ $t('common.cancel') }}</button>
-          <button type="button" class="btn-danger" :disabled="!resetConfirmReady || resettingSystem" @click="submitReset">
-            {{ $t('settings.dangerZoneButton') }}
-          </button>
-        </div>
-      </div>
-    </Modal>
 
     <Modal v-if="showBranchModal" :title="editingBranchId === null ? $t('settings.newBranch') : $t('settings.editBranch')" @close="showBranchModal = false">
       <form class="space-y-4" @submit.prevent="submitBranch">

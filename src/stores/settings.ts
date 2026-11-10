@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import * as settingsApi from '@/api/settings'
-import type { AppSettings, ExchangeRateEntry } from '@/types/domain'
+import type { AppSettings, ExchangeRateEntry, TaxDefaults, TaxRate } from '@/types/domain'
 
 // Business-wide settings every screen needs (the live USD->KHR rate, receipt
 // text, loyalty rate). Loaded once after sign-in and refreshed after edits.
@@ -8,15 +8,27 @@ export const useSettingsStore = defineStore('settings', {
   state: () => ({
     rate: 4100,
     rateHistory: [] as ExchangeRateEntry[],
-    app: { receiptHeader: 'Com Mart', receiptFooter: '', loyaltyPointsPerUsd: 1, allowOutOfStockSale: false } as AppSettings,
+    app: {
+      receiptHeader: 'Com Mart',
+      receiptFooter: '',
+      loyaltyPointsPerUsd: 1,
+      allowOutOfStockSale: false,
+      defaultCustomerId: null,
+      defaultCustomerName: '',
+      taxDefaults: { pos: null, invoice: null, purchase: null, expense: null },
+    } as AppSettings,
+    // The company's tax rates (every one, switched off too: a document keeps
+    // showing the rate it used). Loaded with the settings.
+    taxRates: [] as TaxRate[],
     loaded: false,
   }),
   actions: {
     async load() {
-      const [rate, app] = await Promise.all([settingsApi.getExchangeRate(), settingsApi.getSettings()])
+      const [rate, app, taxRates] = await Promise.all([settingsApi.getExchangeRate(), settingsApi.getSettings(), settingsApi.listTaxRates()])
       this.rate = rate.rate
       this.rateHistory = rate.history
       this.app = app
+      this.taxRates = taxRates
       this.loaded = true
     },
     async ensureLoaded() {
@@ -29,6 +41,24 @@ export const useSettingsStore = defineStore('settings', {
     },
     async saveApp(app: AppSettings) {
       this.app = await settingsApi.updateSettings(app)
+    },
+    // Just the app settings and tax rates (not the exchange rate): the POS
+    // re-reads them so a till left open all day picks up a new default
+    // customer or starting tax.
+    async refreshApp() {
+      ;[this.app, this.taxRates] = await Promise.all([settingsApi.getSettings(), settingsApi.listTaxRates()])
+    },
+    // Settings › Tax rates.
+    async refreshTaxRates() {
+      this.taxRates = await settingsApi.listTaxRates()
+      this.app = await settingsApi.getSettings()
+    },
+    async saveTaxDefaults(d: TaxDefaults) {
+      this.app = { ...this.app, taxDefaults: await settingsApi.updateTaxDefaults(d) }
+    },
+    // Customers page: who the POS starts every sale with (null: walk-in).
+    async saveDefaultCustomer(customerId: number | null) {
+      this.app = await settingsApi.updateDefaultCustomer(customerId)
     },
   },
 })

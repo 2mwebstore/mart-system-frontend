@@ -1,25 +1,24 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import dayjs from 'dayjs'
 import { useI18n } from 'vue-i18n'
-import { categoryName, label } from '@/i18n'
+import { categoryName } from '@/i18n'
 import { FileDown, Plus } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useDateRangeQuery } from '@/composables/useDateRangeQuery'
 import { useProfitLossData } from '@/composables/useProfitLossData'
 import { formatUSD, formatKHR } from '@/utils/format'
 import { CATEGORY_COLORS } from '@/utils/chartColors'
-import { EXPENSE_CATEGORIES } from '@/types/domain'
 import * as peopleApi from '@/api/people'
+import type { ExpenseInput } from '@/api/people'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import DailyLineChart from '@/components/charts/DailyLineChart.vue'
 import SegmentedBar from '@/components/charts/SegmentedBar.vue'
 import Modal from '@/components/Modal.vue'
-import SearchableSelect from '@/components/SearchableSelect.vue'
+import ExpenseForm from '@/components/expenses/ExpenseForm.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t, locale } = useI18n()
-const expenseCategoryOptions = computed(() => EXPENSE_CATEGORIES.map((c) => ({ value: c, label: label('expenseCat', c) })))
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -39,6 +38,7 @@ const {
   statementLines,
   grossProfitByCategory,
   netProfitByDay,
+  tax,
   reload,
 } = useProfitLossData(range, branchId)
 
@@ -59,20 +59,12 @@ const profitLabels = computed(() => netProfitByDay.value.map((d) => dayjs(d.date
 const profitValues = computed(() => netProfitByDay.value.map((d) => Math.round(d.netProfitCents / 100)))
 
 const showAddExpense = ref(false)
-const expenseForm = reactive({ category: EXPENSE_CATEGORIES[0], amount: '', date: new Date().toLocaleDateString('en-CA'), note: '' })
 const savingExpense = ref(false)
-async function submitExpense() {
+async function submitExpense(body: ExpenseInput) {
   savingExpense.value = true
   try {
-    await peopleApi.createExpense({
-      branchId: branchId.value,
-      category: expenseForm.category,
-      amountCents: Math.round(Number(expenseForm.amount) * 100),
-      expenseDate: expenseForm.date,
-      note: expenseForm.note,
-    })
+    await peopleApi.createExpense(body)
     showAddExpense.value = false
-    Object.assign(expenseForm, { amount: '', note: '' })
     toast.success(t('pl.expenseAdded'))
     await reload()
   } catch {
@@ -95,7 +87,7 @@ async function submitExpense() {
         <button type="button" class="btn-secondary flex items-center gap-2" @click="toast.info(t('pl.pdfSoon'))">
           <FileDown :stroke-width="1.8" class="w-4 h-4" /> {{ t('pl.downloadPdf') }}
         </button>
-        <button type="button" class="btn-primary flex items-center gap-2" @click="showAddExpense = true">
+        <button v-if="auth.hasPermission('expense.create')" type="button" class="btn-primary flex items-center gap-2" @click="showAddExpense = true">
           <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ t('pl.addExpense') }}
         </button>
       </div>
@@ -123,6 +115,19 @@ async function submitExpense() {
         <p class="text-sm text-primary-tint-text">{{ t('pl.netProfit') }}</p>
         <p class="font-mono text-xl mt-1 text-primary-tint-text">{{ formatUSD(netProfitCents) }}</p>
         <p class="text-xs text-primary-tint-text">{{ t('pl.marginPct', { pct: netMarginPct }) }}</p>
+      </div>
+    </div>
+
+    <div v-if="tax.collectedCents || tax.paidCents" class="grid grid-cols-1 sm:grid-cols-2 gap-4" data-pl-tax>
+      <div class="card">
+        <p class="text-sm text-muted">{{ t('tax.collected') }}</p>
+        <p class="font-mono text-xl mt-1">{{ formatUSD(tax.collectedCents) }}</p>
+        <p class="text-xs text-muted">{{ t('tax.collectedHint', { pos: formatUSD(tax.posCents), invoice: formatUSD(tax.invoiceCents) }) }}</p>
+      </div>
+      <div class="card">
+        <p class="text-sm text-muted">{{ t('tax.paid') }}</p>
+        <p class="font-mono text-xl mt-1">{{ formatUSD(tax.paidCents) }}</p>
+        <p class="text-xs text-muted">{{ t('tax.paidHint', { expense: formatUSD(tax.expenseCents), purchase: formatUSD(tax.purchaseCents) }) }}</p>
       </div>
     </div>
 
@@ -159,31 +164,8 @@ async function submitExpense() {
       </div>
     </div>
 
-    <Modal
-      v-if="showAddExpense" 
-      :title="t('pl.addExpenseTitle')" @close="showAddExpense = false"
-    >
-      <form class="space-y-4" @submit.prevent="submitExpense">
-        <SearchableSelect v-model="expenseForm.category" :label="t('common.category')" :options="expenseCategoryOptions" :searchable="false" :clearable="false" />
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-sm text-muted mb-1">{{ t('pl.amountUsd') }}</label>
-            <input v-model="expenseForm.amount" type="number" step="0.01" class="input" required />
-          </div>
-          <div>
-            <label class="block text-sm text-muted mb-1">{{ t('common.date') }}</label>
-            <input v-model="expenseForm.date" type="date" class="input" required />
-          </div>
-        </div>
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ t('common.note') }}</label>
-          <input v-model="expenseForm.note" type="text" class="input" />
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="showAddExpense = false">{{ t('common.cancel') }}</button>
-          <button type="submit" class="btn-primary" :disabled="savingExpense">{{ t('common.save') }}</button>
-        </div>
-      </form>
+    <Modal v-if="showAddExpense" wide :title="t('pl.addExpenseTitle')" @close="showAddExpense = false">
+      <ExpenseForm :branch-id="branchId" :show-branch="false" :saving="savingExpense" @save="submitExpense" @cancel="showAddExpense = false" />
     </Modal>
   </div>
 </template>

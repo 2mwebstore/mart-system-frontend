@@ -65,5 +65,7 @@ export function useProfitLossData(dateRange: Ref<{ from: string; to: string }>, 
     statementLines,
     grossProfitByCategory: computed(() => r.value?.profitByCategory ?? []),
     netProfitByDay: computed(() => r.value?.netProfitByDay ?? []),
+    // Tax on top, kept out of every figure above (an older server sends none).
+    tax: computed(() => r.value?.tax ?? { collectedCents: 0, posCents: 0, invoiceCents: 0, paidCents: 0, expenseCents: 0, purchaseCents: 0 }),
   }
 }

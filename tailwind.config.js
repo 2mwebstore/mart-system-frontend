@@ -35,7 +35,7 @@ export default {
         // Khmer riel sign (៛, U+17DB) — absent from JetBrains Mono —
         // renders as the actual glyph instead of a fallback-font
         // substitute that reads as a stray "$" next to KHR amounts.
-        mono: ['"JetBrains Mono"', '"Kantumruy Pro"', 'monospace'],
+        mono: [ '"Kantumruy Pro"', 'sans-serif'],
       },
       borderRadius: {
         control: '10px',

@@ -2,6 +2,8 @@
 // Create / edit an invoice (back-office sale). Items are added with the same
 // search box as the purchase-order form; each line has its own price (filled
 // with the catalog price, editable for wholesale), % or $ discount and note.
+// Tax is added on top of the lines after discounts plus shipping, starting from
+// Settings › Tax rates' rate for invoices; an invoice being edited keeps its own.
 // The server re-checks everything and owns the totals.
 import { computed, ref } from 'vue'
 import { X } from 'lucide-vue-next'
@@ -10,11 +12,13 @@ import SearchAddInput from '@/components/SearchAddInput.vue'
 import DiscountInput from '@/components/DiscountInput.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import InvoicePaymentForm from '@/components/invoices/InvoicePaymentForm.vue'
+import TaxSelect from '@/components/TaxSelect.vue'
 import type { DiscountType } from '@/composables/useCart'
 import { useSettingsStore } from '@/stores/settings'
 import { localName, t } from '@/i18n'
 import { formatKHR, formatUSD } from '@/utils/format'
 import { usdCentsToRiel } from '@/utils/money'
+import { formatPercent, nameFor, percentFor, startingRate, taxCents } from '@/utils/tax'
 import type { Customer, Invoice, InvoiceInput, InvoicePaymentInput, PaymentMethodRow, Product } from '@/types/domain'
 
 const props = defineProps<{
@@ -67,6 +71,7 @@ const discountType = ref<DiscountType>('amount')
 const discountValue = ref((props.invoice?.discountCents ?? 0) / 100)
 const shippingDollars = ref((props.invoice?.shippingCents ?? 0) / 100)
 const note = ref(props.invoice?.note ?? '')
+const taxRateId = ref<number | null>(props.invoice ? props.invoice.taxRateId : startingRate(settings.app.taxDefaults?.invoice, settings.taxRates))
 
 const customerOptions = computed(() => props.customers.map((c) => ({ value: c.id, label: c.name, sub: c.phone })))
 // Sellable lines: active, and not a family parent (its variants are sold instead).
@@ -120,7 +125,12 @@ const subtotal = computed(() => lines.value.reduce((n, l) => n + gross(l), 0))
 const lineDiscounts = computed(() => lines.value.reduce((n, l) => n + lineDiscount(l), 0))
 const invoiceDiscount = computed(() => discountOf(subtotal.value - lineDiscounts.value, discountType.value, discountValue.value))
 const shipping = computed(() => cents(shippingDollars.value))
-const total = computed(() => subtotal.value - lineDiscounts.value - invoiceDiscount.value + shipping.value)
+const beforeTax = computed(() => subtotal.value - lineDiscounts.value - invoiceDiscount.value + shipping.value)
+// The invoice's own rate stays as it was kept, like the server's.
+const taxPercent = computed(() => percentFor(taxRateId.value, settings.taxRates, props.invoice))
+const taxName = computed(() => nameFor(taxRateId.value, settings.taxRates, props.invoice))
+const tax = computed(() => taxCents(beforeTax.value, taxPercent.value))
+const total = computed(() => beforeTax.value + tax.value)
 const paid = computed(() => props.invoice?.paidCents ?? 0)
 
 // Money received when the invoice is made (new invoices only; optional).
@@ -153,6 +163,7 @@ function save() {
     })),
     discountCents: invoiceDiscount.value,
     shippingCents: shipping.value,
+    taxRateId: taxRateId.value,
     note: note.value,
     ...(!props.invoice && payNow.value.payment ? { payment: payNow.value.payment } : {}),
   })
@@ -220,12 +231,13 @@ function save() {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <DiscountInput v-model:type="discountType" v-model:value="discountValue" :label="$t('inventory.invoiceDiscount')" />
       <div>
         <label class="block text-sm text-muted mb-1" for="inv-ship">{{ $t('invoices.shipping') }}</label>
         <input id="inv-ship" v-model.number="shippingDollars" type="number" min="0" step="0.01" class="input" />
       </div>
+      <TaxSelect v-model="taxRateId" :kept="invoice" />
     </div>
 
     <RichTextEditor id="inv-note" v-model="note" :label="$t('common.note')" :placeholder="$t('invoices.noteHint')" />
@@ -235,6 +247,9 @@ function save() {
       <div v-if="lineDiscounts" class="flex justify-between"><span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ formatUSD(lineDiscounts) }}</span></div>
       <div v-if="invoiceDiscount" class="flex justify-between"><span class="text-muted">{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ formatUSD(invoiceDiscount) }}</span></div>
       <div v-if="shipping" class="flex justify-between"><span class="text-muted">{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ formatUSD(shipping) }}</span></div>
+      <div v-if="taxRateId" class="flex justify-between" data-tax-line>
+        <span class="text-muted">{{ $t('tax.line', { name: `${taxName} ${formatPercent(taxPercent)}` }) }}</span><span class="font-mono">{{ formatUSD(tax) }}</span>
+      </div>
       <div class="flex justify-between font-medium border-t border-line pt-1">
         <span>{{ $t('col.total') }}</span>
         <span class="font-mono">{{ formatUSD(total) }} <span class="text-muted font-normal">({{ formatKHR(usdCentsToRiel(total, settings.rate)) }})</span></span>

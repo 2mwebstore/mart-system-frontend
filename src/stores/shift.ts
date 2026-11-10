@@ -34,6 +34,10 @@ export interface HeldSale {
   tableOrderIds?: number[]
   tableOrderId?: number | null // held before whole-table payment existed
   tableOrderLabel?: string
+  // The sale's tax rate (null: no tax) and note; absent on a sale held
+  // before either existed.
+  taxRateId?: number | null
+  note?: string
 }
 
 const heldKey = (deviceKey: string) => `com-mart-pos-held-${deviceKey}`

@@ -17,10 +17,11 @@ export function useDebounced<T>(source: Ref<T>, ms = 300): Ref<T> {
 // returns the page; `deps` are the filters — changing any of them jumps back
 // to page 1 and refetches. `reload()` refetches the current page (call it
 // after a create / edit / delete), stepping back a page if the current one
-// has just become empty.
+// has just become empty. `enabled` says whether to fetch at all (a list the
+// person may not see stays empty rather than asking and being refused).
 export function usePagedList<T, S = undefined>(
   fetcher: (q: PageQuery) => Promise<Paged<T[], S>>,
-  options: { perPage?: number; deps?: WatchSource[] } = {},
+  options: { perPage?: number; deps?: WatchSource[]; enabled?: () => boolean } = {},
 ) {
   const perPage = options.perPage ?? 10
   const rows = ref([]) as Ref<T[]>
@@ -32,6 +33,7 @@ export function usePagedList<T, S = undefined>(
   let seq = 0
 
   async function load() {
+    if (options.enabled && !options.enabled()) return
     const mine = ++seq
     loading.value = true
     try {

@@ -1,18 +1,29 @@
 import { defineStore } from 'pinia'
 import * as authApi from '@/api/auth'
 import { clearTokens, getRefreshToken, setTokens } from '@/api/tokens'
+import { ACTIVE_BRANCH_KEY } from '@/api/activeBranch'
+import { setCompanyCode } from '@/api/companyCode'
+import { useBrandingStore } from './branding'
 
 interface AuthState {
   user: authApi.UserSummary | null
+  // What the user may do at the active branch: their role there decides.
   permissions: string[]
+  // What the server said for the session as a whole: the role at a till
+  // session's branch, or the main role.
+  sessionUser: authApi.UserSummary | null
+  sessionPermissions: string[]
   branches: authApi.BranchSummary[]
+  // The company the user works for; null for the super admin, who manages
+  // the companies (the /platform pages) and works in none of them.
+  company: authApi.CompanySummary | null
+  isSuperAdmin: boolean
   activeBranchId: number | null
   deviceKey: string
   tillName: string
   viaPinLogin: boolean
 }
 
-const ACTIVE_BRANCH_KEY = 'com-mart-active-branch'
 // The POS screen's till identity — set on PIN sign-in, kept across sessions
 // like activeBranchId (a kiosk stays pointed at the same till; only the
 // signed-in cashier changes).
@@ -30,7 +41,11 @@ export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     user: null,
     permissions: [],
+    sessionUser: null,
+    sessionPermissions: [],
     branches: [],
+    company: null,
+    isSuperAdmin: false,
     activeBranchId: Number(localStorage.getItem(ACTIVE_BRANCH_KEY)) || null,
     deviceKey: localStorage.getItem(DEVICE_KEY_STORAGE) ?? '',
     tillName: localStorage.getItem(TILL_NAME_STORAGE) ?? '',
@@ -42,10 +57,21 @@ export const useAuthStore = defineStore('auth', {
     hasPermission: (state) => (key: string) => state.permissions.includes(key),
     // The signed-in user can run a till with this session, PIN or not.
     canUsePos: (state) => state.user !== null && state.permissions.includes('pos.sell'),
+    activeBranch: (state) => state.branches.find((b) => b.id === state.activeBranchId) ?? null,
   },
 
   actions: {
-    applySession(session: { user: authApi.UserSummary; permissions: string[]; branches: authApi.BranchSummary[] }) {
+    applySession(session: authApi.MeResponse) {
+      this.company = session.company ?? null
+      this.isSuperAdmin = session.is_super_admin === true
+      // This browser now works for the user's company: its tills, name and
+      // logo are the ones shown from here on, the sign-in pages included.
+      if (this.company) {
+        setCompanyCode(this.company.code)
+        void useBrandingStore().useCompany(this.company.code)
+      }
+      this.sessionUser = session.user
+      this.sessionPermissions = session.permissions
       this.user = session.user
       this.permissions = session.permissions
       this.branches = session.branches
@@ -66,28 +92,44 @@ export const useAuthStore = defineStore('auth', {
           localStorage.removeItem(ACTIVE_BRANCH_KEY)
         }
       }
+      this.followActiveBranch()
     },
 
     setActiveBranch(branchId: number) {
       this.activeBranchId = branchId
       localStorage.setItem(ACTIVE_BRANCH_KEY, String(branchId))
+      this.followActiveBranch()
+    },
+
+    // A user can hold a different role at each branch, so what they may do,
+    // and the role shown, follow the active branch. A till session stays with
+    // what the server gave it: the role at the till's branch.
+    followActiveBranch() {
+      const branch = this.activeBranch
+      if (this.viaPinLogin || !branch?.permissions || !this.sessionUser) {
+        this.user = this.sessionUser
+        this.permissions = this.sessionPermissions
+        return
+      }
+      this.permissions = branch.permissions
+      this.user = { ...this.sessionUser, role_id: branch.role_id ?? this.sessionUser.role_id, role_name: branch.role_name ?? this.sessionUser.role_name }
     },
 
     async login(username: string, password: string) {
       const result = await authApi.login(username, password)
       setTokens(result.access_token, result.refresh_token)
-      this.applySession(result)
       this.viaPinLogin = false
       localStorage.removeItem(VIA_PIN_LOGIN_KEY)
+      this.applySession(result)
     },
 
-    async pinLogin(deviceKey: string, tillName: string, username: string, pin: string) {
-      const result = await authApi.pinLogin(deviceKey, username, pin)
+    async pinLogin(companyCode: string, deviceKey: string, tillName: string, username: string, pin: string) {
+      const result = await authApi.pinLogin(companyCode, deviceKey, username, pin)
       setTokens(result.access_token, result.refresh_token)
+      this.viaPinLogin = true
       this.applySession(result)
       this.deviceKey = deviceKey
       this.tillName = tillName
-      this.viaPinLogin = true
       localStorage.setItem(DEVICE_KEY_STORAGE, deviceKey)
       localStorage.setItem(TILL_NAME_STORAGE, tillName)
       localStorage.setItem(VIA_PIN_LOGIN_KEY, '1')

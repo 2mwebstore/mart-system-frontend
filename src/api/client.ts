@@ -1,5 +1,6 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './tokens'
+import { BRANCH_HEADER, storedActiveBranch } from './activeBranch'
 import type { ApiEnvelope } from './types'
 import { useToast } from '@/composables/useToast'
 import { apiErrorMessage } from '@/i18n/apiErrors'
@@ -19,16 +20,52 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers = config.headers ?? {}
     config.headers.Authorization = `Bearer ${token}`
+    // A till session ignores it: the server keeps that one at the till's branch.
+    const branch = storedActiveBranch()
+    if (branch) config.headers[BRANCH_HEADER] = String(branch)
   }
   return config
 })
 
-let isRefreshing = false
-let pendingQueue: Array<() => void> = []
+// Their 401 means a wrong password or a dead session, which a refresh can't fix.
+// Any other 401, /auth/me included, is an access token that needs renewing.
+const SESSION_ROUTE = /\/auth\/(login|pin-login|refresh|logout)$/
 
-function onRefreshed() {
-  pendingQueue.forEach((resolve) => resolve())
-  pendingQueue = []
+// How long to give another tab to finish storing the tokens it just received.
+const TAB_RACE_WAIT_MS = 500
+
+let refreshing: Promise<void> | null = null
+
+async function refreshSession(usedToken: string): Promise<void> {
+  try {
+    const { data } = await refreshClient.post<ApiEnvelope<{ access_token: string; refresh_token: string }>>(
+      '/auth/refresh',
+      { refresh_token: usedToken },
+    )
+    setTokens(data.data.access_token, data.data.refresh_token)
+  } catch (err) {
+    // Another tab may have rotated the token we just sent, which is why the
+    // server refused it. Its tokens are good, so use them instead of signing out.
+    if ((err as AxiosError).response?.status === 401) {
+      await new Promise((resolve) => setTimeout(resolve, TAB_RACE_WAIT_MS))
+      const stored = getRefreshToken()
+      if (stored && stored !== usedToken) return
+    }
+    throw err
+  }
+}
+
+// Every request that hits a 401 at the same moment waits on this one refresh.
+function sharedRefresh(usedToken: string): Promise<void> {
+  refreshing ??= refreshSession(usedToken).finally(() => {
+    refreshing = null
+  })
+  return refreshing
+}
+
+function goToSignIn() {
+  clearTokens()
+  window.location.href = window.location.pathname.startsWith('/pos') ? '/pos/login' : '/login'
 }
 
 apiClient.interceptors.response.use(
@@ -36,44 +73,31 @@ apiClient.interceptors.response.use(
   async (error: AxiosError<ApiEnvelope<unknown>>) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined
     const status = error.response?.status
-    const isAuthRoute = originalRequest?.url?.includes('/auth/')
+    const silent = (originalRequest as { silent?: boolean } | undefined)?.silent
 
-    if (status === 401 && originalRequest && !originalRequest._retry && !isAuthRoute) {
+    if (status === 401 && originalRequest && !originalRequest._retry && !SESSION_ROUTE.test(originalRequest.url ?? '')) {
       const refreshToken = getRefreshToken()
       if (!refreshToken) {
-        clearTokens()
-        window.location.href = '/login'
+        goToSignIn()
         return Promise.reject(error)
       }
 
       originalRequest._retry = true
-
-      if (!isRefreshing) {
-        isRefreshing = true
-        try {
-          const { data } = await refreshClient.post<ApiEnvelope<{ access_token: string; refresh_token: string }>>(
-            '/auth/refresh',
-            { refresh_token: refreshToken },
-          )
-          setTokens(data.data.access_token, data.data.refresh_token)
-        } catch (refreshError) {
-          clearTokens()
-          window.location.href = '/login'
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
-          onRefreshed()
-        }
+      try {
+        await sharedRefresh(refreshToken)
+      } catch (refreshError) {
+        // Only a refused token ends the session. A dropped connection or a
+        // server error says nothing about it, so the till stays signed in.
+        if ((refreshError as AxiosError).response?.status === 401) goToSignIn()
+        else if (!silent) useToast().error(apiErrorMessage(refreshError))
+        return Promise.reject(refreshError)
       }
-
-      await new Promise<void>((resolve) => pendingQueue.push(resolve))
       return apiClient(originalRequest)
     }
 
     // Prefer the first field-level message (e.g. "That username is already
     // taken.") over the generic "One or more fields are invalid."
     const message = apiErrorMessage(error)
-    const silent = (originalRequest as { silent?: boolean } | undefined)?.silent
     if (status !== 401 && !silent) {
       useToast().error(message)
     }

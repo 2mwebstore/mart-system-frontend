@@ -61,7 +61,10 @@ async function voidSale(id: number, receiptNo: string) {
             <td class="py-2 font-mono text-xs">{{ formatDateTime(s.soldAt).split(' ').slice(-1)[0] }}</td>
             <td class="py-2 text-right font-mono">{{ s.items.reduce((sum, i) => sum + i.qty, 0) }}</td>
             <td class="py-2">{{ label('method', s.payment.method) }}</td>
-            <td class="py-2 text-right font-mono">{{ formatUSD(s.totalCents) }}</td>
+            <td class="py-2 text-right font-mono">
+              {{ formatUSD(s.totalCents) }}
+              <span v-if="s.taxCents" class="block text-xs text-muted" :title="s.taxName">{{ $t('tax.label') }} {{ formatUSD(s.taxCents) }}</span>
+            </td>
             <td class="py-2"><StatusBadge :tone="s.status === 'PAID' ? 'success' : 'danger'" :label="label('saleStatus', s.status)" /></td>
             <td class="py-2">
               <button

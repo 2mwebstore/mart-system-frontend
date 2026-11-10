@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import * as settingsApi from '@/api/settings'
 import { apiBaseURL } from '@/api/client'
+import { getCompanyCode } from '@/api/companyCode'
 import { setCompanyName, t } from '@/i18n'
 import type { Branding } from '@/types/domain'
 
@@ -9,6 +10,9 @@ import type { Branding } from '@/types/domain'
 // the customer display and the QR menu. Loaded at start-up — before anyone
 // signs in — and kept in localStorage so the next visit shows them at once
 // instead of flashing the default name first.
+//
+// Each company has its own: this is the company this browser works for (see
+// api/companyCode.ts), and the app's own name and no logo when there's none.
 const CACHE_KEY = 'com-mart-branding'
 const empty: Branding = { companyName: '', hasLogo: false, logoLink: '', logoVersion: '' }
 
@@ -21,9 +25,9 @@ function readCache(): Branding {
   }
 }
 
-function logoUrlOf(b: Branding): string {
+function logoUrlOf(b: Branding, code = getCompanyCode()): string {
   if (b.logoLink) return b.logoLink
-  return b.hasLogo ? `${apiBaseURL}/auth/branding/logo?v=${b.logoVersion}` : ''
+  return b.hasLogo ? `${apiBaseURL}/auth/branding/logo?company=${encodeURIComponent(code)}&v=${b.logoVersion}` : ''
 }
 
 // The browser tab: the company name, and the logo as the tab icon.
@@ -45,13 +49,14 @@ function applyToDocument(b: Branding) {
 }
 
 export const useBrandingStore = defineStore('branding', {
-  state: () => ({ ...readCache(), loaded: false }),
+  // code: the company these are for, '' for the app's own.
+  state: () => ({ ...readCache(), code: getCompanyCode(), loaded: false }),
   getters: {
     // The system's name — "Com Mart Control System" until a company name is set.
     name: (s): string => s.companyName || t('app.name'),
     // The short form used as the store name on the POS, customer display, etc.
     shortName: (s): string => s.companyName || t('app.brand'),
-    logoUrl: (s): string => logoUrlOf(s),
+    logoUrl: (s): string => logoUrlOf(s, s.code),
   },
   actions: {
     set(b: Branding) {
@@ -67,8 +72,12 @@ export const useBrandingStore = defineStore('branding', {
       }
     },
     async refresh() {
+      const code = getCompanyCode()
+      this.code = code
       try {
-        this.set(await settingsApi.getBranding())
+        const b = await settingsApi.getBranding(code)
+        // Another company chosen meanwhile: this answer is out of date.
+        if (this.code === code) this.set(b)
       } catch {
         // offline / API down: keep the cached copy
       } finally {
@@ -84,6 +93,19 @@ export const useBrandingStore = defineStore('branding', {
       window.addEventListener('storage', (e) => {
         if (e.key === CACHE_KEY) this.$patch(readCache())
       })
+    },
+    // Shows the company with this code from now on (already remembered by
+    // the caller), unless it's the one showing. '' shows the app's own name
+    // and no logo, which is what the server gives without a code.
+    async useCompany(code: string) {
+      if (code === this.code && this.loaded) return
+      if (!code) {
+        this.code = ''
+        this.set({ ...empty })
+        this.loaded = true
+        return
+      }
+      await this.refresh()
     },
     async save(companyName: string, logo?: string) {
       this.set(await settingsApi.updateBranding(logo === undefined ? { companyName } : { companyName, logo }))

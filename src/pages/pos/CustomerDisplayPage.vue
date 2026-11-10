@@ -198,6 +198,10 @@ onUnmounted(() => {
             </span>
             <span class="font-mono text-success-text">−{{ formatUSD(cart.cartDiscountCents) }}</span>
           </div>
+          <div v-if="cart.taxCents" class="flex justify-between">
+            <span class="text-muted">{{ $t('tax.line', { name: cart.taxLabel }) }}</span>
+            <span class="font-mono">{{ formatUSD(cart.taxCents) }}</span>
+          </div>
         </div>
         <div class="mt-auto border-t border-line pt-4">
           <p class="text-muted text-lg">{{ cart.payment ? $t('pos.amountDue') : $t('col.total') }}</p>

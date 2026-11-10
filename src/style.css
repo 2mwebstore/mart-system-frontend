@@ -39,6 +39,18 @@
   .badge-danger {
     @apply bg-danger text-danger-text rounded-control px-2 py-0.5 text-xs font-medium;
   }
+  /* A list's toolbar: search and filters (.list-filters) on the left, its
+     buttons (.list-actions) on the right. On a phone every filter takes the
+     full width, one under another, and the buttons wrap below them. */
+  .list-toolbar {
+    @apply flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between;
+  }
+  .list-filters {
+    @apply flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end;
+  }
+  .list-actions {
+    @apply flex flex-wrap gap-2;
+  }
 }
 
 /* Phones: table cells stay on one line and the table scrolls sideways inside
