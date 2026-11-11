@@ -98,3 +98,37 @@ describe('the auth store at each branch', () => {
     expect(auth.user?.role_name).toBe('Manager')
   })
 })
+
+describe('the auth store and the till', () => {
+  it("remembers the till's branch and makes it the selected one", () => {
+    const auth = useAuthStore()
+    auth.applySession(session())
+    auth.selectTill('BKK-1', 'Till 1 · BKK1', 2)
+    expect(auth.tillBranchId).toBe(2)
+    expect(auth.activeBranchId).toBe(2)
+    expect(localStorage.getItem('com-mart-pos-till-branch')).toBe('2')
+    expect(localStorage.getItem('com-mart-active-branch')).toBe('2')
+    // Kept for the next visit, like the till itself.
+    setActivePinia(createPinia())
+    expect(useAuthStore().tillBranchId).toBe(2)
+  })
+
+  it("leaves the selected branch alone for a branch the user doesn't have", () => {
+    const auth = useAuthStore()
+    auth.applySession(session())
+    auth.selectTill('SS-1', 'Till 1 · Sen Sok', 3)
+    expect(auth.activeBranchId).toBe(1)
+  })
+
+  it('forgets the till and its branch', () => {
+    const auth = useAuthStore()
+    auth.applySession(session())
+    auth.selectTill('BKK-1', 'Till 1 · BKK1', 2)
+    auth.forgetTill()
+    expect([auth.deviceKey, auth.tillName, auth.tillBranchId]).toEqual(['', '', null])
+    expect(localStorage.getItem('com-mart-pos-device-key')).toBeNull()
+    expect(localStorage.getItem('com-mart-pos-till-branch')).toBeNull()
+    // The branch stays selected.
+    expect(auth.activeBranchId).toBe(2)
+  })
+})

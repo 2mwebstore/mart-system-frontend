@@ -21,6 +21,8 @@ interface AuthState {
   activeBranchId: number | null
   deviceKey: string
   tillName: string
+  // The till's branch; null for a till remembered before this was kept.
+  tillBranchId: number | null
   viaPinLogin: boolean
 }
 
@@ -29,6 +31,7 @@ interface AuthState {
 // signed-in cashier changes).
 const DEVICE_KEY_STORAGE = 'com-mart-pos-device-key'
 const TILL_NAME_STORAGE = 'com-mart-pos-till-name'
+const TILL_BRANCH_STORAGE = 'com-mart-pos-till-branch'
 // Admin and POS share one token store (one project/origin). Which flow
 // produced the current session is recorded here: a PIN sign-in at the till,
 // or a back-office password sign-in. A back-office session that can sell
@@ -49,6 +52,7 @@ export const useAuthStore = defineStore('auth', {
     activeBranchId: Number(localStorage.getItem(ACTIVE_BRANCH_KEY)) || null,
     deviceKey: localStorage.getItem(DEVICE_KEY_STORAGE) ?? '',
     tillName: localStorage.getItem(TILL_NAME_STORAGE) ?? '',
+    tillBranchId: Number(localStorage.getItem(TILL_BRANCH_STORAGE)) || null,
     viaPinLogin: localStorage.getItem(VIA_PIN_LOGIN_KEY) === '1',
   }),
 
@@ -123,33 +127,37 @@ export const useAuthStore = defineStore('auth', {
       this.applySession(result)
     },
 
-    async pinLogin(companyCode: string, deviceKey: string, tillName: string, username: string, pin: string) {
+    async pinLogin(companyCode: string, deviceKey: string, tillName: string, tillBranchId: number, username: string, pin: string) {
       const result = await authApi.pinLogin(companyCode, deviceKey, username, pin)
       setTokens(result.access_token, result.refresh_token)
       this.viaPinLogin = true
-      this.applySession(result)
-      this.deviceKey = deviceKey
-      this.tillName = tillName
-      localStorage.setItem(DEVICE_KEY_STORAGE, deviceKey)
-      localStorage.setItem(TILL_NAME_STORAGE, tillName)
       localStorage.setItem(VIA_PIN_LOGIN_KEY, '1')
+      this.applySession(result)
+      this.selectTill(deviceKey, tillName, tillBranchId)
     },
 
-    // Points this session at a till without a PIN sign-in (back-office
-    // session with pos.sell). The server still checks the till's branch
-    // against the user's branches on every POS call.
-    selectTill(deviceKey: string, tillName: string) {
+    // Points this session at a till; without a PIN sign-in, that's a
+    // back-office session with pos.sell. The server still checks the till's
+    // branch against the user's branches on every POS call. The till's branch
+    // becomes the selected one, so the till picker shows that branch's tills
+    // when this cashier changes till or opens the next shift.
+    selectTill(deviceKey: string, tillName: string, tillBranchId: number) {
       this.deviceKey = deviceKey
       this.tillName = tillName
+      this.tillBranchId = tillBranchId
       localStorage.setItem(DEVICE_KEY_STORAGE, deviceKey)
       localStorage.setItem(TILL_NAME_STORAGE, tillName)
+      localStorage.setItem(TILL_BRANCH_STORAGE, String(tillBranchId))
+      if (tillBranchId !== this.activeBranchId && this.branches.some((b) => b.id === tillBranchId)) this.setActiveBranch(tillBranchId)
     },
 
     forgetTill() {
       this.deviceKey = ''
       this.tillName = ''
+      this.tillBranchId = null
       localStorage.removeItem(DEVICE_KEY_STORAGE)
       localStorage.removeItem(TILL_NAME_STORAGE)
+      localStorage.removeItem(TILL_BRANCH_STORAGE)
     },
 
     async fetchMe() {

@@ -54,8 +54,11 @@ async function confirmClose() {
 function backToPos() {
   router.push({ name: 'pos' })
 }
+// The next shift may be at another till: the till is chosen again, among the
+// branch's tills, instead of reopening this one.
 function startNextShift() {
-  router.push({ name: 'pos-open-shift' })
+  auth.forgetTill()
+  router.push({ name: 'pos-login' })
 }
 function printReport() {
   window.print()

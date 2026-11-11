@@ -102,12 +102,12 @@ function forgetCompany() {
   void branding.useCompany('')
 }
 
-// A session can only use tills in its own branches; the PIN form lists every
-// active till (the server checks the cashier's branch on sign-in).
+// A session sees the tills of the selected branch only (the back office's
+// branch switcher, or the Branch picker here); the PIN form lists every active
+// till (the server checks the cashier's branch on sign-in).
 const shownTills = computed(() => {
   if (!sessionMode.value) return activeTills.value
-  const allowed = new Set(auth.branches.map((b) => b.id))
-  return activeTills.value.filter((x) => allowed.has(x.branchId))
+  return activeTills.value.filter((x) => x.branchId === auth.activeBranchId)
 })
 function tillLabel(x: PublicTill) {
   return x.branchName ? `${x.name} · ${x.branchName}` : x.name
@@ -116,11 +116,27 @@ const tillOptions = computed(() => shownTills.value.map((x) => ({ value: x.devic
 const selectedTill = computed(() => shownTills.value.find((x) => x.deviceKey === deviceKey.value))
 const tillName = computed(() => (selectedTill.value ? tillLabel(selectedTill.value) : ''))
 
+// Another branch is picked here only by a back-office session, among the
+// branches where its role may sell; a PIN sign-in stays at its till's branch.
+const sellBranches = computed(() =>
+  auth.branches.filter((b) => (b.permissions ?? auth.sessionPermissions).includes('pos.sell')),
+)
+const branchOptions = computed(() => sellBranches.value.map((b) => ({ value: b.id, label: b.name })))
+const canPickBranch = computed(() => !auth.viaPinLogin && sellBranches.value.length > 1)
+function setBranch(v: string | number | null) {
+  const id = Number(v)
+  if (!id || id === auth.activeBranchId) return
+  auth.setActiveBranch(id)
+  errorMessage.value = ''
+  pickDefaultTill()
+}
+
+// The remembered till stays picked while it's listed. Otherwise a till is
+// picked for the cashier only when it's the only one: with more, they choose,
+// so a new shift never lands on a till by accident.
 function pickDefaultTill() {
   if (shownTills.value.some((x) => x.deviceKey === deviceKey.value)) return
-  // Prefer a till in the back office's active branch, then any allowed one.
-  const inActive = shownTills.value.find((x) => x.branchId === auth.activeBranchId)
-  deviceKey.value = (inActive ?? shownTills.value[0])?.deviceKey ?? ''
+  deviceKey.value = shownTills.value.length === 1 ? shownTills.value[0].deviceKey : ''
 }
 
 const username = ref('')
@@ -138,7 +154,7 @@ function openWithSession() {
     errorMessage.value = t('pos.pickTill')
     return
   }
-  auth.selectTill(deviceKey.value, tillName.value)
+  auth.selectTill(deviceKey.value, tillName.value, selectedTill.value.branchId)
   router.push({ name: 'pos' })
 }
 
@@ -155,7 +171,8 @@ function switchToSession() {
 
 async function handleSubmit() {
   errorMessage.value = ''
-  if (!deviceKey.value) {
+  const till = selectedTill.value
+  if (!till) {
     errorMessage.value = t('pos.pickTill')
     return
   }
@@ -165,7 +182,7 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
-    await auth.pinLogin(companyCode.value, deviceKey.value, tillName.value, username.value.trim(), pin.value)
+    await auth.pinLogin(companyCode.value, till.deviceKey, tillName.value, till.branchId, username.value.trim(), pin.value)
     router.push({ name: 'pos' })
   } catch (err) {
     errorMessage.value = apiErrorMessage(err, 'pos.invalidPin')
@@ -209,6 +226,18 @@ async function handleSubmit() {
       <div v-else-if="sessionMode" class="card space-y-4">
         <p class="text-sm">{{ $t('pos.signedInAs', { name: auth.user?.full_name }) }}</p>
         <SearchableSelect
+          v-if="canPickBranch"
+          :model-value="auth.activeBranchId"
+          :label="$t('common.branch')"
+          :options="branchOptions"
+          :clearable="false"
+          data-branch-picker
+          @update:model-value="setBranch"
+        />
+        <p v-else-if="auth.activeBranch" class="text-sm text-muted" data-branch-shown>
+          {{ $t('common.branch') }}: <span class="text-ink">{{ auth.activeBranch.name }}</span>
+        </p>
+        <SearchableSelect
           :model-value="deviceKey || null"
           :label="$t('common.till')"
           :options="tillOptions"
@@ -216,7 +245,9 @@ async function handleSubmit() {
           :placeholder="$t('pos.pickTill')"
           @update:model-value="setTill"
         />
-        <p v-if="!loading && tillOptions.length === 0" class="text-sm text-muted">{{ $t('pos.noTillsForYou') }}</p>
+        <p v-if="!loading && tillOptions.length === 0" class="text-sm text-muted" data-no-tills>
+          {{ auth.activeBranch ? $t('pos.noTillsAtBranch', { branch: auth.activeBranch.name }) : $t('pos.noTillsForYou') }}
+        </p>
         <p v-if="errorMessage" class="text-sm text-danger-strong text-center" role="alert">{{ errorMessage }}</p>
         <button type="button" class="btn-primary w-full" :disabled="!selectedTill" @click="openWithSession">{{ $t('pos.openPos') }}</button>
         <button type="button" class="text-sm text-muted hover:text-ink block mx-auto" @click="switchToPin">{{ $t('pos.usePinInstead') }}</button>

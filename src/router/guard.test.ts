@@ -43,10 +43,15 @@ vi.mock('@/stores/shift', () => ({
   }),
 }))
 
-function signIn({ viaPin = false, till = false } = {}) {
+// till: a till at the user's branch (Main), remembered with its branch;
+// tillBranch: the branch remembered with it instead ('' for none).
+function signIn({ viaPin = false, till = false, tillBranch = '1' } = {}) {
   setTokens('access', 'refresh')
   if (viaPin) localStorage.setItem('com-mart-pos-via-pin-login', '1')
-  if (till) localStorage.setItem('com-mart-pos-device-key', 'till-1')
+  if (till) {
+    localStorage.setItem('com-mart-pos-device-key', 'till-1')
+    if (tillBranch) localStorage.setItem('com-mart-pos-till-branch', tillBranch)
+  }
 }
 
 async function landsOn(path: string) {
@@ -119,6 +124,16 @@ describe('a PIN session', () => {
     session.shiftOpen = false
     expect(await landsOn('/pos')).toBe('pos-open-shift')
   })
+
+  it("stays at its till whichever branch the browser had selected", async () => {
+    session.branches = [
+      { id: 1, name: 'Main', code: 'MAIN' },
+      { id: 2, name: 'Riverside', code: 'RS' },
+    ]
+    localStorage.setItem('com-mart-active-branch', '1')
+    signIn({ viaPin: true, till: true, tillBranch: '2' })
+    expect(await landsOn('/pos')).toBe('pos')
+  })
 })
 
 describe('a password session', () => {
@@ -130,6 +145,24 @@ describe('a password session', () => {
   it('opens the till when the user can sell', async () => {
     signIn({ till: true })
     expect(await landsOn('/pos')).toBe('pos')
+  })
+
+  it("picks a till again when the remembered one is at another branch than the selected one", async () => {
+    session.branches = [
+      { id: 1, name: 'Main', code: 'MAIN' },
+      { id: 2, name: 'Riverside', code: 'RS' },
+    ]
+    localStorage.setItem('com-mart-active-branch', '1')
+    signIn({ till: true, tillBranch: '2' })
+    for (const path of ['/pos', '/pos/open-shift', '/pos/close-shift']) {
+      await router.push('/t/start')
+      expect(await landsOn(path), path).toBe('pos-login')
+    }
+  })
+
+  it("picks a till again when the remembered one's branch isn't known", async () => {
+    signIn({ till: true, tillBranch: '' })
+    expect(await landsOn('/pos')).toBe('pos-login')
   })
 
   it('does not open the till when the user cannot sell', async () => {

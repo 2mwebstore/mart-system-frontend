@@ -1370,6 +1370,7 @@
     "signedInAs": "Signed in as {name}",
     "pickTill": "Pick a till.",
     "noTillsForYou": "None of your branches has an active till. Add one in Settings → Tills.",
+    "noTillsAtBranch": "{branch} has no active till. Add one in Settings → Tills.",
     "openPos": "Open POS",
     "usePinInstead": "Sign in as a different cashier (PIN)",
     "continueAs": "Continue as {name} instead",

@@ -198,6 +198,10 @@ router.beforeEach(async (to) => {
   // till must be picked first; /pos/login does that.
   if (!auth.viaPinLogin && !auth.canUsePos) return { name: 'pos-login' }
   if (!auth.deviceKey) return { name: 'pos-login' }
+  // The back office's selected branch decides the till: a remembered till
+  // at another branch (or one remembered before its branch was kept) is
+  // picked again there. A PIN sign-in is at its till's branch already.
+  if (!auth.viaPinLogin && auth.tillBranchId !== auth.activeBranchId) return { name: 'pos-login' }
 
   // POS routes additionally gate on whether this till has an open shift. The
   // server is the source of truth (an admin can open or close the same till's
