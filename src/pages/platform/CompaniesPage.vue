@@ -55,6 +55,12 @@ function replace(updated: Company) {
 }
 
 const codePattern = /^[A-Z0-9]{2,12}$/
+const codeOk = (raw: string) => codePattern.test(normaliseCompanyCode(raw))
+// The same rule for the browser, so a wrong code is pointed out on Create or
+// Save instead of the button just not working. Spaces round it are trimmed.
+const codeInputPattern = '\\s*[A-Za-z0-9]{2,12}\\s*'
+// Said under the field as soon as what's typed can't be a code.
+const codeWrong = (raw: string) => raw.trim() !== '' && !codeOk(raw)
 
 // A limit field: blank is no limit.
 type LimitField = number | ''
@@ -78,15 +84,15 @@ const emptyCreate = () => ({
   maxUsers: '' as LimitField,
 })
 const createForm = reactive(emptyCreate())
-const createValid = computed(
-  () => codePattern.test(normaliseCompanyCode(createForm.code)) && limitValid(createForm.maxBranches) && limitValid(createForm.maxUsers),
-)
+const createValid = computed(() => codeOk(createForm.code) && limitValid(createForm.maxBranches) && limitValid(createForm.maxUsers))
 
 function openCreate() {
   Object.assign(createForm, emptyCreate())
   showCreate.value = true
 }
 async function submitCreate() {
+  // The browser checks the fields first and says what's wrong; this is a backstop.
+  if (!createValid.value) return
   creating.value = true
   try {
     const created = await platformApi.createCompany({
@@ -111,9 +117,7 @@ const editing = ref<Company | null>(null)
 const saving = ref(false)
 const clearingLog = ref(false)
 const editForm = reactive({ name: '', code: '', active: true, maxBranches: '' as LimitField, maxUsers: '' as LimitField, retentionMonths: 3 })
-const editValid = computed(
-  () => codePattern.test(normaliseCompanyCode(editForm.code)) && limitValid(editForm.maxBranches) && limitValid(editForm.maxUsers),
-)
+const editValid = computed(() => codeOk(editForm.code) && limitValid(editForm.maxBranches) && limitValid(editForm.maxUsers))
 // A limit below what the company has switches nothing off: say so.
 const branchesOverLimit = computed(() => {
   const max = toLimit(editForm.maxBranches)
@@ -136,7 +140,7 @@ function openEdit(c: Company) {
   })
 }
 async function submitEdit() {
-  if (!editing.value) return
+  if (!editing.value || !editValid.value) return
   saving.value = true
   try {
     replace(
@@ -345,8 +349,22 @@ async function submitOwner() {
         </div>
         <div>
           <label for="company-code" class="block text-sm text-muted mb-1">{{ $t('platform.code') }}</label>
-          <input id="company-code" v-model="createForm.code" type="text" class="input font-mono uppercase w-40" maxlength="12" autocomplete="off" required />
-          <p class="text-xs text-muted mt-1">{{ $t('platform.codeHint') }}</p>
+          <input
+            id="company-code"
+            v-model="createForm.code"
+            type="text"
+            class="input font-mono uppercase w-40"
+            maxlength="12"
+            autocomplete="off"
+            required
+            :pattern="codeInputPattern"
+            :title="$t('platform.codeInvalid')"
+            :aria-invalid="codeWrong(createForm.code)"
+            aria-describedby="company-code-help"
+          />
+          <p id="company-code-help" class="text-xs mt-1" :class="codeWrong(createForm.code) ? 'text-danger-strong' : 'text-muted'" data-code-help>
+            {{ codeWrong(createForm.code) ? $t('platform.codeInvalid') : $t('platform.codeHint') }}
+          </p>
         </div>
         <fieldset class="space-y-2">
           <legend class="sr-only">{{ $t('platform.limits') }}</legend>
@@ -383,7 +401,7 @@ async function submitOwner() {
         </div>
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" class="btn-secondary" @click="showCreate = false">{{ $t('common.cancel') }}</button>
-          <button type="submit" class="btn-primary" :disabled="creating || !createValid">{{ $t('platform.createCompany') }}</button>
+          <button type="submit" class="btn-primary" :disabled="creating">{{ $t('platform.createCompany') }}</button>
         </div>
       </form>
     </Modal>
@@ -396,8 +414,22 @@ async function submitOwner() {
         </div>
         <div>
           <label for="edit-code" class="block text-sm text-muted mb-1">{{ $t('platform.code') }}</label>
-          <input id="edit-code" v-model="editForm.code" type="text" class="input font-mono uppercase w-40" maxlength="12" autocomplete="off" required />
-          <p class="text-xs text-muted mt-1">{{ $t('platform.codeChangeHint') }}</p>
+          <input
+            id="edit-code"
+            v-model="editForm.code"
+            type="text"
+            class="input font-mono uppercase w-40"
+            maxlength="12"
+            autocomplete="off"
+            required
+            :pattern="codeInputPattern"
+            :title="$t('platform.codeInvalid')"
+            :aria-invalid="codeWrong(editForm.code)"
+            aria-describedby="edit-code-help"
+          />
+          <p id="edit-code-help" class="text-xs mt-1" :class="codeWrong(editForm.code) ? 'text-danger-strong' : 'text-muted'" data-code-help>
+            {{ codeWrong(editForm.code) ? $t('platform.codeInvalid') : $t('platform.codeChangeHint') }}
+          </p>
         </div>
         <label class="flex items-center justify-between text-sm">
           <span>{{ $t('common.active') }}</span>
@@ -448,7 +480,7 @@ async function submitOwner() {
 
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" class="btn-secondary" @click="editing = null">{{ $t('common.cancel') }}</button>
-          <button type="submit" class="btn-primary" :disabled="saving || !editValid">{{ $t('common.save') }}</button>
+          <button type="submit" class="btn-primary" :disabled="saving">{{ $t('common.save') }}</button>
         </div>
       </form>
     </Modal>

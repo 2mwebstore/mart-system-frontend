@@ -1717,6 +1717,7 @@
     "companyName": "Company name",
     "code": "Code",
     "codeHint": "2 to 12 letters and digits. Staff type it once at each till to sign in there.",
+    "codeInvalid": "Use only letters A–Z and digits 0–9, 2 to 12 of them: no spaces, dashes or other signs.",
     "codeChangeHint": "Tills that remember the old code will ask for the new one.",
     "branches": "Branches",
     "staff": "Staff",

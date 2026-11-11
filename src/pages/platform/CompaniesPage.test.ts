@@ -132,16 +132,69 @@ describe('CompaniesPage', () => {
     ])
   })
 
+  // Save stays clickable: the browser points at the field and says why,
+  // instead of a button that silently does nothing.
   it("won't save a limit below 1", async () => {
     await mount()
     button(t('common.edit')).click()
     await settle()
     setValue('edit-max-branches', '0')
     await nextTick()
-    expect(button(t('common.save')).disabled).toBe(true)
+    expect(button(t('common.save')).disabled).toBe(false)
+    expect((field('edit-max-branches') as HTMLInputElement).checkValidity()).toBe(false)
+    host.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.updates).toEqual([])
     setValue('edit-max-branches', '1')
     await nextTick()
-    expect(button(t('common.save')).disabled).toBe(false)
+    expect((field('edit-max-branches') as HTMLInputElement).checkValidity()).toBe(true)
+  })
+
+  // A code the server can't take used to leave Create greyed out with no
+  // reason given, so a super admin couldn't tell why nothing happened.
+  it.each(['MART-01', 'My Shop', 'C', 'SHOP_1', 'ម៉ាត'])('says why the code %s is wrong, and sends nothing', async (code) => {
+    await mount()
+    button(t('platform.newCompany')).click()
+    await settle()
+    setValue('company-name', 'Small shop')
+    setValue('company-code', code)
+    setValue('owner-name', 'Small owner')
+    setValue('owner-username', 'small.owner')
+    setValue('owner-password', 'long-enough')
+    await nextTick()
+    const help = host.querySelector('#company-code-help')!
+    expect(help.textContent?.trim()).toBe(t('platform.codeInvalid'))
+    expect(help.classList.contains('text-danger-strong')).toBe(true)
+    expect(field('company-code').getAttribute('aria-invalid')).toBe('true')
+    expect((field('company-code') as HTMLInputElement).checkValidity()).toBe(false)
+    expect(button(t('platform.createCompany')).disabled).toBe(false)
+    host.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.creates).toEqual([])
+  })
+
+  it('takes a code in lower case or with spaces round it', async () => {
+    await mount()
+    button(t('platform.newCompany')).click()
+    await settle()
+    for (const code of ['cc2', ' CC2 ', 'ABCDEFGHIJ12']) {
+      setValue('company-code', code)
+      await nextTick()
+      expect((field('company-code') as HTMLInputElement).checkValidity()).toBe(true)
+      expect(host.querySelector('#company-code-help')!.textContent?.trim()).toBe(t('platform.codeHint'))
+    }
+  })
+
+  it('says why a new code is wrong when editing', async () => {
+    await mount()
+    button(t('common.edit')).click()
+    await settle()
+    setValue('edit-code', 'G-T')
+    await nextTick()
+    expect(host.querySelector('#edit-code-help')!.textContent?.trim()).toBe(t('platform.codeInvalid'))
+    host.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.updates).toEqual([])
   })
 
   it('clears old log entries for that company', async () => {
