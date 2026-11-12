@@ -105,3 +105,49 @@
 .rich-text b {
   font-weight: 600;
 }
+
+/* A receipt being printed on the till's 80 mm receipt printer (see
+   utils/receiptPrint.ts). Off-screen while it's measured, then the only thing
+   on the page: as wide as the paper, black on white for a thermal printer,
+   without the card or dialog it sits in on screen. */
+#receipt-print {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 80mm;
+  box-sizing: border-box;
+  padding: 2mm 4mm 4mm;
+  background: #fff;
+}
+#receipt-print > * {
+  max-width: none !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+#receipt-print,
+#receipt-print * {
+  color: #000 !important;
+  border-color: #000 !important;
+}
+#receipt-print * {
+  background: transparent !important;
+}
+@media print {
+  html.printing-receipt,
+  html.printing-receipt body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  html.printing-receipt body > *:not(#receipt-print) {
+    display: none !important;
+  }
+  html.printing-receipt #receipt-print {
+    position: static;
+  }
+}

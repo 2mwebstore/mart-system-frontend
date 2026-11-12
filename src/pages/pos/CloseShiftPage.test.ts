@@ -48,6 +48,8 @@ const openShift = {
 vi.mock('@/api/pos', () => ({
   closeShift: async () => ({ ...openShift, status: 'CLOSED', closedAt: '2026-11-11T17:00:00+07:00' }),
 }))
+const printed = vi.hoisted(() => ({ elements: [] as HTMLElement[] }))
+vi.mock('@/utils/receiptPrint', () => ({ printReceipt: (el: HTMLElement) => void printed.elements.push(el) }))
 vi.mock('@/api/settings', () => ({
   getBranding: async () => ({ companyName: 'CM Shop', hasLogo: false, logoLink: '', logoVersion: '' }),
 }))
@@ -67,6 +69,7 @@ const button = (text: string) => [...host.querySelectorAll('button')].find((b) =
 
 beforeEach(async () => {
   localStorage.clear()
+  printed.elements = []
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().selectTill('TK-2', 'Till 2 · Toul Kork', 1)
@@ -103,5 +106,13 @@ describe('after closing a shift', () => {
     const auth = useAuthStore()
     expect([auth.deviceKey, auth.tillName, auth.tillBranchId]).toEqual(['', '', null])
     expect(localStorage.getItem('com-mart-pos-device-key')).toBeNull()
+  })
+
+  it('prints the shift report on receipt paper', async () => {
+    button(t('shifts.confirmClose')).click()
+    await settle()
+    button(t('common.print')).click()
+    expect(printed.elements).toHaveLength(1)
+    expect(printed.elements[0].id).toBe('pos-shift-report')
   })
 })

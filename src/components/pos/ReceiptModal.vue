@@ -7,6 +7,7 @@ import { useBrandingStore } from '@/stores/branding'
 import type { Sale } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
 import { formatPercent } from '@/utils/tax'
+import { printReceipt as printOnReceiptPaper } from '@/utils/receiptPrint'
 import { label, localName } from '@/i18n'
 
 defineProps<{ sale: Sale }>()
@@ -14,8 +15,10 @@ const emit = defineEmits<{ close: [] }>()
 const settings = useSettingsStore()
 const branding = useBrandingStore()
 
+// Only the receipt goes to the printer, sized to the 80 mm roll.
 function printReceipt() {
-  window.print()
+  const receipt = document.getElementById('pos-receipt')
+  if (receipt) printOnReceiptPaper(receipt)
 }
 </script>
 
