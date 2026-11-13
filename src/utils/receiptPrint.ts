@@ -1,15 +1,20 @@
 // Prints a receipt (or a shift report) on the till's receipt printer: 80 mm
 // roll paper, with nothing but the receipt itself. No dialog title, close
-// button, buttons or card border, the receipt as wide as the paper, and the
-// page exactly as long as the receipt, so the printer doesn't feed a whole
-// page of blank paper after it.
+// button, buttons or card border, the receipt as wide as the printer prints,
+// and the page exactly as long as the receipt, so the printer doesn't feed a
+// whole page of blank paper after it.
+//
+// An 80 mm printer prints only the middle 72 mm of the paper, and its driver
+// puts the page's left edge where that starts (4 mm in). So the page is those
+// 72 mm: a page as wide as the paper came out 4 mm to the right, its last
+// 4 mm cut off.
 //
 // The receipt is copied into a sheet of its own (#receipt-print, styled in
 // style.css) that is the only thing printed, and measured there at the
 // paper's width to size the page. Everything is removed once printing is
 // done.
 
-export const RECEIPT_PAPER_MM = 80
+export const RECEIPT_PRINT_MM = 72
 // A little paper to spare, so rounding never spills the last line onto a
 // second page.
 const SPARE_MM = 2
@@ -46,7 +51,7 @@ export function printReceipt(source: HTMLElement) {
 
   const page = document.createElement('style')
   page.id = PAGE_STYLE_ID
-  page.textContent = `@page { size: ${RECEIPT_PAPER_MM}mm ${receiptPageMm(sheet.getBoundingClientRect().height)}mm; margin: 0; }`
+  page.textContent = `@page { size: ${RECEIPT_PRINT_MM}mm ${receiptPageMm(sheet.getBoundingClientRect().height)}mm; margin: 0; }`
   // Last in <head>, so it wins over another page's @page (an invoice's A4).
   document.head.appendChild(page)
 

@@ -63,9 +63,9 @@ describe('printing a receipt', () => {
     expect(p.sheet).not.toContain('Payment complete')
   })
 
-  it('makes the page 80 mm wide and as long as the receipt', () => {
+  it('makes the page as wide as an 80 mm printer prints, and as long as the receipt', () => {
     printReceipt(receiptOnScreen())
-    expect(printed[0].page).toBe('@page { size: 80mm 102mm; margin: 0; }')
+    expect(printed[0].page).toBe('@page { size: 72mm 102mm; margin: 0; }')
   })
 
   it('rounds the length up, with a little to spare', () => {

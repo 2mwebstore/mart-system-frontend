@@ -108,15 +108,16 @@
 
 /* A receipt being printed on the till's 80 mm receipt printer (see
    utils/receiptPrint.ts). Off-screen while it's measured, then the only thing
-   on the page: as wide as the paper, black on white for a thermal printer,
-   without the card or dialog it sits in on screen. */
+   on the page: as wide as the printer prints (72 mm), black on white for a
+   thermal printer, without the card or dialog it sits in on screen. No space
+   above it: the printer leaves its own between the cut and the first line. */
 #receipt-print {
   position: fixed;
   top: 0;
   left: -10000px;
-  width: 80mm;
+  width: 72mm;
   box-sizing: border-box;
-  padding: 2mm 4mm 4mm;
+  padding: 0 1.5mm 3mm;
   background: #fff;
 }
 #receipt-print > * {
