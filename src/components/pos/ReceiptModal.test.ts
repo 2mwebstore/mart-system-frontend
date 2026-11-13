@@ -81,21 +81,38 @@ const totals = () =>
   [...host.querySelectorAll('[data-receipt-items] + div > div')].map((d) => [...d.children].map((c) => c.textContent?.trim()).join(' ').trim())
 
 describe('the receipt after a sale', () => {
-  it('lists the items under Item, Qty, Disc and Total', async () => {
+  it('lists the items under Item, Qty and Total when nothing is discounted', async () => {
     await showReceipt(sale)
-    expect(head()).toEqual(['Item', 'Qty', 'Disc', 'Total'])
+    expect(head()).toEqual(['Item', 'Qty', 'Total'])
     expect(lines()).toEqual([
-      ['Dish soap 750ml', '1', '', '$1.95'],
-      ['Toothpaste 150g', '1', '', '$1.40'],
+      ['Dish soap 750ml', '1', '$1.95'],
+      ['Toothpaste 150g', '1', '$1.40'],
     ])
+    expect(host.querySelector('[data-receipt-items]')!.classList).toContain('grid-cols-[minmax(0,1fr)_auto_auto]')
     expect(totals()).toEqual(['Subtotal $3.35', 'Total $3.35', formatKHR(13700)])
+  })
+
+  it('adds the Disc column when an item has a discount', async () => {
+    await showReceipt(discounted)
+    expect(head()).toEqual(['Item', 'Qty', 'Disc', 'Total'])
+    expect(host.querySelector('[data-receipt-items]')!.classList).toContain('grid-cols-[minmax(0,1fr)_auto_auto_auto]')
+  })
+
+  it('leaves the Disc column out when only the whole sale is discounted', async () => {
+    await showReceipt({ ...sale, discountCents: 50, totalCents: 285, totalRiel: 11700 })
+    expect(head()).toEqual(['Item', 'Qty', 'Total'])
+    expect(lines()).toEqual([
+      ['Dish soap 750ml', '1', '$1.95'],
+      ['Toothpaste 150g', '1', '$1.40'],
+    ])
+    expect(totals()).toEqual(['Subtotal $3.35', 'Discount -$0.50', 'Total $2.85', formatKHR(11700)])
   })
 
   it('prints product names smaller than the amounts', async () => {
     await showReceipt(discounted)
     const names = [...host.querySelectorAll('[data-receipt-name]')]
     expect(names).toHaveLength(3)
-    for (const name of names) expect(name.classList).toContain('text-[9px]')
+    for (const name of names) expect(name.classList).toContain('text-[11px]')
     expect(host.querySelector('#pos-receipt')!.classList).toContain('text-sm')
   })
 

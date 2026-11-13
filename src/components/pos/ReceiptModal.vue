@@ -22,6 +22,8 @@ const branding = useBrandingStore()
 const linesTotal = computed(() => props.sale.items.reduce((sum, item) => sum + item.lineTotalCents, 0))
 const lineDiscounts = computed(() => props.sale.items.reduce((sum, item) => sum + item.discountCents, 0))
 const saleDiscount = computed(() => Math.max(0, props.sale.discountCents - lineDiscounts.value))
+// The Disc column is there only when some line has a discount of its own.
+const hasLineDiscount = computed(() => props.sale.items.some((item) => item.discountCents > 0))
 
 // Only the receipt goes to the printer, sized to the 80 mm roll.
 function printReceipt() {
@@ -40,23 +42,28 @@ function printReceipt() {
         <p class="text-muted">{{ $t('pos.cashierLine', { name: sale.cashier }) }}</p>
       </div>
 
-      <!-- Item | Qty | Disc | Total: each line's own discount, and its total after it. -->
-      <div class="border-t border-line pt-2 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-start gap-x-2 gap-y-1" data-receipt-items>
+      <!-- Item | Qty | Disc | Total: each line's own discount, and its total after it.
+           With no line discounts it's just Item | Qty | Total. -->
+      <div
+        class="border-t border-line pt-2 grid items-start gap-x-2 gap-y-1"
+        :class="hasLineDiscount ? 'grid-cols-[minmax(0,1fr)_auto_auto_auto]' : 'grid-cols-[minmax(0,1fr)_auto_auto]'"
+        data-receipt-items
+      >
         <div class="contents font-medium" data-receipt-head>
           <span>{{ $t('col.item') }}</span>
           <span class="text-right">{{ $t('col.qty') }}</span>
-          <span class="text-right">{{ $t('pos.receiptDisc') }}</span>
+          <span v-if="hasLineDiscount" class="text-right">{{ $t('pos.receiptDisc') }}</span>
           <span class="text-right">{{ $t('col.total') }}</span>
         </div>
-        <div class="col-span-4 border-b border-dashed border-line" aria-hidden="true" />
+        <div class="col-span-full border-b border-dashed border-line" aria-hidden="true" />
         <div v-for="item in sale.items" :key="item.productId" class="contents" data-receipt-line>
-          <div class="min-w-0 break-words text-[9px] leading-tight pt-1" data-receipt-name>
+          <div class="min-w-0 break-words text-[11px] leading-tight pt-0.5" data-receipt-name>
             {{ localName(item.name, item.nameKm) }}
-            <p v-if="item.qty > 1" class="text-[8px] text-muted">{{ $t('pos.each', { price: formatUSD(item.unitPriceCents) }) }}</p>
-            <p v-if="item.note" class="text-[8px] text-muted font-body">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
+            <p v-if="item.qty > 1" class="text-[10px] text-muted">{{ $t('pos.each', { price: formatUSD(item.unitPriceCents) }) }}</p>
+            <p v-if="item.note" class="text-[10px] text-muted font-body">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
           </div>
           <span class="text-right">{{ item.qty }}</span>
-          <span class="text-right">{{ item.discountCents > 0 ? `-${formatUSD(item.discountCents)}` : '' }}</span>
+          <span v-if="hasLineDiscount" class="text-right">{{ item.discountCents > 0 ? `-${formatUSD(item.discountCents)}` : '' }}</span>
           <span class="text-right">{{ formatUSD(item.lineTotalCents) }}</span>
         </div>
       </div>
