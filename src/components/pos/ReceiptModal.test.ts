@@ -112,7 +112,7 @@ describe('the receipt after a sale', () => {
     await showReceipt(discounted)
     const names = [...host.querySelectorAll('[data-receipt-name]')]
     expect(names).toHaveLength(3)
-    for (const name of names) expect(name.classList).toContain('text-[11px]')
+    for (const name of names) expect(name.classList).toContain('text-[12px]')
     expect(host.querySelector('#pos-receipt')!.classList).toContain('text-sm')
   })
 

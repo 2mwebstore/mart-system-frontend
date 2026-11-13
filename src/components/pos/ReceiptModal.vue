@@ -57,7 +57,7 @@ function printReceipt() {
         </div>
         <div class="col-span-full border-b border-dashed border-line" aria-hidden="true" />
         <div v-for="item in sale.items" :key="item.productId" class="contents" data-receipt-line>
-          <div class="min-w-0 break-words text-[11px] leading-tight pt-0.5" data-receipt-name>
+          <div class="min-w-0 break-words text-[12px] leading-tight pt-0.5" data-receipt-name>
             {{ localName(item.name, item.nameKm) }}
             <p v-if="item.qty > 1" class="text-[10px] text-muted">{{ $t('pos.each', { price: formatUSD(item.unitPriceCents) }) }}</p>
             <p v-if="item.note" class="text-[10px] text-muted font-body">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
