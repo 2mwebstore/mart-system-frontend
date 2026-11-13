@@ -1386,6 +1386,8 @@
     "customerDisplay": "អេក្រង់អតិថិជន",
     "customerDisplayHint": "បើកផ្ទាំងសម្រាប់អេក្រង់ដែលបែរទៅអតិថិជន។ អូសវាទៅទីនោះ ហើយចុច ពេញអេក្រង់។",
     "moreActions": "សកម្មភាពផ្សេងទៀត",
+    "fullScreen": "ពេញអេក្រង់",
+    "exitFullScreen": "បិទពេញអេក្រង់",
     "cartTitle": "កន្ត្រក ({n})",
     "backToProducts": "ត្រឡប់ទៅទំនិញ",
     "viewCart": "មើលកន្ត្រក",

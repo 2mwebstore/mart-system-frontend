@@ -3,9 +3,10 @@
 // note, discount, price per line, then the totals), and the payment result
 // once it's paid. Everything comes from the POS tab in this same browser —
 // see composables/useCustomerDisplay.ts. Opened from the POS header.
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { CheckCircle2, Maximize } from 'lucide-vue-next'
 import { useCustomerDisplayReceiver, type CartMessage, type DisplayLine, type PaidMessage, type PaymentDraft } from '@/composables/useCustomerDisplay'
+import { useFullscreen } from '@/composables/useFullscreen'
 import { i18n, label, setLocale, type Locale } from '@/i18n'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { useBrandingStore } from '@/stores/branding'
@@ -64,16 +65,8 @@ function tenderedText(p: PaymentDraft) {
   return parts.length ? parts.join(' + ') : '—'
 }
 
-const isFullscreen = ref(false)
-function syncFullscreen() {
-  isFullscreen.value = !!document.fullscreenElement
-}
-function enterFullscreen() {
-  void document.documentElement.requestFullscreen?.().catch(() => {})
-}
-onMounted(() => document.addEventListener('fullscreenchange', syncFullscreen))
+const { isFullscreen, enter: enterFullscreen } = useFullscreen()
 onUnmounted(() => {
-  document.removeEventListener('fullscreenchange', syncFullscreen)
   clearTimeout(highlightTimer)
   receiver.close()
 })

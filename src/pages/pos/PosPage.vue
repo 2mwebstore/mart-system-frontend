@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { LayoutGrid, Minus, Monitor, MoreVertical, NotebookPen, Package, Pencil, Plus, Search, ShoppingCart, Trash2, UtensilsCrossed, X } from 'lucide-vue-next'
+import { LayoutGrid, Maximize, Minimize, Minus, Monitor, MoreVertical, NotebookPen, Package, Pencil, Plus, Search, ShoppingCart, Trash2, UtensilsCrossed, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useBrandingStore } from '@/stores/branding'
@@ -12,6 +12,7 @@ import { listCustomers } from '@/api/people'
 import type { Category, CreateSaleInput, Customer, Product, Sale, TableBoardEntry, TableOrder } from '@/types/domain'
 import { formatUSD, initialsOf } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
+import { useFullscreen } from '@/composables/useFullscreen'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import PaymentModal from '@/components/pos/PaymentModal.vue'
 import ReceiptModal from '@/components/pos/ReceiptModal.vue'
@@ -66,6 +67,9 @@ watch(
 )
 onMounted(() => document.addEventListener('mousedown', onDocMouseDown))
 onUnmounted(() => document.removeEventListener('mousedown', onDocMouseDown))
+// Full screen, as on the customer display: the same button takes it back out.
+const fullscreen = useFullscreen()
+const fullscreenLabel = computed(() => (fullscreen.isFullscreen.value ? t('pos.exitFullScreen') : t('pos.fullScreen')))
 
 // Catalog, stock and customers come from the API for this till's branch.
 const products = ref<Product[]>([])
@@ -560,6 +564,17 @@ function goToCloseShift() {
           <Monitor :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.customerDisplay') }}
         </button>
         <RouterLink :to="{ name: 'dashboard' }" class="btn-secondary text-sm px-3 py-1.5">{{ $t('pos.backOffice') }}</RouterLink>
+        <button
+          v-if="fullscreen.supported"
+          type="button"
+          class="btn-secondary px-2 py-1.5"
+          :aria-label="fullscreenLabel"
+          :title="fullscreenLabel"
+          data-pos-fullscreen
+          @click="fullscreen.toggle()"
+        >
+          <component :is="fullscreen.isFullscreen.value ? Minimize : Maximize" :stroke-width="1.8" class="w-5 h-5" />
+        </button>
       </div>
       <!-- Narrower screens: held sales stays one tap away, the rest go in a menu -->
       <div class="flex xl:hidden items-center gap-2 shrink-0">
@@ -599,6 +614,16 @@ function goToCloseShift() {
             <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(goToCloseShift)">{{ $t('shifts.closeShift') }}</button>
             <button type="button" role="menuitem" class="hidden md:block w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(openCustomerDisplay)">{{ $t('pos.customerDisplay') }}</button>
             <RouterLink :to="{ name: 'dashboard' }" role="menuitem" class="block px-4 py-2.5 text-sm hover:bg-surface-subtle">{{ $t('pos.backOffice') }}</RouterLink>
+            <button
+              v-if="fullscreen.supported"
+              type="button"
+              role="menuitem"
+              class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle"
+              data-pos-fullscreen-menu
+              @click="menu(fullscreen.toggle)"
+            >
+              {{ fullscreenLabel }}
+            </button>
             <div class="px-4 py-2 border-t border-line"><LanguageSwitch /></div>
           </div>
         </div>

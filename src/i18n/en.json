@@ -1386,6 +1386,8 @@
     "customerDisplay": "Customer display",
     "customerDisplayHint": "Opens a window for the customer-facing screen; drag it there and press Full screen.",
     "moreActions": "More actions",
+    "fullScreen": "Full screen",
+    "exitFullScreen": "Exit full screen",
     "cartTitle": "Cart ({n})",
     "backToProducts": "Back to products",
     "viewCart": "View cart",
