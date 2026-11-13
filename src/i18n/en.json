@@ -1422,9 +1422,8 @@
     "continue": "Continue",
     "companyCodeShown": "Company {code}.",
     "changeCompany": "Change company",
+    "saleOptions": "Discount, tax and note",
     "saleNote": "Sale note",
-    "saleNoteAdd": "Add a note to this sale",
-    "saleNoteEdit": "Edit this sale's note",
     "saleNoteHint": "Kept with the sale and shown in its details. It isn't printed on the receipt."
   },
   "customerDisplay": {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { LayoutGrid, Maximize, Minimize, Minus, Monitor, MoreVertical, NotebookPen, Package, Pencil, Plus, Search, ShoppingCart, Trash2, UtensilsCrossed, X } from 'lucide-vue-next'
+import { LayoutGrid, Maximize, Minimize, Minus, Monitor, MoreVertical, Package, Pencil, Plus, Search, ShoppingCart, Trash2, UtensilsCrossed, X } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useBrandingStore } from '@/stores/branding'
@@ -26,9 +26,7 @@ import { useTableOrders } from '@/composables/useTableOrders'
 import VariantPickerModal from '@/components/pos/VariantPickerModal.vue'
 import LineEditModal from '@/components/pos/LineEditModal.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
-import Modal from '@/components/Modal.vue'
-import RichTextEditor from '@/components/RichTextEditor.vue'
-import TaxSelect from '@/components/TaxSelect.vue'
+import SaleOptionsModal, { type SaleOptions } from '@/components/pos/SaleOptionsModal.vue'
 import { formatPercent, startingRate } from '@/utils/tax'
 import { plainText } from '@/utils/richText'
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -102,16 +100,18 @@ const cartTaxRateId = computed({
 })
 const taxLabel = computed(() => (cart.taxRate.value ? `${cart.taxRate.value.name} ${formatPercent(cart.taxRate.value.percent)}` : ''))
 
-// The sale's own note (rich text), shown in the sale's details afterwards.
-const showNote = ref(false)
-const noteDraft = ref('')
-function openNote() {
-  noteDraft.value = cart.note.value
-  showNote.value = true
-}
-function saveNote() {
-  cart.note.value = noteDraft.value
-  showNote.value = false
+// Edit (before Hold): the discount on the whole sale, its tax and its own
+// note (rich text, shown in the sale's details afterwards), in one popup.
+const showSaleOptions = ref(false)
+const saleOptionsSet = computed(() => cart.cartDiscountValue.value > 0 || !!cart.note.value)
+function saveSaleOptions(v: SaleOptions) {
+  if (canDiscount) {
+    cart.cartDiscountType.value = v.discountType
+    cart.cartDiscountValue.value = v.discountValue
+  }
+  cartTaxRateId.value = v.taxRateId
+  cart.note.value = v.note
+  showSaleOptions.value = false
 }
 
 const search = ref('')
@@ -701,52 +701,6 @@ function goToCloseShift() {
         </div>
 
         <div class="border-t border-line p-4 space-y-3">
-          <div v-if="canDiscount" class="space-y-1.5">
-            <div class="flex items-center justify-between">
-              <label class="text-xs text-muted">{{ $t('pos.totalDiscount') }}</label>
-              <div class="flex rounded-control border border-line overflow-hidden text-xs">
-                <button
-                  type="button"
-                  class="px-2 py-1"
-                  :class="cart.cartDiscountType.value === 'percent' ? 'bg-primary text-primary-ink' : 'text-muted'"
-                  @click="cart.cartDiscountType.value = 'percent'"
-                >
-                  %
-                </button>
-                <button
-                  type="button"
-                  class="px-2 py-1"
-                  :class="cart.cartDiscountType.value === 'amount' ? 'bg-primary text-primary-ink' : 'text-muted'"
-                  @click="cart.cartDiscountType.value = 'amount'"
-                >
-                  $
-                </button>
-              </div>
-            </div>
-            <input
-              v-model.number="cart.cartDiscountValue.value"
-              type="number"
-              min="0"
-              class="input py-1.5 text-sm"
-              :placeholder="cart.cartDiscountType.value === 'percent' ? $t('pos.discountHintPercent') : $t('pos.discountHintAmount')"
-            />
-          </div>
-
-          <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-            <TaxSelect v-model="cartTaxRateId" />
-            <button
-              type="button"
-              class="btn-secondary flex items-center gap-1.5 text-sm py-2"
-              :class="cart.note.value ? 'border-primary text-primary-text' : ''"
-              :aria-label="cart.note.value ? $t('pos.saleNoteEdit') : $t('pos.saleNoteAdd')"
-              :title="cart.note.value ? plainText(cart.note.value) : $t('pos.saleNoteHint')"
-              data-action="sale-note"
-              @click="openNote"
-            >
-              <NotebookPen :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.saleNote') }}
-            </button>
-          </div>
-
           <div class="space-y-1 text-sm">
             <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ formatUSD(cart.subtotalCents.value) }}</span></div>
             <div v-if="cart.discountCentsCapped.value > 0" class="flex justify-between"><span class="text-muted">{{ $t('pos.discount') }}</span><span class="font-mono">-{{ formatUSD(cart.discountCentsCapped.value) }}</span></div>
@@ -756,7 +710,18 @@ function goToCloseShift() {
             <div class="flex justify-between text-lg font-medium border-t border-line pt-2"><span>{{ $t('pos.total') }}</span><span class="font-mono">{{ formatUSD(cart.totalCents.value) }}</span></div>
           </div>
 
-          <div class="grid grid-cols-2 gap-2">
+          <!-- Edit: the sale's discount, tax and note, in a popup. -->
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              class="btn-secondary flex items-center justify-center gap-1.5"
+              :class="saleOptionsSet ? 'border-primary text-primary-text' : ''"
+              :title="cart.note.value ? plainText(cart.note.value) : $t('pos.saleOptions')"
+              data-action="sale-options"
+              @click="showSaleOptions = true"
+            >
+              <Pencil :stroke-width="1.8" class="w-4 h-4" /> {{ $t('common.edit') }}
+            </button>
             <button type="button" class="btn-secondary" :disabled="cart.lines.length === 0" @click="holdCurrentSale">{{ $t('pos.hold') }}</button>
             <button type="button" class="btn-secondary flex items-center justify-center gap-1.5" :disabled="cart.lines.length === 0" @click="voidCurrentSale">
               <Trash2 :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.clear') }}
@@ -904,16 +869,16 @@ function goToCloseShift() {
       @draft="paymentDraft = $event"
     />
     <ReceiptModal v-if="completedSale" :sale="completedSale" @close="closeReceipt" />
-    <Modal v-if="showNote" :title="$t('pos.saleNote')" wide @close="showNote = false">
-      <form class="space-y-4" @submit.prevent="saveNote">
-        <p class="text-sm text-muted">{{ $t('pos.saleNoteHint') }}</p>
-        <RichTextEditor id="sale-note" v-model="noteDraft" :label="$t('pos.saleNote')" />
-        <div class="flex justify-end gap-2">
-          <button type="button" class="btn-secondary" @click="showNote = false">{{ $t('common.cancel') }}</button>
-          <button type="submit" class="btn-primary">{{ $t('common.save') }}</button>
-        </div>
-      </form>
-    </Modal>
+    <SaleOptionsModal
+      v-if="showSaleOptions"
+      :discount-type="cart.cartDiscountType.value"
+      :discount-value="cart.cartDiscountValue.value"
+      :tax-rate-id="cartTaxRateId"
+      :note="cart.note.value"
+      :can-discount="canDiscount"
+      @close="showSaleOptions = false"
+      @save="saveSaleOptions"
+    />
     <CashMovementModal v-if="showCashMovement" @close="showCashMovement = false" />
     <RecentSalesModal v-if="showRecentSales" @close="showRecentSales = false" @voided="loadProducts" />
     <HeldSalesModal v-if="showHeldSales" @close="showHeldSales = false" @resume="onResumeHeld" />
