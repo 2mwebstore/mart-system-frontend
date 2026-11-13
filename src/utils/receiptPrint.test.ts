@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { printReceipt, receiptPageMm } from './receiptPrint'
+import { clearReceiptPrint, printReceipt, receiptPageMm } from './receiptPrint'
 
 // What the page holds while the browser prints.
 interface Printed {
@@ -27,16 +27,7 @@ function receiptOnScreen() {
 
 beforeEach(() => {
   printed = []
-  vi.spyOn(window, 'print').mockImplementation(() => {
-    const sheet = document.getElementById('receipt-print')
-    printed.push({
-      sheet: sheet?.innerHTML ?? '',
-      sheetId: sheet?.parentElement === document.body ? sheet.id : null,
-      copyId: sheet?.firstElementChild?.getAttribute('id') ?? null,
-      page: document.getElementById('receipt-print-page')?.textContent ?? '',
-      printing: document.documentElement.classList.contains('printing-receipt'),
-    })
-  })
+  vi.spyOn(window, 'print').mockImplementation(() => void printed.push(onPaperNow()))
   // jsdom lays nothing out: the sheet measures 377 px (just under 100 mm) tall.
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     return { height: this.id === 'receipt-print' ? 377 : 0 } as DOMRect
@@ -45,9 +36,21 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  window.dispatchEvent(new Event('afterprint'))
+  clearReceiptPrint()
   document.body.innerHTML = ''
 })
+
+// What a page sent to the printer now would come out as.
+function onPaperNow(): Printed {
+  const sheet = document.getElementById('receipt-print')
+  return {
+    sheet: sheet?.innerHTML ?? '',
+    sheetId: sheet?.parentElement === document.body ? sheet.id : null,
+    copyId: sheet?.firstElementChild?.getAttribute('id') ?? null,
+    page: document.getElementById('receipt-print-page')?.textContent ?? '',
+    printing: document.documentElement.classList.contains('printing-receipt'),
+  }
+}
 
 describe('printing a receipt', () => {
   it('prints a copy of the receipt alone, without its buttons', () => {
@@ -85,16 +88,29 @@ describe('printing a receipt', () => {
     a4.remove()
   })
 
-  it('leaves the screen as it was once printing is done', () => {
+  it('still prints the receipt alone when Android lays the page out after saying it was done', () => {
+    // Chrome on Android: print() returns at once and afterprint comes with it;
+    // the page goes to the printer after that.
+    vi.mocked(window.print).mockImplementation(() => void window.dispatchEvent(new Event('afterprint')))
     printReceipt(receiptOnScreen())
-    window.dispatchEvent(new Event('afterprint'))
+
+    const p = onPaperNow()
+    expect(p.printing).toBe(true)
+    expect(p.sheet).toContain('1× Tea $1.00')
+    expect(p.sheet).not.toContain('Payment complete')
+    expect(p.page).toBe('@page { size: 72mm 102mm; margin: 0; }')
+  })
+
+  it('leaves the screen and printing as they were once the receipt is closed', () => {
+    printReceipt(receiptOnScreen())
+    clearReceiptPrint()
     expect(document.getElementById('receipt-print')).toBeNull()
     expect(document.getElementById('receipt-print-page')).toBeNull()
     expect(document.documentElement.classList.contains('printing-receipt')).toBe(false)
     expect(document.getElementById('pos-receipt')?.textContent).toContain('Print')
   })
 
-  it('prints only the latest receipt when the browser never said it was done', () => {
+  it('prints only the latest receipt when printed again', () => {
     const receipt = receiptOnScreen()
     printReceipt(receipt)
     receipt.querySelector('p')!.textContent = 'Reprint'

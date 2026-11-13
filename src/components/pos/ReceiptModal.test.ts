@@ -6,8 +6,11 @@ import type { Sale } from '@/types/domain'
 import { formatKHR } from '@/utils/format'
 import ReceiptModal from './ReceiptModal.vue'
 
-const printed = vi.hoisted(() => ({ elements: [] as HTMLElement[] }))
-vi.mock('@/utils/receiptPrint', () => ({ printReceipt: (el: HTMLElement) => void printed.elements.push(el) }))
+const printed = vi.hoisted(() => ({ elements: [] as HTMLElement[], cleared: 0 }))
+vi.mock('@/utils/receiptPrint', () => ({
+  printReceipt: (el: HTMLElement) => void printed.elements.push(el),
+  clearReceiptPrint: () => void printed.cleared++,
+}))
 vi.mock('@/api/settings', () => ({
   getBranding: async () => ({ companyName: 'CM Shop', hasLogo: false, logoLink: '', logoVersion: '' }),
 }))
@@ -63,6 +66,7 @@ afterEach(() => {
   app = null
   document.body.innerHTML = ''
   printed.elements = []
+  printed.cleared = 0
   setLocale('en')
 })
 
@@ -157,5 +161,15 @@ describe('the receipt after a sale', () => {
     // The dialog's title and buttons stay on screen.
     expect(receipt.textContent).not.toContain(t('pos.paymentComplete'))
     expect(receipt.textContent).not.toContain(t('pos.newSale'))
+  })
+
+  it('keeps the receipt ready for the printer until it is closed', async () => {
+    await showReceipt(sale)
+    const print = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === t('common.print'))!
+    print.click()
+    expect(printed.cleared).toBe(0)
+    app!.unmount()
+    app = null
+    expect(printed.cleared).toBe(1)
   })
 })

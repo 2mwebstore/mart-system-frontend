@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Printer, ArrowLeft } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -10,7 +10,7 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import type { Shift } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
 import { drawerStatus } from '@/utils/money'
-import { printReceipt } from '@/utils/receiptPrint'
+import { clearReceiptPrint, printReceipt } from '@/utils/receiptPrint'
 import { useToast } from '@/composables/useToast'
 import { t } from '@/i18n'
 
@@ -61,11 +61,13 @@ function startNextShift() {
   auth.forgetTill()
   router.push({ name: 'pos-login' })
 }
-// On the till's receipt printer, like a sale's receipt.
+// On the till's receipt printer, like a sale's receipt. It stays ready for the
+// printer until this page is left (see utils/receiptPrint).
 function printReport() {
   const report = document.getElementById('pos-shift-report')
   if (report) printReceipt(report)
 }
+onUnmounted(clearReceiptPrint)
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onUnmounted } from 'vue'
 import { Printer } from 'lucide-vue-next'
 import Modal from '@/components/Modal.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -8,7 +8,7 @@ import { useBrandingStore } from '@/stores/branding'
 import type { Sale } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
 import { formatPercent } from '@/utils/tax'
-import { printReceipt as printOnReceiptPaper } from '@/utils/receiptPrint'
+import { clearReceiptPrint, printReceipt as printOnReceiptPaper } from '@/utils/receiptPrint'
 import { label, localName } from '@/i18n'
 
 const props = defineProps<{ sale: Sale }>()
@@ -25,11 +25,13 @@ const saleDiscount = computed(() => Math.max(0, props.sale.discountCents - lineD
 // The Disc column is there only when some line has a discount of its own.
 const hasLineDiscount = computed(() => props.sale.items.some((item) => item.discountCents > 0))
 
-// Only the receipt goes to the printer, sized to the 80 mm roll.
+// Only the receipt goes to the printer, sized to the 80 mm roll. It stays
+// ready for the printer until the receipt is closed (see utils/receiptPrint).
 function printReceipt() {
   const receipt = document.getElementById('pos-receipt')
   if (receipt) printOnReceiptPaper(receipt)
 }
+onUnmounted(clearReceiptPrint)
 </script>
 
 <template>

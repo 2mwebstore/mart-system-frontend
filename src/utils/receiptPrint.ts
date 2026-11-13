@@ -11,8 +11,15 @@
 //
 // The receipt is copied into a sheet of its own (#receipt-print, styled in
 // style.css) that is the only thing printed, and measured there at the
-// paper's width to size the page. Everything is removed once printing is
-// done.
+// paper's width to size the page.
+//
+// The sheet stays ready until the receipt is closed (clearReceiptPrint, from
+// the page or dialog that printed it) or the next print, not just until the
+// browser says printing is done: Chrome on Android says so (afterprint) as
+// soon as print() returns, before Android has laid the page out for the
+// printer. Tidied up then, the printer got the screen as it was: the dialog
+// with its title, ×, and border, over two pages. Off-screen and only in
+// effect when printing, the sheet changes nothing on screen meanwhile.
 
 export const RECEIPT_PRINT_MM = 72
 // A little paper to spare, so rounding never spills the last line onto a
@@ -24,11 +31,11 @@ const SHEET_ID = 'receipt-print'
 const PAGE_STYLE_ID = 'receipt-print-page'
 const PRINTING_CLASS = 'printing-receipt'
 
-function cleanUp() {
+// Removes the print sheet and its page size: printing is back to normal.
+export function clearReceiptPrint() {
   document.getElementById(SHEET_ID)?.remove()
   document.getElementById(PAGE_STYLE_ID)?.remove()
   document.documentElement.classList.remove(PRINTING_CLASS)
-  window.removeEventListener('afterprint', cleanUp)
 }
 
 // The page height, in whole millimetres, for a sheet this tall.
@@ -37,7 +44,7 @@ export function receiptPageMm(heightPx: number) {
 }
 
 export function printReceipt(source: HTMLElement) {
-  cleanUp() // anything left from a print the browser never reported done
+  clearReceiptPrint() // the last receipt printed, if still there
 
   const copy = source.cloneNode(true) as HTMLElement
   copy.removeAttribute('id')
@@ -56,6 +63,5 @@ export function printReceipt(source: HTMLElement) {
   document.head.appendChild(page)
 
   document.documentElement.classList.add(PRINTING_CLASS)
-  window.addEventListener('afterprint', cleanUp)
   window.print()
 }
