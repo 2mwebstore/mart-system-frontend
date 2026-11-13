@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Printer } from 'lucide-vue-next'
 import Modal from '@/components/Modal.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -10,10 +11,17 @@ import { formatPercent } from '@/utils/tax'
 import { printReceipt as printOnReceiptPaper } from '@/utils/receiptPrint'
 import { label, localName } from '@/i18n'
 
-defineProps<{ sale: Sale }>()
+const props = defineProps<{ sale: Sale }>()
 const emit = defineEmits<{ close: [] }>()
 const settings = useSettingsStore()
 const branding = useBrandingStore()
+
+// Each line shows its own discount and its total after it, so the subtotal is
+// those totals added up and the discount under it is the one on the whole
+// sale. (The sale's own discount is the two together.)
+const linesTotal = computed(() => props.sale.items.reduce((sum, item) => sum + item.lineTotalCents, 0))
+const lineDiscounts = computed(() => props.sale.items.reduce((sum, item) => sum + item.discountCents, 0))
+const saleDiscount = computed(() => Math.max(0, props.sale.discountCents - lineDiscounts.value))
 
 // Only the receipt goes to the printer, sized to the 80 mm roll.
 function printReceipt() {
@@ -32,19 +40,32 @@ function printReceipt() {
         <p class="text-muted">{{ $t('pos.cashierLine', { name: sale.cashier }) }}</p>
       </div>
 
-      <div class="border-t border-line pt-2 space-y-1">
-        <div v-for="item in sale.items" :key="item.productId">
-          <div class="flex justify-between">
-            <span>{{ item.qty }}× {{ localName(item.name, item.nameKm) }}</span>
-            <span>{{ formatUSD(item.unitPriceCents * item.qty) }}</span>
+      <!-- Item | Qty | Disc | Total: each line's own discount, and its total after it. -->
+      <div class="border-t border-line pt-2 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-start gap-x-2 gap-y-1" data-receipt-items>
+        <div class="contents font-medium" data-receipt-head>
+          <span>{{ $t('col.item') }}</span>
+          <span class="text-right">{{ $t('col.qty') }}</span>
+          <span class="text-right">{{ $t('pos.receiptDisc') }}</span>
+          <span class="text-right">{{ $t('col.total') }}</span>
+        </div>
+        <div class="col-span-4 border-b border-dashed border-line" aria-hidden="true" />
+        <div v-for="item in sale.items" :key="item.productId" class="contents" data-receipt-line>
+          <div class="min-w-0 break-words text-[9px] leading-tight pt-1" data-receipt-name>
+            {{ localName(item.name, item.nameKm) }}
+            <p v-if="item.qty > 1" class="text-[8px] text-muted">{{ $t('pos.each', { price: formatUSD(item.unitPriceCents) }) }}</p>
+            <p v-if="item.note" class="text-[8px] text-muted font-body">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
           </div>
-          <p v-if="item.note" class="text-xs text-muted pl-3 font-body">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
+          <span class="text-right">{{ item.qty }}</span>
+          <span class="text-right">{{ item.discountCents > 0 ? `-${formatUSD(item.discountCents)}` : '' }}</span>
+          <span class="text-right">{{ formatUSD(item.lineTotalCents) }}</span>
         </div>
       </div>
 
       <div class="border-t border-line pt-2 space-y-1">
-        <div class="flex justify-between"><span>{{ $t('pos.subtotal') }}</span><span>{{ formatUSD(sale.subtotalCents) }}</span></div>
-        <div v-if="sale.discountCents > 0" class="flex justify-between"><span>{{ $t('pos.discount') }}</span><span>-{{ formatUSD(sale.discountCents) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('pos.subtotal') }}</span><span>{{ formatUSD(linesTotal) }}</span></div>
+        <div v-if="saleDiscount > 0" class="flex justify-between" data-sale-discount>
+          <span>{{ $t('pos.discount') }}</span><span>-{{ formatUSD(saleDiscount) }}</span>
+        </div>
         <div v-if="sale.taxCents > 0" class="flex justify-between" data-tax-line>
           <span>{{ $t('tax.line', { name: `${sale.taxName} ${formatPercent(sale.taxPercent)}` }) }}</span><span>{{ formatUSD(sale.taxCents) }}</span>
         </div>

@@ -1306,6 +1306,7 @@
     "discountHintAmount": "e.g. 2.00",
     "subtotal": "Subtotal",
     "discount": "Discount",
+    "receiptDisc": "Disc",
     "total": "Total",
     "hold": "Hold",
     "clear": "Clear",
