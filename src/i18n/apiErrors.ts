@@ -101,6 +101,8 @@ const rules: Rule[] = [
   { re: /^This invoice is already paid in full\.$/, key: 'apiErrors.invoicePaid' },
   { re: /^That's more than the ([$៛][\d.,]+) still owed\.$/, key: 'apiErrors.paymentOverBalance', params: (m) => ({ amount: m[1] }) },
   { re: /^The main currency can't change once the company has products, sales, invoices, purchases, expenses or shifts\.$/, key: 'apiErrors.mainCurrencyLocked' },
+  { re: /^This company doesn't use tables\. The platform administrator can turn them on\.$/, key: 'apiErrors.tablesOff' },
+  { re: /^Tables can't be turned off while a table has orders waiting or not yet paid\./, key: 'apiErrors.tableOrdersOpen' },
   { re: /^The due date can't be before the invoice date\.$/, key: 'invoices.dueBeforeDate' },
   { re: /^That till isn't registered or is inactive\.$/, key: 'apiErrors.unknownDevice' },
   { re: /^Product #(\d+) isn't available for sale\.$/, key: 'apiErrors.productUnavailable', params: (m) => ({ id: m[1] }) },

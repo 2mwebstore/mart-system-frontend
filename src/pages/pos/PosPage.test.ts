@@ -9,18 +9,22 @@ import { useSettingsStore } from '@/stores/settings'
 import { useShiftStore } from '@/stores/shift'
 import PosPage from './PosPage.vue'
 
-// The company's choice (the super admin's): with shifts, or without.
-const company = vi.hoisted(() => ({ shiftMode: 'REQUIRED' as 'REQUIRED' | 'SKIP' }))
+// The company's choices (the super admin's): with shifts or without, with
+// tables or without. polling says whether the table orders are asked for.
+const company = vi.hoisted(() => ({ shiftMode: 'REQUIRED' as 'REQUIRED' | 'SKIP', usesTables: true, polling: null as null | (() => boolean) }))
 
 vi.mock('@/api/catalog', () => ({ listCategories: async () => [], listProducts: async () => [] }))
 vi.mock('@/api/people', () => ({ listCustomers: async () => [] }))
 vi.mock('@/api/tableOrders', () => ({ getTableBoard: async () => [] }))
 vi.mock('@/api/settings', () => ({
-  getSettings: async () => ({ ...useSettingsStore().app, shiftMode: company.shiftMode }),
+  getSettings: async () => ({ ...useSettingsStore().app, shiftMode: company.shiftMode, usesTables: company.usesTables }),
   listTaxRates: async () => [],
 }))
 vi.mock('@/composables/useTableOrders', () => ({
-  useTableOrders: () => ({ newCount: ref(0), orders: ref([]), refresh: async () => {}, accept: async () => {}, move: async () => {} }),
+  useTableOrders: (_branch: () => number, enabled: () => boolean) => {
+    company.polling = enabled
+    return { newCount: ref(0), orders: ref([]), refresh: async () => {}, accept: async () => {}, move: async () => {} }
+  },
 }))
 vi.mock('@/composables/useCustomerDisplay', () => ({
   openCustomerDisplay: () => {},
@@ -37,13 +41,14 @@ async function settle() {
   }
 }
 
-async function openTill(shiftMode: 'REQUIRED' | 'SKIP') {
+async function openTill(shiftMode: 'REQUIRED' | 'SKIP', usesTables = true) {
   company.shiftMode = shiftMode
+  company.usesTables = usesTables
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().$patch({ permissions: ['pos.sell', 'pos.cash_movement'] })
   const settings = useSettingsStore()
-  settings.app = { ...settings.app, shiftMode }
+  settings.app = { ...settings.app, shiftMode, usesTables }
   const shift = useShiftStore()
   shift.shift = { id: 7, branchId: 1, status: 'OPEN' } as Shift
   shift.deviceKey = 'TK-1'
@@ -89,5 +94,25 @@ describe("the till's shift buttons", () => {
     expect(shown('[role="menu"]')).toBe(true)
     expect(shown('[data-pos-close-shift-menu]')).toBe(false)
     expect(shown('[data-pos-cash-movement-menu]')).toBe(false)
+  })
+})
+
+describe("the till's tables", () => {
+  it('offers table orders and the Tables view to a company with tables', async () => {
+    await openTill('REQUIRED')
+    expect(host.querySelectorAll('[data-pos-table-orders]')).toHaveLength(2)
+    expect(shown('[data-pos-browse]')).toBe(true)
+    expect(company.polling!()).toBe(true)
+  })
+
+  it('offers neither to a company without tables, and asks for no table orders', async () => {
+    // A till left on its Tables view shows products.
+    localStorage.setItem('com-mart-pos-browse', 'tables')
+    await openTill('REQUIRED', false)
+    expect(shown('[data-pos-table-orders]')).toBe(false)
+    expect(shown('[data-pos-browse]')).toBe(false)
+    expect(host.querySelector('input[type="search"]')).not.toBeNull()
+    expect(company.polling!()).toBe(false)
+    localStorage.removeItem('com-mart-pos-browse')
   })
 })

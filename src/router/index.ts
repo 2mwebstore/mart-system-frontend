@@ -121,6 +121,12 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/platform/companies' },
         { path: 'companies', name: 'platform-companies', component: () => import('@/pages/platform/CompaniesPage.vue'), meta: { platform: true } },
+        {
+          path: 'companies/:id/edit',
+          name: 'platform-company-edit',
+          component: () => import('@/pages/platform/CompanyEditPage.vue'),
+          meta: { platform: true },
+        },
         { path: 'system', name: 'platform-system', component: () => import('@/pages/platform/SystemPage.vue'), meta: { platform: true } },
       ],
     },
@@ -187,6 +193,9 @@ router.beforeEach(async (to) => {
   // and no closing a shift at the till.
   if (!settings.usesShifts && to.name === 'shifts') return { name: 'dashboard' }
   if (!settings.usesShifts && to.name === 'pos-close-shift') return { name: 'pos' }
+  // A company without tables (the super admin's choice too) has no Tables &
+  // QR settings and no QR sheet to print.
+  if (!settings.usesTables && (to.name === 'settings-tables' || to.name === 'table-qr-print')) return { name: 'dashboard' }
 
   // Every admin page other than Settings itself is branch-scoped — with no
   // branches at all (most drastically: right after a production reset,

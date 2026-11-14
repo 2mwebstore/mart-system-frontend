@@ -62,7 +62,10 @@ const sections = computed(() =>
     { key: 'receipt', route: 'settings-receipt', label: t('settings.tabReceipt') },
     { key: 'alerts', route: 'settings-alerts', label: t('alerts.tab') },
     { key: 'system', route: 'settings-system', label: t('settings.tabSystem') },
-  ].filter((s) => canOpen(s.route, auth.hasPermission)),
+  ]
+    // A company without tables (the super admin's choice) has no Tables & QR.
+    .filter((s) => s.key !== 'tables' || settings.usesTables)
+    .filter((s) => canOpen(s.route, auth.hasPermission)),
 )
 const section = useRouteSection(() => sections.value.map((s) => s.key))
 const pageTitle = computed(() => sections.value.find((s) => s.key === section.value)?.label ?? t('settings.title'))
@@ -252,6 +255,7 @@ async function saveReceipt() {
         taxDefaults: settings.app.taxDefaults,
         mainCurrency: settings.app.mainCurrency,
         shiftMode: settings.app.shiftMode,
+        usesTables: settings.app.usesTables,
       }),
     () => undefined,
   )

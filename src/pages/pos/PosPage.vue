@@ -297,7 +297,12 @@ function closeReceipt() {
 // Polled for this till's branch; a new one chimes and shows a toast. Loading
 // one fills the cart (and accepts it, so the customer sees it's being made);
 // paying then marks it PAID. See composables/useTableOrders.ts.
-const tableOrders = useTableOrders(() => shift.branchId)
+// A company without tables (the super admin's choice) has none of this: no
+// Table orders button, no Tables view, nothing polled.
+const tableOrders = useTableOrders(
+  () => shift.branchId,
+  () => settings.usesTables,
+)
 const showTableOrders = ref(false)
 function loadTableOrder(o: TableOrder) {
   return loadTableOrders([o])
@@ -353,7 +358,9 @@ function readBrowse(): 'products' | 'tables' {
     return 'products'
   }
 }
-const browse = ref<'products' | 'tables'>(readBrowse())
+const browseChoice = ref<'products' | 'tables'>(readBrowse())
+// Products, whatever was remembered, for a company without tables.
+const browse = computed(() => (settings.usesTables ? browseChoice.value : 'products'))
 const boardTables = ref<TableBoardEntry[]>([])
 const boardLoading = ref(false)
 async function loadBoard() {
@@ -368,7 +375,7 @@ async function loadBoard() {
   }
 }
 function setBrowse(mode: 'products' | 'tables') {
-  browse.value = mode
+  browseChoice.value = mode
   try {
     localStorage.setItem(BROWSE_KEY, mode)
   } catch {
@@ -379,6 +386,13 @@ function setBrowse(mode: 'products' | 'tables') {
 onMounted(() => {
   if (browse.value === 'tables') void loadBoard()
 })
+// Tables turned back on for a till that was on its Tables view: show them.
+watch(
+  () => settings.usesTables,
+  (uses) => {
+    if (uses && browse.value === 'tables') void loadBoard()
+  },
+)
 // The table whose orders are open; its list follows the live poll.
 const boardTileKey = ref<string | null>(null)
 const boardTileName = ref('')
@@ -566,7 +580,13 @@ function goToCloseShift() {
             {{ shift.heldSales.length }}
           </span>
         </button>
-        <button type="button" class="btn-dark text-sm px-3 py-1.5 relative flex items-center gap-1.5" @click="showTableOrders = true">
+        <button
+          v-if="settings.usesTables"
+          type="button"
+          class="btn-dark text-sm px-3 py-1.5 relative flex items-center gap-1.5"
+          data-pos-table-orders
+          @click="showTableOrders = true"
+        >
           <UtensilsCrossed :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.tableOrders') }}
           <span v-if="tableOrders.newCount.value" class="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-danger-strong text-white text-[10px]">
             {{ tableOrders.newCount.value }}
@@ -594,9 +614,11 @@ function goToCloseShift() {
       <!-- Narrower screens: held sales stays one tap away, the rest go in a menu -->
       <div class="flex xl:hidden items-center gap-2 shrink-0">
         <button
+          v-if="settings.usesTables"
           type="button"
           class="btn-dark text-sm px-2.5 sm:px-3 py-1.5 relative flex items-center gap-1.5"
           :aria-label="$t('pos.tableOrders')"
+          data-pos-table-orders
           @click="showTableOrders = true"
         >
           <UtensilsCrossed :stroke-width="1.8" class="w-4 h-4" /><span class="hidden sm:inline">{{ $t('pos.tableOrders') }}</span>
@@ -767,7 +789,7 @@ function goToCloseShift() {
       </div>
       <!-- Product browsing / Tables board -->
       <div class="flex-1 flex flex-col min-w-0 p-3 sm:p-4 gap-3">
-        <div class="flex rounded-control border border-line bg-surface p-0.5 self-start" role="tablist" :aria-label="$t('pos.browseLabel')">
+        <div v-if="settings.usesTables" class="flex rounded-control border border-line bg-surface p-0.5 self-start" role="tablist" :aria-label="$t('pos.browseLabel')" data-pos-browse>
           <button
             type="button"
             role="tab"
@@ -938,7 +960,7 @@ function goToCloseShift() {
       @load="loadTableOrder"
     />
     <TableOrdersModal
-      v-if="showTableOrders"
+      v-if="showTableOrders && settings.usesTables"
       :orders="tableOrders.orders.value"
       @close="showTableOrders = false"
       @accept="(id) => tableOrders.accept(id).catch(() => {})"

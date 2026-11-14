@@ -117,7 +117,8 @@ const sections = computed<NavSection[]>(() => openable([
         children: [
           page('settings-rate', t('settings.tabRate')),
           page('settings-branches', t('settings.tabBranches')),
-          page('settings-tables', t('tables.tab')),
+          // A company without tables (the super admin's choice) has no Tables & QR.
+          ...(settings.usesTables ? [page('settings-tables', t('tables.tab'))] : []),
           page('settings-payments', t('settings.tabPayments')),
           page('settings-tax', t('tax.tab')),
           page('settings-company', t('settings.tabCompany')),

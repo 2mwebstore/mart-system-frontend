@@ -87,6 +87,10 @@ export interface AppSettings {
   // How the till starts selling. Read-only here too; the super admin sets it
   // on the company (platform.updateCompany).
   shiftMode: ShiftMode
+  // Whether the company uses tables: dining tables, their QR codes and the
+  // orders customers send from them. Off, nothing about tables shows.
+  // Read-only here too; the super admin sets it on the company.
+  usesTables: boolean
 }
 
 export type Currency = 'USD' | 'KHR'
@@ -786,6 +790,8 @@ export interface Company {
   // What it prices and sells in. Locked once it has amounts stored in it.
   mainCurrency: Currency
   mainCurrencyLocked: boolean
+  // Whether it uses tables and QR ordering. The super admin sets it too.
+  usesTables: boolean
   owners: CompanyOwner[]
   createdAt: string
 }

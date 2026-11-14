@@ -1,21 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, h, nextTick, type App } from 'vue'
+import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { i18n, t } from '@/i18n'
 import type { Company } from '@/types/domain'
 import CompaniesPage from './CompaniesPage.vue'
 
-// The platform API, recording what the page sends.
+// The platform API, recording what the page sends. Editing a company is a
+// page of its own (CompanyEditPage.test.ts).
 const server = vi.hoisted(() => ({
-  updates: [] as unknown[],
   creates: [] as unknown[],
   branchSwitches: [] as unknown[],
   userSwitches: [] as unknown[],
-  cleared: [] as number[],
   // How the listed company starts its shifts.
   shiftMode: 'REQUIRED' as 'REQUIRED' | 'SKIP',
   // What the listed company sells in, and whether it has amounts in it yet.
   mainCurrency: 'USD' as 'USD' | 'KHR',
   mainCurrencyLocked: false,
+  usesTables: true,
 }))
 const company = (): Company => ({
   id: 7,
@@ -32,22 +33,15 @@ const company = (): Company => ({
   shiftMode: server.shiftMode,
   mainCurrency: server.mainCurrency,
   mainCurrencyLocked: server.mainCurrencyLocked,
+  usesTables: server.usesTables,
   owners: [{ id: 70, fullName: 'Owner', username: 'gt.owner', active: true }],
   createdAt: '2026-11-01T00:00:00Z',
 })
 vi.mock('@/api/platform', () => ({
   listCompanies: async () => [company()],
-  updateCompany: async (id: number, body: Record<string, unknown>) => {
-    server.updates.push({ id, ...body })
-    return { ...company(), ...body }
-  },
   createCompany: async (body: Record<string, unknown>) => {
     server.creates.push(body)
     return { ...company(), id: 8, ...body }
-  },
-  clearCompanyActivityLog: async (id: number) => {
-    server.cleared.push(id)
-    return { deleted: 4 }
   },
   listCompanyBranches: async () => [
     { id: 1, code: 'HQ', name: 'Head office', active: true },
@@ -67,6 +61,7 @@ vi.mock('@/api/platform', () => ({
 
 let app: App | null = null
 let host: HTMLElement
+let router: Router
 
 async function settle() {
   for (let i = 0; i < 5; i++) {
@@ -76,9 +71,17 @@ async function settle() {
 }
 
 async function mount() {
+  router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/platform/companies', name: 'platform-companies', component: CompaniesPage },
+      { path: '/platform/companies/:id/edit', name: 'platform-company-edit', component: { render: () => h('p', { 'data-edit-page': '' }) } },
+    ],
+  })
+  await router.push('/platform/companies')
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CompaniesPage).use(i18n)
+  app = createApp({ template: '<RouterView />' }).use(router).use(i18n)
   app.mount(host)
   await settle()
 }
@@ -98,14 +101,13 @@ function setValue(id: string, value: string) {
 }
 
 beforeEach(() => {
-  server.updates = []
   server.creates = []
   server.branchSwitches = []
   server.userSwitches = []
-  server.cleared = []
   server.shiftMode = 'REQUIRED'
   server.mainCurrency = 'USD'
   server.mainCurrencyLocked = false
+  server.usesTables = true
 })
 
 afterEach(() => {
@@ -122,43 +124,6 @@ describe('CompaniesPage', () => {
     expect(row).toContain(t('platform.offCount', { n: 1 }))
     expect(row).toContain('4')
     expect(row).toContain(t('settings.retentionMonthsOption', { n: 2 }, 2))
-  })
-
-  it('saves the limits, blank as no limit, and the retention', async () => {
-    await mount()
-    button(t('common.edit')).click()
-    await settle()
-    expect(field('edit-max-branches').value).toBe('5')
-    expect(field('edit-max-users').value).toBe('')
-    setValue('edit-max-branches', '')
-    setValue('edit-max-users', '3')
-    setValue('edit-retention', '1')
-    await nextTick()
-    // Fewer than it has on: it says nothing is switched off.
-    expect(host.textContent).toContain(t('platform.limitBelowCount', { active: 4 }))
-    host.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
-    await settle()
-    expect(server.updates).toEqual([
-      { id: 7, name: 'Gotech', code: 'GT', active: true, maxBranches: null, maxUsers: 3, retentionMonths: 1, shiftMode: 'REQUIRED', mainCurrency: 'USD' },
-    ])
-  })
-
-  // Save stays clickable: the browser points at the field and says why,
-  // instead of a button that silently does nothing.
-  it("won't save a limit below 1", async () => {
-    await mount()
-    button(t('common.edit')).click()
-    await settle()
-    setValue('edit-max-branches', '0')
-    await nextTick()
-    expect(button(t('common.save')).disabled).toBe(false)
-    expect((field('edit-max-branches') as HTMLInputElement).checkValidity()).toBe(false)
-    host.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
-    await settle()
-    expect(server.updates).toEqual([])
-    setValue('edit-max-branches', '1')
-    await nextTick()
-    expect((field('edit-max-branches') as HTMLInputElement).checkValidity()).toBe(true)
   })
 
   // A code the server can't take used to leave Create greyed out with no
@@ -196,27 +161,6 @@ describe('CompaniesPage', () => {
     }
   })
 
-  it('says why a new code is wrong when editing', async () => {
-    await mount()
-    button(t('common.edit')).click()
-    await settle()
-    setValue('edit-code', 'G-T')
-    await nextTick()
-    expect(host.querySelector('#edit-code-help')!.textContent?.trim()).toBe(t('platform.codeInvalid'))
-    host.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
-    await settle()
-    expect(server.updates).toEqual([])
-  })
-
-  it('clears old log entries for that company', async () => {
-    await mount()
-    button(t('common.edit')).click()
-    await settle()
-    button(t('settings.retentionClearNow')).click()
-    await settle()
-    expect(server.cleared).toEqual([7])
-  })
-
   it('a new company starts with the limits given, or none', async () => {
     await mount()
     button(t('platform.newCompany')).click()
@@ -241,6 +185,7 @@ describe('CompaniesPage', () => {
         maxUsers: null,
         shiftMode: 'REQUIRED',
         mainCurrency: 'USD',
+        usesTables: true,
       },
     ])
   })
@@ -268,53 +213,15 @@ describe('CompaniesPage', () => {
     expect(server.creates).toEqual([expect.objectContaining({ code: 'RS', mainCurrency: 'KHR' })])
   })
 
-  it("changes an empty company's currency, and shows it in the list", async () => {
-    await mount()
-    button(t('common.edit')).click()
-    await settle()
-    const form = host.querySelector<HTMLFormElement>('form')!
-    expect(form.querySelector('[data-main-currency]')!.hasAttribute('disabled')).toBe(false)
-    expect(form.querySelector('[data-main-currency-locked]')).toBeNull()
-    form.querySelector<HTMLInputElement>('[data-main-currency-option="KHR"]')!.click()
-    await nextTick()
-    form.dispatchEvent(new Event('submit'))
-    await settle()
-    expect(server.updates).toEqual([expect.objectContaining({ id: 7, mainCurrency: 'KHR' })])
-    expect(host.querySelector('[data-company-currency]')!.textContent!.trim()).toBe(t('platform.mainCurrencyShortKHR'))
-  })
-
-  it('locks the currency of a company with amounts in it, and says why', async () => {
-    server.mainCurrency = 'KHR'
-    server.mainCurrencyLocked = true
-    await mount()
-    button(t('common.edit')).click()
-    await settle()
-    const form = host.querySelector<HTMLFormElement>('form')!
-    expect(form.querySelector('[data-main-currency]')!.hasAttribute('disabled')).toBe(true)
-    expect(form.querySelector<HTMLInputElement>('[data-main-currency-option="KHR"]')!.checked).toBe(true)
-    expect(form.querySelector('[data-main-currency-locked]')!.textContent!.trim()).toBe(t('platform.mainCurrencyLocked'))
-    form.dispatchEvent(new Event('submit'))
-    await settle()
-    // It still saves the rest, with the currency as it was.
-    expect(server.updates).toEqual([expect.objectContaining({ id: 7, mainCurrency: 'KHR' })])
-  })
-
   it('shows how each company starts its shifts', async () => {
     await mount()
     expect(host.querySelector('[data-company-shift-mode]')!.textContent!.trim()).toBe(t('platform.shiftModeShortREQUIRED'))
   })
 
-  it("starts the edit form from a company's own choice", async () => {
+  it('shows a company that skips shifts as such', async () => {
     server.shiftMode = 'SKIP'
     await mount()
     expect(host.querySelector('[data-company-shift-mode]')!.textContent!.trim()).toBe(t('platform.shiftModeShortSKIP'))
-    button(t('common.edit')).click()
-    await settle()
-    const form = host.querySelector<HTMLFormElement>('form')!
-    expect(form.querySelector<HTMLInputElement>('[data-shift-mode-option="SKIP"]')!.checked).toBe(true)
-    form.dispatchEvent(new Event('submit'))
-    await settle()
-    expect(server.updates).toEqual([expect.objectContaining({ id: 7, shiftMode: 'SKIP' })])
   })
 
   it('makes a company that skips opening shifts', async () => {
@@ -335,29 +242,45 @@ describe('CompaniesPage', () => {
     expect(server.creates).toEqual([expect.objectContaining({ code: 'QS', shiftMode: 'SKIP' })])
   })
 
-  it("changes a company's shifts to skipped, and back", async () => {
+  it('shows whether each company uses tables', async () => {
     await mount()
-    button(t('common.edit')).click()
-    await settle()
-    const form = () => host.querySelector<HTMLFormElement>('form')!
-    expect(form().querySelector<HTMLInputElement>('[data-shift-mode-option="REQUIRED"]')!.checked).toBe(true)
-    form().querySelector<HTMLInputElement>('[data-shift-mode-option="SKIP"]')!.click()
-    await nextTick()
-    form().dispatchEvent(new Event('submit'))
-    await settle()
-    expect(server.updates).toEqual([expect.objectContaining({ id: 7, shiftMode: 'SKIP' })])
-    // The list shows what was saved.
-    expect(host.querySelector('[data-company-shift-mode]')!.textContent!.trim()).toBe(t('platform.shiftModeShortSKIP'))
+    expect(host.querySelector('[data-company-tables]')!.textContent!.trim()).toBe(t('platform.tablesShortOn'))
+    app?.unmount()
+    host.remove()
+    server.usesTables = false
+    await mount()
+    expect(host.querySelector('[data-company-tables]')!.textContent!.trim()).toBe(t('platform.tablesShortOff'))
+  })
 
-    // Opened again, the form starts from the company's choice.
-    button(t('common.edit')).click()
+  it('makes a company without tables', async () => {
+    await mount()
+    button(t('platform.newCompany')).click()
     await settle()
-    expect(form().querySelector<HTMLInputElement>('[data-shift-mode-option="SKIP"]')!.checked).toBe(true)
-    form().querySelector<HTMLInputElement>('[data-shift-mode-option="REQUIRED"]')!.click()
+    const form = host.querySelector<HTMLFormElement>('form')!
+    expect(form.querySelector<HTMLInputElement>('[data-tables-option="on"]')!.checked).toBe(true)
+    setValue('company-name', 'Shop without tables')
+    setValue('company-code', 'nt')
+    setValue('owner-name', 'Shop owner')
+    setValue('owner-username', 'nt.owner')
+    setValue('owner-password', 'long-enough')
+    form.querySelector<HTMLInputElement>('[data-tables-option="off"]')!.click()
     await nextTick()
-    form().dispatchEvent(new Event('submit'))
+    form.dispatchEvent(new Event('submit'))
     await settle()
-    expect(server.updates[1]).toEqual(expect.objectContaining({ id: 7, shiftMode: 'REQUIRED' }))
+    expect(server.creates).toEqual([expect.objectContaining({ code: 'NT', usesTables: false })])
+  })
+
+  // No popup any more: the pencil is a link to the company's own page.
+  it('opens a company on its own Edit page', async () => {
+    await mount()
+    const edit = host.querySelector<HTMLAnchorElement>('[data-edit-company]')!
+    expect(edit.getAttribute('aria-label')).toBe(t('common.edit'))
+    expect(edit.getAttribute('href')).toBe('/platform/companies/7/edit')
+    edit.click()
+    await settle()
+    expect(router.currentRoute.value.name).toBe('platform-company-edit')
+    expect(router.currentRoute.value.params.id).toBe('7')
+    expect(host.querySelector('[data-edit-page]')).not.toBeNull()
   })
 
   it("switches a company's branches and accounts on and off", async () => {

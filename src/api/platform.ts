@@ -11,13 +11,14 @@ export interface CompanyLimits {
 }
 
 export const listCompanies = () => get<Company[]>('/platform/companies')
+export const getCompany = (id: number) => get<Company>(`/platform/companies/${id}`)
 export const createCompany = (
-  c: { name: string; code: string; ownerFullName: string; ownerUsername: string; ownerPassword: string; shiftMode: ShiftMode; mainCurrency: Currency } & CompanyLimits,
+  c: { name: string; code: string; ownerFullName: string; ownerUsername: string; ownerPassword: string; shiftMode: ShiftMode; mainCurrency: Currency; usesTables: boolean } & CompanyLimits,
 ) => post<Company>('/platform/companies', c)
 // Every field is the new value.
 export const updateCompany = (
   id: number,
-  c: { name: string; code: string; active: boolean; retentionMonths: number; shiftMode: ShiftMode; mainCurrency: Currency } & CompanyLimits,
+  c: { name: string; code: string; active: boolean; retentionMonths: number; shiftMode: ShiftMode; mainCurrency: Currency; usesTables: boolean } & CompanyLimits,
 ) =>
   put<Company>(`/platform/companies/${id}`, c)
 // Purges the company's activity log entries older than its retention, now.

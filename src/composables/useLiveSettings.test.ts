@@ -9,17 +9,17 @@ import { MIN_GAP_MS, RECHECK_MS, useLiveSettings } from './useLiveSettings'
 
 // The company's settings on the server, as the super admin last left them;
 // reads counts each re-read, quiet whether it asked for no error toast.
-const server = vi.hoisted(() => ({ shiftMode: 'REQUIRED' as 'REQUIRED' | 'SKIP', reads: 0, quiet: [] as boolean[], fail: false }))
+const server = vi.hoisted(() => ({ shiftMode: 'REQUIRED' as 'REQUIRED' | 'SKIP', usesTables: true, reads: 0, quiet: [] as boolean[], fail: false }))
 vi.mock('@/api/settings', () => ({
   getSettings: async (opts?: { silent?: boolean }) => {
     server.reads++
     server.quiet.push(opts?.silent === true)
     if (server.fail) throw new Error('offline')
-    return { ...useSettingsStore().app, shiftMode: server.shiftMode }
+    return { ...useSettingsStore().app, shiftMode: server.shiftMode, usesTables: server.usesTables }
   },
 }))
 
-const pages = ['dashboard', 'shifts', 'pos', 'pos-open-shift', 'pos-close-shift']
+const pages = ['dashboard', 'shifts', 'pos', 'pos-open-shift', 'pos-close-shift', 'settings-tables', 'table-qr-print', 'settings-rate']
 let app: App | null = null
 let router: Router
 
@@ -38,6 +38,7 @@ async function openAt(page: string, { mode = 'REQUIRED' as 'REQUIRED' | 'SKIP', 
   const settings = useSettingsStore()
   settings.$patch({ loaded: true, appReadAt: Date.now(), app: { ...settings.app, shiftMode: mode } })
   server.shiftMode = mode
+  server.usesTables = true
   router = createRouter({ history: createMemoryHistory(), routes: pages.map((name) => ({ path: `/${name}`, name, component: { render: () => null } })) })
   await router.push(`/${page}`)
   app = createApp({ setup: () => (useLiveSettings(), () => null) }).use(pinia).use(router)
@@ -146,5 +147,30 @@ describe('shifts turned off or on while the app is open', () => {
     await wait(RECHECK_MS)
     expect(useSettingsStore().usesShifts).toBe(true)
     expect(at()).toBe('pos-open-shift')
+  })
+})
+
+describe('tables turned off or on while the app is open', () => {
+  it('leaves Settings > Tables & QR and the QR sheet for the Dashboard', async () => {
+    for (const page of ['settings-tables', 'table-qr-print']) {
+      await openAt(page)
+      server.usesTables = false
+      await wait(RECHECK_MS)
+      expect(useSettingsStore().usesTables).toBe(false)
+      expect(at()).toBe('dashboard')
+      app!.unmount()
+      app = null
+    }
+  })
+
+  it('stays on any other page', async () => {
+    for (const page of ['settings-rate', 'pos']) {
+      await openAt(page)
+      server.usesTables = false
+      await wait(RECHECK_MS)
+      expect(at()).toBe(page)
+      app!.unmount()
+      app = null
+    }
   })
 })

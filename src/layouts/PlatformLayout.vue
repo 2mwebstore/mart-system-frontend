@@ -24,7 +24,7 @@ const sections = computed<NavSection[]>(() => [
   {
     key: 'platform',
     items: [
-      { key: 'companies', label: t('platform.navCompanies'), icon: Building2, route: 'platform-companies' },
+      { key: 'companies', label: t('platform.navCompanies'), icon: Building2, route: 'platform-companies', also: ['platform-company-edit'] },
       { key: 'system', label: t('platform.navSystem'), icon: HardDrive, route: 'platform-system' },
     ],
   },

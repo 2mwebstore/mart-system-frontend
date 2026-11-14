@@ -18,6 +18,7 @@ export const useSettingsStore = defineStore('settings', {
       taxDefaults: { pos: null, invoice: null, purchase: null, expense: null },
       mainCurrency: 'USD',
       shiftMode: 'REQUIRED',
+      usesTables: true,
     } as AppSettings,
     // The company's tax rates (every one, switched off too: a document keeps
     // showing the rate it used). Loaded with the settings.
@@ -31,6 +32,9 @@ export const useSettingsStore = defineStore('settings', {
     // Whether the company works in shifts (the super admin's choice). Without
     // them, nothing about shifts shows: the till keeps one open by itself.
     usesShifts: (s) => s.app.shiftMode !== 'SKIP',
+    // Whether the company uses tables and QR ordering (the super admin's
+    // choice). Without them, nothing about tables shows.
+    usesTables: (s) => s.app.usesTables !== false,
     // What the company prices and sells in (the super admin's choice): every
     // *Cents amount is in its minor unit, cents or whole riel.
     mainCurrency: (s): Currency => (s.app.mainCurrency === 'KHR' ? 'KHR' : 'USD'),

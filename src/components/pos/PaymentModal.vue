@@ -158,7 +158,7 @@ function confirmOther() {
   <Modal :title="$t('pos.takePayment')" xl flush @close="emit('close')">
     <!-- Wide screens: the payment on the left, Quick cash beside it. Narrow:
          one column, Quick cash between the tendered boxes and the change. -->
-    <div class="grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr]">
+    <div class="grid lg:grid-cols-[minmax(0,1fr)_30rem] lg:grid-rows-[auto_1fr]">
       <div class="px-6 pt-6 lg:px-8 lg:pt-8 space-y-5" :class="cash ? 'lg:col-start-1 lg:row-start-1' : 'lg:col-span-2'">
         <div class="text-center">
           <p class="text-muted text-sm">{{ $t('pos.amountDue') }}</p>
@@ -247,7 +247,6 @@ function confirmOther() {
           </button>
         </template>
 
-        <button type="button" class="text-sm text-muted hover:text-ink block mx-auto" @click="emit('close')">{{ $t('common.cancel') }}</button>
       </div>
     </div>
   </Modal>

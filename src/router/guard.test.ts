@@ -12,6 +12,8 @@ const session = vi.hoisted(() => ({
   // The company's choice (the super admin's), and whether the till's own
   // shift opening fails; opened is each float the till opened a shift with.
   shiftMode: 'REQUIRED' as 'REQUIRED' | 'SKIP',
+  // Whether the company uses tables (the super admin's choice too).
+  usesTables: true,
   openFails: false,
   opened: [] as number[][],
 }))
@@ -47,6 +49,9 @@ vi.mock('@/stores/settings', () => ({
     },
     get usesShifts() {
       return session.shiftMode !== 'SKIP'
+    },
+    get usesTables() {
+      return session.usesTables
     },
   }),
 }))
@@ -90,6 +95,7 @@ beforeEach(async () => {
     branches: [{ id: 1, name: 'Main', code: 'MAIN' }],
     shiftOpen: true,
     shiftMode: 'REQUIRED',
+    usesTables: true,
     openFails: false,
     opened: [],
   })
@@ -210,6 +216,18 @@ describe('a password session', () => {
     expect(await landsOn('/shifts')).toBe('dashboard')
   })
 
+  it('has no Tables & QR settings or QR sheet without tables', async () => {
+    session.permissions = ['pos.sell', 'table.view']
+    signIn()
+    expect(await landsOn('/settings/tables')).toBe('settings-tables')
+    expect(await landsOn('/print/table-qr')).toBe('table-qr-print')
+    await router.push('/t/start')
+    session.usesTables = false
+    expect(await landsOn('/settings/tables')).toBe('dashboard')
+    await router.push('/t/start')
+    expect(await landsOn('/print/table-qr')).toBe('dashboard')
+  })
+
   it('opens the till when the user can sell', async () => {
     signIn({ till: true })
     expect(await landsOn('/pos')).toBe('pos')
@@ -295,6 +313,7 @@ describe('the super admin', () => {
     signIn()
     session.superAdmin = true
     expect(await landsOn('/platform/system')).toBe('platform-system')
+    expect(await landsOn('/platform/companies/7/edit')).toBe('platform-company-edit')
   })
 
   it('reaches no company page and no till', async () => {

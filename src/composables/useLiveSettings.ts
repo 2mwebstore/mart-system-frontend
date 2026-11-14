@@ -17,7 +17,9 @@ export const MIN_GAP_MS = 5_000
 //
 // A page that no longer applies is left: without shifts, the Shifts page goes
 // to the Dashboard and the till's Open or Close shift page back to selling
-// (where the till opens its shift by itself, see the router guard).
+// (where the till opens its shift by itself, see the router guard); without
+// tables, Settings > Tables & QR and the QR sheet go to the Dashboard (the
+// till drops its Tables view by itself).
 export function useLiveSettings() {
   const auth = useAuthStore()
   const settings = useSettingsStore()
@@ -42,6 +44,14 @@ export function useLiveSettings() {
       const at = router.currentRoute.value.name
       if (at === 'shifts') void router.replace({ name: 'dashboard' })
       else if (at === 'pos-open-shift' || at === 'pos-close-shift') void router.replace({ name: 'pos' })
+    },
+  )
+  watch(
+    () => settings.usesTables,
+    (uses) => {
+      if (uses) return
+      const at = router.currentRoute.value.name
+      if (at === 'settings-tables' || at === 'table-qr-print') void router.replace({ name: 'dashboard' })
     },
   )
 

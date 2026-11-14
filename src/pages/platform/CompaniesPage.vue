@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { KeyRound, Pencil, Plus, Power, Trash2 } from 'lucide-vue-next'
+import { KeyRound, Pencil, Plus, Power } from 'lucide-vue-next'
 import * as platformApi from '@/api/platform'
 import { normaliseCompanyCode } from '@/api/companyCode'
 import type { Company, CompanyBranch, CompanyUser, Currency, ShiftMode } from '@/types/domain'
 import Modal from '@/components/Modal.vue'
 import ShiftModePicker from '@/components/platform/ShiftModePicker.vue'
 import MainCurrencyPicker from '@/components/platform/MainCurrencyPicker.vue'
+import TablesPicker from '@/components/platform/TablesPicker.vue'
 import PasswordInput from '@/components/PasswordInput.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import SearchInput from '@/components/SearchInput.vue'
@@ -14,13 +15,14 @@ import SearchableSelect from '@/components/SearchableSelect.vue'
 import Pagination from '@/components/Pagination.vue'
 import { useLocalList } from '@/composables/useLocalList'
 import { useToast } from '@/composables/useToast'
+import { codeInputPattern, codeOk, codeWrong, limitValid, toLimit, type LimitField } from '@/utils/companyForm'
 import { t } from '@/i18n'
 
 // The super admin's list of companies. They make each company with its first
 // Owner, who signs in and sets up its branches, tills, staff and catalog; they
-// set each company's limits and how long it keeps its activity log, switch its
-// branches and accounts on and off, and look after the Owner accounts when
-// nobody in a company can.
+// edit each one on a page of its own (CompanyEditPage.vue: its limits, shifts,
+// currency, tables and activity log), switch its branches and accounts on and
+// off, and look after the Owner accounts when nobody in a company can.
 const toast = useToast()
 const companies = ref<Company[]>([])
 const loading = ref(true)
@@ -56,19 +58,6 @@ function replace(updated: Company) {
   else companies.value[i] = updated
 }
 
-const codePattern = /^[A-Z0-9]{2,12}$/
-const codeOk = (raw: string) => codePattern.test(normaliseCompanyCode(raw))
-// The same rule for the browser, so a wrong code is pointed out on Create or
-// Save instead of the button just not working. Spaces round it are trimmed.
-const codeInputPattern = '\\s*[A-Za-z0-9]{2,12}\\s*'
-// Said under the field as soon as what's typed can't be a code.
-const codeWrong = (raw: string) => raw.trim() !== '' && !codeOk(raw)
-
-// A limit field: blank is no limit.
-type LimitField = number | ''
-const toLimit = (v: LimitField): number | null => (v === '' || v === null ? null : Number(v))
-const fromLimit = (v: number | null): LimitField => (v === null ? '' : v)
-const limitValid = (v: LimitField) => v === '' || v === null || (Number.isInteger(Number(v)) && Number(v) >= 1)
 // "2 / 5" against a limit, "2" without one.
 const countText = (active: number, max: number | null) => (max === null ? String(active) : `${active} / ${max}`)
 
@@ -86,6 +75,7 @@ const emptyCreate = () => ({
   maxUsers: '' as LimitField,
   shiftMode: 'REQUIRED' as ShiftMode,
   mainCurrency: 'USD' as Currency,
+  usesTables: true,
 })
 const createForm = reactive(emptyCreate())
 const createValid = computed(() => codeOk(createForm.code) && limitValid(createForm.maxBranches) && limitValid(createForm.maxUsers))
@@ -112,78 +102,6 @@ async function submitCreate() {
     // the API client already toasted the reason
   } finally {
     creating.value = false
-  }
-}
-
-// --- Edit company --------------------------------------------------------------
-
-const editing = ref<Company | null>(null)
-const saving = ref(false)
-const clearingLog = ref(false)
-const editForm = reactive({
-  name: '',
-  code: '',
-  active: true,
-  maxBranches: '' as LimitField,
-  maxUsers: '' as LimitField,
-  retentionMonths: 3,
-  shiftMode: 'REQUIRED' as ShiftMode,
-  mainCurrency: 'USD' as Currency,
-})
-const editValid = computed(() => codeOk(editForm.code) && limitValid(editForm.maxBranches) && limitValid(editForm.maxUsers))
-// A limit below what the company has switches nothing off: say so.
-const branchesOverLimit = computed(() => {
-  const max = toLimit(editForm.maxBranches)
-  return editing.value !== null && max !== null && limitValid(editForm.maxBranches) && editing.value.activeBranchCount > max
-})
-const usersOverLimit = computed(() => {
-  const max = toLimit(editForm.maxUsers)
-  return editing.value !== null && max !== null && limitValid(editForm.maxUsers) && editing.value.activeUserCount > max
-})
-
-function openEdit(c: Company) {
-  editing.value = c
-  Object.assign(editForm, {
-    name: c.name,
-    code: c.code,
-    active: c.active,
-    maxBranches: fromLimit(c.maxBranches),
-    maxUsers: fromLimit(c.maxUsers),
-    retentionMonths: c.retentionMonths,
-    shiftMode: c.shiftMode,
-    mainCurrency: c.mainCurrency,
-  })
-}
-async function submitEdit() {
-  if (!editing.value || !editValid.value) return
-  saving.value = true
-  try {
-    replace(
-      await platformApi.updateCompany(editing.value.id, {
-        ...editForm,
-        code: normaliseCompanyCode(editForm.code),
-        maxBranches: toLimit(editForm.maxBranches),
-        maxUsers: toLimit(editForm.maxUsers),
-      }),
-    )
-    editing.value = null
-    toast.success(t('platform.companySaved'))
-  } catch {
-    // the API client already toasted the reason
-  } finally {
-    saving.value = false
-  }
-}
-async function clearLog() {
-  if (!editing.value) return
-  clearingLog.value = true
-  try {
-    const res = await platformApi.clearCompanyActivityLog(editing.value.id)
-    toast.success(t('settings.retentionCleared', { count: res.deleted }))
-  } catch {
-    // the API client already toasted the reason
-  } finally {
-    clearingLog.value = false
   }
 }
 
@@ -306,6 +224,7 @@ async function submitOwner() {
               <th class="py-2 font-medium text-right pl-4">{{ $t('platform.logKept') }}</th>
               <th class="py-2 font-medium pl-4">{{ $t('platform.shiftsColumn') }}</th>
               <th class="py-2 font-medium pl-4">{{ $t('platform.currencyColumn') }}</th>
+              <th class="py-2 font-medium pl-4">{{ $t('platform.tablesColumn') }}</th>
               <th class="py-2 font-medium pl-4">{{ $t('platform.owners') }}</th>
               <th class="py-2 font-medium"></th>
             </tr>
@@ -328,6 +247,7 @@ async function submitOwner() {
               <td class="py-2.5 text-right pl-4 whitespace-nowrap">{{ $t('settings.retentionMonthsOption', { n: c.retentionMonths }, c.retentionMonths) }}</td>
               <td class="py-2.5 pl-4 whitespace-nowrap" data-company-shift-mode>{{ $t(`platform.shiftModeShort${c.shiftMode}`) }}</td>
               <td class="py-2.5 pl-4 whitespace-nowrap" data-company-currency>{{ $t(`platform.mainCurrencyShort${c.mainCurrency}`) }}</td>
+              <td class="py-2.5 pl-4 whitespace-nowrap" data-company-tables>{{ $t(c.usesTables ? 'platform.tablesShortOn' : 'platform.tablesShortOff') }}</td>
               <td class="py-2.5 pl-4">
                 <p v-for="o in c.owners" :key="o.id" :class="o.active ? '' : 'text-muted line-through'">
                   {{ o.fullName }} <span class="text-xs text-muted font-mono">{{ o.username }}</span>
@@ -342,17 +262,23 @@ async function submitOwner() {
                   <button type="button" class="p-1.5 text-muted hover:text-ink" :title="$t('platform.ownerAccounts')" :aria-label="$t('platform.ownerAccounts')" @click="openOwner(c)">
                     <KeyRound :stroke-width="1.8" class="w-4 h-4" />
                   </button>
-                  <button type="button" class="p-1.5 text-muted hover:text-ink" :title="$t('common.edit')" :aria-label="$t('common.edit')" @click="openEdit(c)">
+                  <RouterLink
+                    :to="{ name: 'platform-company-edit', params: { id: c.id } }"
+                    class="p-1.5 text-muted hover:text-ink"
+                    :title="$t('common.edit')"
+                    :aria-label="$t('common.edit')"
+                    data-edit-company
+                  >
                     <Pencil :stroke-width="1.8" class="w-4 h-4" />
-                  </button>
+                  </RouterLink>
                 </div>
               </td>
             </tr>
             <tr v-if="!loading && companyList.total === 0">
-              <td colspan="9" class="py-8 text-center text-muted">{{ companies.length === 0 ? $t('platform.noCompanies') : $t('common.noMatches') }}</td>
+              <td colspan="11" class="py-8 text-center text-muted">{{ companies.length === 0 ? $t('platform.noCompanies') : $t('common.noMatches') }}</td>
             </tr>
             <tr v-if="loading">
-              <td colspan="9" class="py-8 text-center text-muted">{{ $t('common.loading') }}</td>
+              <td colspan="11" class="py-8 text-center text-muted">{{ $t('common.loading') }}</td>
             </tr>
           </tbody>
         </table>
@@ -402,6 +328,7 @@ async function submitOwner() {
         </fieldset>
         <ShiftModePicker v-model="createForm.shiftMode" name="create-shift-mode" class="border-t border-line pt-4" />
         <MainCurrencyPicker v-model="createForm.mainCurrency" name="create-main-currency" class="border-t border-line pt-4" />
+        <TablesPicker v-model="createForm.usesTables" name="create-tables" class="border-t border-line pt-4" />
         <div class="border-t border-line pt-4 space-y-4">
           <div>
             <h3 class="text-sm font-medium">{{ $t('platform.firstOwner') }}</h3>
@@ -423,88 +350,6 @@ async function submitOwner() {
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" class="btn-secondary" @click="showCreate = false">{{ $t('common.cancel') }}</button>
           <button type="submit" class="btn-primary" :disabled="creating">{{ $t('platform.createCompany') }}</button>
-        </div>
-      </form>
-    </Modal>
-
-    <Modal v-if="editing" :title="$t('platform.editCompany')" @close="editing = null">
-      <form class="space-y-4" @submit.prevent="submitEdit">
-        <div>
-          <label for="edit-name" class="block text-sm text-muted mb-1">{{ $t('platform.companyName') }}</label>
-          <input id="edit-name" v-model="editForm.name" type="text" class="input" maxlength="120" required />
-        </div>
-        <div>
-          <label for="edit-code" class="block text-sm text-muted mb-1">{{ $t('platform.code') }}</label>
-          <input
-            id="edit-code"
-            v-model="editForm.code"
-            type="text"
-            class="input font-mono uppercase w-40"
-            maxlength="12"
-            autocomplete="off"
-            required
-            :pattern="codeInputPattern"
-            :title="$t('platform.codeInvalid')"
-            :aria-invalid="codeWrong(editForm.code)"
-            aria-describedby="edit-code-help"
-          />
-          <p id="edit-code-help" class="text-xs mt-1" :class="codeWrong(editForm.code) ? 'text-danger-strong' : 'text-muted'" data-code-help>
-            {{ codeWrong(editForm.code) ? $t('platform.codeInvalid') : $t('platform.codeChangeHint') }}
-          </p>
-        </div>
-        <label class="flex items-center justify-between text-sm">
-          <span>{{ $t('common.active') }}</span>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="editForm.active"
-            class="w-9 h-5 rounded-full transition-colors relative"
-            :class="editForm.active ? 'bg-primary' : 'bg-line'"
-            @click="editForm.active = !editForm.active"
-          >
-            <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" :class="editForm.active ? 'left-4' : 'left-0.5'" />
-          </button>
-        </label>
-        <p v-if="editing.active && !editForm.active" class="text-xs text-danger-strong">{{ $t('platform.disableWarning') }}</p>
-
-        <fieldset class="border-t border-line pt-4 space-y-2">
-          <legend class="sr-only">{{ $t('platform.limits') }}</legend>
-          <p class="text-sm font-medium" aria-hidden="true">{{ $t('platform.limits') }}</p>
-          <p class="text-xs text-muted">{{ $t('platform.limitsHint') }}</p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label for="edit-max-branches" class="block text-sm text-muted mb-1">{{ $t('platform.maxBranches') }}</label>
-              <input id="edit-max-branches" v-model.number="editForm.maxBranches" type="number" min="1" step="1" class="input" :placeholder="$t('platform.noLimit')" />
-              <p class="text-xs text-muted mt-1">{{ activeOf(editing.activeBranchCount, editing.maxBranches) }}</p>
-            </div>
-            <div>
-              <label for="edit-max-users" class="block text-sm text-muted mb-1">{{ $t('platform.maxUsers') }}</label>
-              <input id="edit-max-users" v-model.number="editForm.maxUsers" type="number" min="1" step="1" class="input" :placeholder="$t('platform.noLimit')" />
-              <p class="text-xs text-muted mt-1">{{ activeOf(editing.activeUserCount, editing.maxUsers) }}</p>
-            </div>
-          </div>
-          <p v-if="branchesOverLimit" class="text-xs text-warning-text">{{ $t('platform.limitBelowCount', { active: editing.activeBranchCount }) }}</p>
-          <p v-if="usersOverLimit" class="text-xs text-warning-text">{{ $t('platform.limitBelowCount', { active: editing.activeUserCount }) }}</p>
-        </fieldset>
-
-        <ShiftModePicker v-model="editForm.shiftMode" name="edit-shift-mode" class="border-t border-line pt-4" />
-        <MainCurrencyPicker v-model="editForm.mainCurrency" name="edit-main-currency" :locked="editing.mainCurrencyLocked" class="border-t border-line pt-4" />
-
-        <div class="border-t border-line pt-4 space-y-2">
-          <label for="edit-retention" class="block text-sm font-medium">{{ $t('platform.retention') }}</label>
-          <select id="edit-retention" v-model.number="editForm.retentionMonths" class="input w-32">
-            <option v-for="n in [1, 2, 3]" :key="n" :value="n">{{ $t('settings.retentionMonthsOption', { n }, n) }}</option>
-          </select>
-          <p class="text-xs text-muted">{{ $t('platform.retentionHint') }}</p>
-          <p class="text-xs text-muted">{{ $t('settings.retentionClearNowHint') }}</p>
-          <button type="button" class="btn-secondary flex items-center gap-2" :disabled="clearingLog" @click="clearLog">
-            <Trash2 :stroke-width="1.8" class="w-4 h-4" /> {{ $t('settings.retentionClearNow') }}
-          </button>
-        </div>
-
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="editing = null">{{ $t('common.cancel') }}</button>
-          <button type="submit" class="btn-primary" :disabled="saving">{{ $t('common.save') }}</button>
         </div>
       </form>
     </Modal>

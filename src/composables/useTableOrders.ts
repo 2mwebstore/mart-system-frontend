@@ -29,8 +29,9 @@ function chime() {
 }
 
 // The POS's queue of open QR table orders for its branch, polled. A NEW order
-// this screen hasn't seen yet plays a chime and shows a toast.
-export function useTableOrders(branchId: () => number) {
+// this screen hasn't seen yet plays a chime and shows a toast. Nothing is
+// asked for while `enabled` says no (a company without tables).
+export function useTableOrders(branchId: () => number, enabled: () => boolean = () => true) {
   const toast = useToast()
   const orders = ref<TableOrder[]>([])
   const newCount = ref(0)
@@ -39,6 +40,11 @@ export function useTableOrders(branchId: () => number) {
 
   async function refresh() {
     const id = branchId()
+    if (!enabled()) {
+      orders.value = []
+      newCount.value = 0
+      return
+    }
     if (!id) return
     try {
       // 100 is the API's page maximum; open orders come newest first.
