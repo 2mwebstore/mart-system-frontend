@@ -1,17 +1,21 @@
 <script setup lang="ts">
-// A discount entered as % or $ — the same toggle the POS cart uses. The
-// caller turns (type, value) into cents against its own base; this only
-// collects the input.
+// A discount entered as % or an amount ($ or ៛, the company's main currency)
+// — the same toggle the POS cart uses. The caller turns (type, value) into an
+// amount against its own base; this only collects the input.
+import { computed } from 'vue'
 import type { DiscountType } from '@/composables/useCart'
+import { useMoney } from '@/composables/useMoney'
+import MoneyInput from '@/components/MoneyInput.vue'
 
 defineProps<{ label: string; disabled?: boolean; small?: boolean }>()
 const type = defineModel<DiscountType>('type', { required: true })
 const value = defineModel<number>('value', { required: true })
 
-const options: { type: DiscountType; label: string }[] = [
+const { symbol, currency } = useMoney()
+const options = computed<{ type: DiscountType; label: string }[]>(() => [
   { type: 'percent', label: '%' },
-  { type: 'amount', label: '$' },
-]
+  { type: 'amount', label: symbol.value },
+])
 </script>
 
 <template>
@@ -33,15 +37,19 @@ const options: { type: DiscountType; label: string }[] = [
         </button>
       </div>
     </div>
+    <MoneyInput v-if="type === 'amount'" v-model="value" :currency="currency" :disabled="disabled" :aria-label="label" data-discount-input />
     <input
+      v-else
       v-model.number="value"
       type="number"
       min="0"
-      :max="type === 'percent' ? 100 : undefined"
-      :step="type === 'percent' ? 1 : 0.01"
+      max="100"
+      step="1"
       class="input"
-      :placeholder="type === 'percent' ? $t('pos.discountHintPercent') : $t('pos.discountHintAmount')"
+      :placeholder="$t('pos.discountHintPercent')"
+      :aria-label="label"
       :disabled="disabled"
+      data-discount-input
     />
   </div>
 </template>

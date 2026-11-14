@@ -33,14 +33,18 @@ afterEach(() => {
 })
 
 describe('a cash amount box', () => {
-  it('shows an amount as money, with its sign', async () => {
+  it('shows an amount as money, lined up on the right with its sign after it', async () => {
     const usd = await mount('USD', 1250.5)
     expect(usd.value).toBe('1,250.50')
-    expect(usd.parentElement!.textContent).toContain('$')
+    expect(usd.classList).toContain('text-right')
+    expect(usd.nextElementSibling!.textContent).toBe('$')
+    expect(usd.nextElementSibling!.className).toMatch(/\bright-/)
+    expect(usd.previousElementSibling).toBeNull()
     app!.unmount()
     const khr = await mount('KHR', 50000)
     expect(khr.value).toBe('50,000')
-    expect(khr.parentElement!.textContent).toContain('៛')
+    expect(khr.classList).toContain('text-right')
+    expect(khr.nextElementSibling!.textContent).toBe('៛')
   })
 
   it('starts empty instead of 0, so there is nothing to delete first', async () => {

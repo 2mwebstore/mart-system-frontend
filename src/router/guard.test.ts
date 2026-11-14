@@ -9,6 +9,11 @@ const session = vi.hoisted(() => ({
   permissions: ['pos.sell'] as string[],
   branches: [{ id: 1, name: 'Main', code: 'MAIN' }] as { id: number; name: string; code: string }[],
   shiftOpen: true,
+  // The company's choice (the super admin's), and whether the till's own
+  // shift opening fails; opened is each float the till opened a shift with.
+  shiftMode: 'REQUIRED' as 'REQUIRED' | 'SKIP',
+  openFails: false,
+  opened: [] as number[][],
 }))
 
 vi.mock('@/api/auth', () => ({
@@ -33,10 +38,26 @@ vi.mock('@/api/auth', () => ({
   }),
 }))
 vi.mock('@/stores/branding', () => ({ useBrandingStore: () => ({ useCompany: async () => {} }) }))
-vi.mock('@/stores/settings', () => ({ useSettingsStore: () => ({ ensureLoaded: async () => {} }) }))
+vi.mock('@/stores/settings', () => ({
+  useSettingsStore: () => ({
+    ensureLoaded: async () => {},
+    load: async () => {},
+    get app() {
+      return { shiftMode: session.shiftMode }
+    },
+    get usesShifts() {
+      return session.shiftMode !== 'SKIP'
+    },
+  }),
+}))
 vi.mock('@/stores/shift', () => ({
   useShiftStore: () => ({
     refresh: async () => {},
+    openShift: async (usdCents: number, khrRiel: number) => {
+      if (session.openFails) throw new Error('refused')
+      session.opened.push([usdCents, khrRiel])
+      session.shiftOpen = true
+    },
     get isOpen() {
       return session.shiftOpen
     },
@@ -68,6 +89,9 @@ beforeEach(async () => {
     permissions: ['pos.sell'],
     branches: [{ id: 1, name: 'Main', code: 'MAIN' }],
     shiftOpen: true,
+    shiftMode: 'REQUIRED',
+    openFails: false,
+    opened: [],
   })
   await router.push('/t/start')
 })
@@ -123,6 +147,42 @@ describe('a PIN session', () => {
     signIn({ viaPin: true, till: true })
     session.shiftOpen = false
     expect(await landsOn('/pos')).toBe('pos-open-shift')
+    expect(session.opened).toEqual([])
+  })
+
+  it('opens the shift by itself, with nothing counted, when the company skips it', async () => {
+    signIn({ viaPin: true, till: true })
+    session.shiftOpen = false
+    session.shiftMode = 'SKIP'
+    expect(await landsOn('/pos')).toBe('pos')
+    expect(session.opened).toEqual([[0, 0]])
+    // Asked for the Open shift page, it sells instead.
+    session.shiftOpen = false
+    await router.push('/t/start')
+    expect(await landsOn('/pos/open-shift')).toBe('pos')
+  })
+
+  it("falls back to the Open shift page when the till can't open one by itself", async () => {
+    signIn({ viaPin: true, till: true })
+    session.shiftOpen = false
+    session.shiftMode = 'SKIP'
+    session.openFails = true
+    expect(await landsOn('/pos')).toBe('pos-open-shift')
+  })
+
+  it("doesn't open another shift when one is open", async () => {
+    signIn({ viaPin: true, till: true })
+    session.shiftMode = 'SKIP'
+    expect(await landsOn('/pos')).toBe('pos')
+    expect(session.opened).toEqual([])
+  })
+
+  it('has no closing a shift without shifts', async () => {
+    signIn({ viaPin: true, till: true })
+    expect(await landsOn('/pos/close-shift')).toBe('pos-close-shift')
+    await router.push('/t/start')
+    session.shiftMode = 'SKIP'
+    expect(await landsOn('/pos/close-shift')).toBe('pos')
   })
 
   it("stays at its till whichever branch the browser had selected", async () => {
@@ -140,6 +200,14 @@ describe('a password session', () => {
   it('opens the back office', async () => {
     signIn()
     expect(await landsOn('/dashboard')).toBe('dashboard')
+  })
+
+  it('has no Shifts page without shifts', async () => {
+    signIn()
+    expect(await landsOn('/shifts')).toBe('shifts')
+    await router.push('/t/start')
+    session.shiftMode = 'SKIP'
+    expect(await landsOn('/shifts')).toBe('dashboard')
   })
 
   it('opens the till when the user can sell', async () => {

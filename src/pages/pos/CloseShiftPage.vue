@@ -11,6 +11,7 @@ import MoneyInput from '@/components/MoneyInput.vue'
 import type { Shift } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
 import { drawerStatus } from '@/utils/money'
+import { useMoney } from '@/composables/useMoney'
 import { clearReceiptPrint, printReceipt } from '@/utils/receiptPrint'
 import { useToast } from '@/composables/useToast'
 import { t } from '@/i18n'
@@ -34,7 +35,10 @@ const expectedVisible = computed(() => current.value?.expectedUsdCents != null)
 const countedUSDCents = computed(() => Math.round((countedUSD.value || 0) * 100))
 const countedKHRRiel = computed(() => Math.round(countedKHR.value || 0))
 
-const statusOf = (s: Shift) => drawerStatus(s.diffUsdCents, s.diffKhrRiel, s.exchangeRate)
+// Sales figures are in the company's main currency; the drawer is counted in
+// dollars and riel, and a riel company counts riel first.
+const { money, isRiel, currency } = useMoney()
+const statusOf = (s: Shift) => drawerStatus(s.diffUsdCents, s.diffKhrRiel, s.exchangeRate, currency.value)
 // Live preview for roles allowed to see the expected amount.
 const preview = computed(() => {
   const s = current.value
@@ -84,9 +88,9 @@ onUnmounted(clearReceiptPrint)
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div class="space-y-2 text-sm">
           <div class="flex justify-between"><span class="text-muted">{{ $t('pos.cashSales') }}</span><span class="font-mono">{{ current.cashSalesCount }}</span></div>
-          <div class="flex justify-between"><span class="text-muted">{{ $t('method.KHQR') }}</span><span class="font-mono">{{ formatUSD(current.khqrCents) }}</span></div>
-          <div class="flex justify-between"><span class="text-muted">{{ $t('method.CARD') }}</span><span class="font-mono">{{ formatUSD(current.cardCents) }}</span></div>
-          <div class="flex justify-between font-medium border-t border-line pt-2"><span>{{ $t('shifts.grossSales') }}</span><span class="font-mono">{{ formatUSD(current.grossSalesCents) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('method.KHQR') }}</span><span class="font-mono">{{ money(current.khqrCents) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('method.CARD') }}</span><span class="font-mono">{{ money(current.cardCents) }}</span></div>
+          <div class="flex justify-between font-medium border-t border-line pt-2"><span>{{ $t('shifts.grossSales') }}</span><span class="font-mono">{{ money(current.grossSalesCents) }}</span></div>
           <div class="flex justify-between"><span class="text-muted">{{ $t('shifts.openingFloat') }}</span><span class="font-mono">{{ formatUSD(current.openingUsdCents) }} + {{ formatKHR(current.openingKhrRiel) }}</span></div>
           <div v-if="expectedVisible" class="flex justify-between font-medium border-t border-line pt-2">
             <span>{{ $t('shifts.expectedInDrawer') }}</span>
@@ -101,7 +105,7 @@ onUnmounted(clearReceiptPrint)
               <label class="block text-sm text-muted mb-1">{{ $t('shifts.countedUsd') }}</label>
               <MoneyInput v-model="countedUSD" currency="USD" class="text-lg" />
             </div>
-            <div>
+            <div :class="{ 'order-first': isRiel }" data-riel-box>
               <label class="block text-sm text-muted mb-1">{{ $t('shifts.countedKhr') }}</label>
               <MoneyInput v-model="countedKHR" currency="KHR" class="text-lg" />
             </div>
@@ -135,9 +139,9 @@ onUnmounted(clearReceiptPrint)
       </div>
       <div class="border-t border-line pt-2 space-y-1">
         <div class="flex justify-between"><span>{{ $t('pos.cashSales') }}</span><span>{{ report.cashSalesCount }}</span></div>
-        <div class="flex justify-between"><span>{{ $t('method.KHQR') }}</span><span>{{ formatUSD(report.khqrCents) }}</span></div>
-        <div class="flex justify-between"><span>{{ $t('method.CARD') }}</span><span>{{ formatUSD(report.cardCents) }}</span></div>
-        <div class="flex justify-between font-medium"><span>{{ $t('shifts.grossSales') }}</span><span>{{ formatUSD(report.grossSalesCents) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('method.KHQR') }}</span><span>{{ money(report.khqrCents) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('method.CARD') }}</span><span>{{ money(report.cardCents) }}</span></div>
+        <div class="flex justify-between font-medium"><span>{{ $t('shifts.grossSales') }}</span><span>{{ money(report.grossSalesCents) }}</span></div>
       </div>
       <div class="border-t border-line pt-2 space-y-1">
         <div class="flex justify-between"><span>{{ $t('shifts.expected') }}</span><span>{{ formatUSD(report.expectedUsdCents ?? 0) }} + {{ formatKHR(report.expectedKhrRiel ?? 0) }}</span></div>

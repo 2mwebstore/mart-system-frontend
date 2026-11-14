@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Building2, HardDrive, Menu, ShieldCheck } from 'lucide-vue-next'
+import AppFooter from '@/components/layout/AppFooter.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import UserMenu from '@/components/layout/UserMenu.vue'
 import { findTrail, type NavSection } from '@/components/layout/nav'
@@ -80,6 +81,7 @@ async function handleSignOut() {
       <main class="flex-1 overflow-y-auto bg-page">
         <RouterView />
       </main>
+      <AppFooter />
     </div>
   </div>
 </template>

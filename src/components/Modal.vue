@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 
-const props = defineProps<{ title: string; wide?: boolean }>()
+// wide/xl: a wider dialog. flush: no padding around the content, for a
+// dialog that lays out its own panels edge to edge.
+const props = defineProps<{ title: string; wide?: boolean; xl?: boolean; flush?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const dialogRef = ref<HTMLElement | null>(null)
@@ -40,7 +42,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
       aria-modal="true"
       :aria-label="props.title"
       class="bg-surface rounded-modal border border-line shadow-lg w-full max-h-[90vh] overflow-y-auto"
-      :class="wide ? 'max-w-2xl' : 'max-w-md'"
+      :class="xl ? 'max-w-5xl' : wide ? 'max-w-2xl' : 'max-w-md'"
     >
       <div class="flex items-center justify-between px-5 py-4 border-b border-line">
         <h2 class="font-heading text-lg">{{ title }}</h2>
@@ -48,7 +50,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
           &times;
         </button>
       </div>
-      <div class="p-5">
+      <div :class="{ 'p-5': !flush }">
         <slot />
       </div>
     </div>

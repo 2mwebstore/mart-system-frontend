@@ -10,7 +10,9 @@ import { useFullscreen } from '@/composables/useFullscreen'
 import { i18n, label, setLocale, type Locale } from '@/i18n'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { useBrandingStore } from '@/stores/branding'
-import { formatKHR, formatUSD, initialsOf } from '@/utils/format'
+import { formatKHR, formatMoney, formatUSD, initialsOf } from '@/utils/format'
+import { otherFigure } from '@/utils/money'
+import type { Currency } from '@/types/domain'
 
 const state = ref<CartMessage | PaidMessage | null>(null)
 // The line that just changed (added or qty up) is briefly highlighted.
@@ -56,11 +58,22 @@ function markBroken(url: string) {
   brokenImages.value = new Set(brokenImages.value).add(url)
 }
 
+// Amounts come in the till's main currency (cents, or whole riel), with the
+// rate for the other one shown under the total. This window reads no settings.
+const currency = computed<Currency>(() => state.value?.currency ?? 'USD')
+function money(minor: number) {
+  return formatMoney(minor, currency.value)
+}
+function other(minor: number) {
+  const o = otherFigure(minor, currency.value, state.value?.rate ?? 0)
+  return formatMoney(o.amount, o.currency)
+}
+
 function hasTender(p: PaymentDraft) {
   return p.receivedUsdCents > 0 || p.receivedKhrRiel > 0
 }
 // "$20.00", "៛50,000" or "$5.00 + ៛8,000"; a dash until something is entered.
-function tenderedText(p: PaymentDraft) {
+function tenderedText(p: Pick<PaymentDraft, 'receivedUsdCents' | 'receivedKhrRiel'>) {
   const parts = [p.receivedUsdCents > 0 ? formatUSD(p.receivedUsdCents) : '', p.receivedKhrRiel > 0 ? formatKHR(p.receivedKhrRiel) : ''].filter(Boolean)
   return parts.length ? parts.join(' + ') : '—'
 }
@@ -102,17 +115,21 @@ onUnmounted(() => {
         <div class="space-y-2 text-lg text-left max-w-sm mx-auto">
           <div class="flex justify-between">
             <span class="text-muted">{{ $t('col.total') }}</span>
-            <span class="font-mono">{{ formatUSD(paid.totalCents) }} · {{ formatKHR(paid.totalRiel) }}</span>
+            <span class="font-mono">{{ money(paid.totalCents) }} · {{ other(paid.totalCents) }}</span>
           </div>
           <template v-if="paid.method === 'CASH'">
             <div class="flex justify-between">
               <span class="text-muted">{{ $t('pos.tendered') }}</span>
-              <span class="font-mono">{{ formatUSD(paid.receivedUsdCents) }}{{ paid.receivedKhrRiel ? ` + ${formatKHR(paid.receivedKhrRiel)}` : '' }}</span>
+              <span class="font-mono">{{ tenderedText(paid) }}</span>
             </div>
             <div class="flex justify-between items-baseline border-t border-line pt-3">
               <span class="font-medium">{{ $t('pos.change') }}</span>
               <span class="font-mono text-3xl font-medium">
-                {{ formatUSD(paid.changeUsdCents) }}<span v-if="paid.changeKhrRiel" class="block text-xl text-right">+ {{ formatKHR(paid.changeKhrRiel) }}</span>
+                <!-- A riel company gives all change in riel. -->
+                <template v-if="currency === 'KHR'">{{ formatKHR(paid.changeKhrRiel) }}</template>
+                <template v-else>
+                  {{ formatUSD(paid.changeUsdCents) }}<span v-if="paid.changeKhrRiel" class="block text-xl text-right">+ {{ formatKHR(paid.changeKhrRiel) }}</span>
+                </template>
               </span>
             </div>
           </template>
@@ -158,14 +175,14 @@ onUnmounted(() => {
           <div class="flex-1 min-w-0">
             <p class="text-xl font-medium truncate">{{ primaryName(line) }}</p>
             <p v-if="secondaryName(line)" class="text-sm text-muted truncate">{{ secondaryName(line) }}</p>
-            <p class="text-muted font-mono">{{ line.qty }} × {{ formatUSD(line.unitPriceCents) }}</p>
+            <p class="text-muted font-mono">{{ line.qty }} × {{ money(line.unitPriceCents) }}</p>
             <p v-if="line.note" class="text-muted italic truncate">{{ $t('pos.itemNoteLine', { note: line.note }) }}</p>
           </div>
           <div class="shrink-0 text-right">
-            <p v-if="line.discountCents" class="text-sm text-muted font-mono line-through">{{ formatUSD(line.qty * line.unitPriceCents) }}</p>
-            <p class="text-2xl font-mono font-medium">{{ formatUSD(line.lineTotalCents) }}</p>
+            <p v-if="line.discountCents" class="text-sm text-muted font-mono line-through">{{ money(line.qty * line.unitPriceCents) }}</p>
+            <p class="text-2xl font-mono font-medium">{{ money(line.lineTotalCents) }}</p>
             <p v-if="line.discountCents" class="inline-block mt-1 rounded-control bg-success px-2 py-0.5 text-sm text-success-text font-mono">
-              −{{ formatUSD(line.discountCents) }}<template v-if="line.discountPercent !== null"> ({{ line.discountPercent }}%)</template>
+              −{{ money(line.discountCents) }}<template v-if="line.discountPercent !== null"> ({{ line.discountPercent }}%)</template>
             </p>
           </div>
         </li>
@@ -179,27 +196,27 @@ onUnmounted(() => {
           </div>
           <div class="flex justify-between">
             <span class="text-muted">{{ $t('pos.subtotal') }}</span>
-            <span class="font-mono">{{ formatUSD(cart.subtotalCents) }}</span>
+            <span class="font-mono">{{ money(cart.subtotalCents) }}</span>
           </div>
           <div v-if="cart.lineDiscountsCents" class="flex justify-between">
             <span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span>
-            <span class="font-mono text-success-text">−{{ formatUSD(cart.lineDiscountsCents) }}</span>
+            <span class="font-mono text-success-text">−{{ money(cart.lineDiscountsCents) }}</span>
           </div>
           <div v-if="cart.cartDiscountCents" class="flex justify-between">
             <span class="text-muted">
               {{ $t('inventory.invoiceDiscount') }}<template v-if="cart.cartDiscountPercent !== null"> ({{ cart.cartDiscountPercent }}%)</template>
             </span>
-            <span class="font-mono text-success-text">−{{ formatUSD(cart.cartDiscountCents) }}</span>
+            <span class="font-mono text-success-text">−{{ money(cart.cartDiscountCents) }}</span>
           </div>
           <div v-if="cart.taxCents" class="flex justify-between">
             <span class="text-muted">{{ $t('tax.line', { name: cart.taxLabel }) }}</span>
-            <span class="font-mono">{{ formatUSD(cart.taxCents) }}</span>
+            <span class="font-mono">{{ money(cart.taxCents) }}</span>
           </div>
         </div>
         <div class="mt-auto border-t border-line pt-4">
           <p class="text-muted text-lg">{{ cart.payment ? $t('pos.amountDue') : $t('col.total') }}</p>
-          <p class="font-mono text-5xl font-medium">{{ formatUSD(cart.totalCents) }}</p>
-          <p class="font-mono text-2xl text-muted mt-1">{{ formatKHR(cart.totalRiel) }}</p>
+          <p class="font-mono text-5xl font-medium">{{ money(cart.totalCents) }}</p>
+          <p class="font-mono text-2xl text-muted mt-1">{{ other(cart.totalCents) }}</p>
         </div>
 
         <!-- Live while the cashier is taking payment -->
@@ -216,13 +233,16 @@ onUnmounted(() => {
             <div v-if="hasTender(cart.payment) && cart.payment.shortCents > 0" class="flex justify-between items-baseline border-t border-line pt-2">
               <span class="font-medium">{{ $t('pos.remaining') }}</span>
               <span class="font-mono text-2xl font-medium text-danger-strong text-right">
-                {{ formatUSD(cart.payment.shortCents) }}<span class="block text-base">{{ formatKHR(cart.payment.shortRiel) }}</span>
+                {{ money(cart.payment.shortCents) }}<span class="block text-base">{{ other(cart.payment.shortCents) }}</span>
               </span>
             </div>
             <div v-else-if="hasTender(cart.payment)" class="flex justify-between items-baseline border-t border-line pt-2">
               <span class="font-medium">{{ $t('pos.changeDue') }}</span>
               <span class="font-mono text-3xl font-medium text-success-text text-right">
-                {{ formatUSD(cart.payment.changeUsdCents) }}<span v-if="cart.payment.changeKhrRiel" class="block text-xl">+ {{ formatKHR(cart.payment.changeKhrRiel) }}</span>
+                <template v-if="currency === 'KHR'">{{ formatKHR(cart.payment.changeKhrRiel) }}</template>
+                <template v-else>
+                  {{ formatUSD(cart.payment.changeUsdCents) }}<span v-if="cart.payment.changeKhrRiel" class="block text-xl">+ {{ formatKHR(cart.payment.changeKhrRiel) }}</span>
+                </template>
               </span>
             </div>
           </template>

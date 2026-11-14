@@ -67,7 +67,8 @@ async function open(props: Partial<SaleOptions & { canDiscount: boolean }> = {})
   await settle()
 }
 
-const discountInput = () => host.querySelector<HTMLInputElement>('input[type="number"]')
+// The amount box (money, "2.00") or the percent box, whichever is showing.
+const discountInput = () => host.querySelector<HTMLInputElement>('[data-discount-input]')
 const note = () => host.querySelector<HTMLTextAreaElement>('[data-rich-note]')!
 const button = (text: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text)!
 // The Tax picker's wrapper, found by its "Tax" label.
@@ -104,7 +105,8 @@ describe("the POS cart's Edit popup", () => {
     expect(host.querySelector('[role="dialog"]')!.getAttribute('aria-label')).toBe('Discount, tax and note')
     expect(host.textContent).toContain(t('pos.totalDiscount'))
     expect(button('$').getAttribute('aria-pressed')).toBe('true')
-    expect(discountInput()!.value).toBe('2')
+    expect(discountInput()!.value).toBe('2.00')
+    expect(discountInput()!.type).toBe('text')
     expect(taxPicker().textContent).toContain('VAT')
     expect(note().value).toBe('<p>gift</p>')
   })
@@ -133,9 +135,17 @@ describe("the POS cart's Edit popup", () => {
     await open()
     type(discountInput()!, '')
     await submit()
+    // The amount box takes no minus sign at all.
+    type(discountInput()!, '-5')
+    expect(discountInput()!.value).toBe('5')
+    button('%').click()
+    await settle()
     type(discountInput()!, '-5')
     await submit()
-    expect(saved.map((s) => s.discountValue)).toEqual([0, 0])
+    expect(saved.map((s) => [s.discountType, s.discountValue])).toEqual([
+      ['amount', 0],
+      ['percent', 0],
+    ])
   })
 
   it('changes nothing on Cancel', async () => {

@@ -10,7 +10,6 @@ import { EXPENSE_CATEGORIES, type Expense } from '@/types/domain'
 import { useDebounced, usePagedList } from '@/composables/usePagedList'
 import Pagination from '@/components/Pagination.vue'
 import { useAuthStore } from '@/stores/auth'
-import { formatUSD } from '@/utils/format'
 import { plainText } from '@/utils/richText'
 import Modal from '@/components/Modal.vue'
 import ExpenseForm from '@/components/expenses/ExpenseForm.vue'
@@ -20,6 +19,10 @@ import DateRangePicker from '@/components/DateRangePicker.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import { useToast } from '@/composables/useToast'
 import { label, t } from '@/i18n'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money } = useMoney()
 
 const toast = useToast()
 const auth = useAuthStore()
@@ -122,9 +125,9 @@ async function remove(id: number) {
           </div>
         </div>
         <div class="rounded-control bg-surface-subtle px-3 py-2 text-sm text-muted" data-expense-summary>
-          {{ $t('common.total') }} <span class="font-mono font-semibold text-ink">{{ formatUSD(total) }}</span>
+          {{ $t('common.total') }} <span class="font-mono font-semibold text-ink">{{ money(total) }}</span>
           <template v-if="totalTax > 0">
-            · {{ $t('tax.label') }} <span class="font-mono text-ink">{{ formatUSD(totalTax) }}</span>
+            · {{ $t('tax.label') }} <span class="font-mono text-ink">{{ money(totalTax) }}</span>
           </template>
         </div>
       </div>
@@ -149,15 +152,15 @@ async function remove(id: number) {
               <td class="py-2">{{ label('expenseCat', e.category) }}</td>
               <td class="py-2 text-muted max-w-xs truncate" :title="plainText(e.note)">{{ plainText(e.note) }}</td>
               <td class="py-2 text-muted">{{ e.user }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(e.amountCents) }}</td>
-              <td class="py-2 text-right font-mono text-muted" :title="e.taxName">{{ e.taxCents ? formatUSD(e.taxCents) : '—' }}</td>
-              <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(e.totalCents) }}</td>
+              <td class="py-2 text-right font-mono">{{ money(e.amountCents) }}</td>
+              <td class="py-2 text-right font-mono text-muted" :title="e.taxName">{{ e.taxCents ? money(e.taxCents) : '—' }}</td>
+              <td class="py-2 pr-4 text-right font-mono">{{ money(e.totalCents) }}</td>
               <td class="py-2">
                 <div class="flex items-center gap-1">
                   <button v-if="canEdit" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('expenses.editAria')" @click="editExpense(e)">
                     <Pencil :stroke-width="1.8" class="w-4 h-4" />
                   </button>
-                  <ConfirmDelete v-if="canDelete" :item-label="$t('entity.expense')" :item-name="`${label('expenseCat', e.category)} ${formatUSD(e.totalCents)}`" @confirm="remove(e.id)" />
+                  <ConfirmDelete v-if="canDelete" :item-label="$t('entity.expense')" :item-name="`${label('expenseCat', e.category)} ${money(e.totalCents)}`" @confirm="remove(e.id)" />
                 </div>
               </td>
             </tr>

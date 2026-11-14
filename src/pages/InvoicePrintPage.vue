@@ -10,10 +10,12 @@ import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useBrandingStore } from '@/stores/branding'
 import { localName, seededLabel, t } from '@/i18n'
-import { formatKHR, formatUSD } from '@/utils/format'
-import { formatPercent } from '@/utils/tax'
-import { usdCentsToRiel } from '@/utils/money'
+import { taxTitle } from '@/utils/tax'
 import type { Invoice } from '@/types/domain'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money, other } = useMoney()
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -92,27 +94,27 @@ function printNow() {
               <span v-if="it.note" class="block text-xs text-gray-600 italic">{{ it.note }}</span>
             </td>
             <td class="py-2 text-right font-mono">{{ it.qty }}</td>
-            <td class="py-2 text-right font-mono">{{ formatUSD(it.unitPriceCents) }}</td>
-            <td class="py-2 text-right font-mono">{{ it.discountCents ? `−${formatUSD(it.discountCents)}` : '' }}</td>
-            <td class="py-2 text-right font-mono">{{ formatUSD(it.lineTotalCents) }}</td>
+            <td class="py-2 text-right font-mono">{{ money(it.unitPriceCents) }}</td>
+            <td class="py-2 text-right font-mono">{{ it.discountCents ? `−${money(it.discountCents)}` : '' }}</td>
+            <td class="py-2 text-right font-mono">{{ money(it.lineTotalCents) }}</td>
           </tr>
         </tbody>
       </table>
 
       <div class="ml-auto w-full sm:w-72 space-y-1">
-        <div class="flex justify-between"><span>{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ formatUSD(invoice.subtotalCents) }}</span></div>
-        <div v-if="invoice.lineDiscountCents" class="flex justify-between"><span>{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ formatUSD(invoice.lineDiscountCents) }}</span></div>
-        <div v-if="invoice.discountCents" class="flex justify-between"><span>{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ formatUSD(invoice.discountCents) }}</span></div>
-        <div v-if="invoice.shippingCents" class="flex justify-between"><span>{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ formatUSD(invoice.shippingCents) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ money(invoice.subtotalCents) }}</span></div>
+        <div v-if="invoice.lineDiscountCents" class="flex justify-between"><span>{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ money(invoice.lineDiscountCents) }}</span></div>
+        <div v-if="invoice.discountCents" class="flex justify-between"><span>{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ money(invoice.discountCents) }}</span></div>
+        <div v-if="invoice.shippingCents" class="flex justify-between"><span>{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ money(invoice.shippingCents) }}</span></div>
         <div v-if="invoice.taxCents || invoice.taxRateId" class="flex justify-between">
-          <span>{{ $t('tax.line', { name: `${invoice.taxName} ${formatPercent(invoice.taxPercent)}` }) }}</span><span class="font-mono">{{ formatUSD(invoice.taxCents) }}</span>
+          <span>{{ $t('tax.line', { name: taxTitle(invoice.taxName, invoice.taxPercent) }) }}</span><span class="font-mono">{{ money(invoice.taxCents) }}</span>
         </div>
         <div class="flex justify-between font-medium border-t-2 border-black pt-1 text-base">
-          <span>{{ $t('col.total') }}</span><span class="font-mono">{{ formatUSD(invoice.totalCents) }}</span>
+          <span>{{ $t('col.total') }}</span><span class="font-mono">{{ money(invoice.totalCents) }}</span>
         </div>
-        <div class="flex justify-between text-gray-600"><span></span><span class="font-mono">{{ formatKHR(usdCentsToRiel(invoice.totalCents, invoice.exchangeRate || 4100)) }}</span></div>
-        <div class="flex justify-between"><span>{{ $t('invoices.paid') }}</span><span class="font-mono">{{ formatUSD(invoice.paidCents) }}</span></div>
-        <div class="flex justify-between font-medium text-base"><span>{{ $t('invoices.balanceDue') }}</span><span class="font-mono">{{ formatUSD(invoice.balanceCents) }}</span></div>
+        <div class="flex justify-between text-gray-600"><span></span><span class="font-mono">{{ other(invoice.totalCents, invoice.exchangeRate || undefined) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('invoices.paid') }}</span><span class="font-mono">{{ money(invoice.paidCents) }}</span></div>
+        <div class="flex justify-between font-medium text-base"><span>{{ $t('invoices.balanceDue') }}</span><span class="font-mono">{{ money(invoice.balanceCents) }}</span></div>
       </div>
 
       <section v-if="invoice.payments?.length">
@@ -122,7 +124,7 @@ function printNow() {
             <tr v-for="p in invoice.payments" :key="p.id" class="border-b border-gray-300">
               <td class="py-1 font-mono">{{ p.paidOn }}</td>
               <td class="py-1">{{ seededLabel('method', p.methodType, p.methodName) }}<template v-if="p.reference"> · {{ p.reference }}</template></td>
-              <td class="py-1 text-right font-mono">{{ formatUSD(p.amountCents) }}</td>
+              <td class="py-1 text-right font-mono">{{ money(p.amountCents) }}</td>
             </tr>
           </tbody>
         </table>

@@ -1,6 +1,7 @@
 import { computed, reactive, ref } from 'vue'
-import type { Product, TaxRate } from '@/types/domain'
+import type { Currency, Product, TaxRate } from '@/types/domain'
 import { taxCents as taxOn } from '@/utils/tax'
+import { toMinor } from '@/utils/money'
 
 export type DiscountType = 'percent' | 'amount'
 
@@ -13,7 +14,8 @@ export interface CartLine {
   unitPriceCents: number
   qty: number
   // Per-line discount, independent of the cart-level one below — "discount
-  // can discount on product or total" per the request that added this.
+  // can discount on product or total" per the request that added this. An
+  // amount is typed in the main currency: dollars, or riel.
   discountType: DiscountType
   discountValue: number
   // A free-text remark ("less sugar", "no ice") — cosmetic only, carried
@@ -41,6 +43,9 @@ const tableOrderLabel = ref('')
 // tax for this sale.
 const taxRate = ref<TaxRate | null>(null)
 const defaultTaxRate = ref<TaxRate | null>(null)
+// The company's main currency, which prices are in and amount discounts are
+// typed in. The till sets it from the settings (setCurrency).
+const currency = ref<Currency>('USD')
 // The sale's own note (rich text). It shows in the sale's details, not on the
 // printed receipt.
 const note = ref('')
@@ -50,7 +55,7 @@ function lineGrossCents(line: CartLine) {
 }
 function lineDiscountCents(line: CartLine) {
   const gross = lineGrossCents(line)
-  const raw = line.discountType === 'percent' ? Math.round((gross * line.discountValue) / 100) : Math.round(line.discountValue * 100)
+  const raw = line.discountType === 'percent' ? Math.round((gross * line.discountValue) / 100) : toMinor(line.discountValue, currency.value)
   return Math.min(Math.max(raw, 0), gross)
 }
 function lineNetCents(line: CartLine) {
@@ -125,6 +130,10 @@ export function useCart() {
 
   // The same for the starting tax: an empty sale still on the old one takes
   // the new one; a sale under way, or switched by the cashier, keeps its own.
+  function setCurrency(c: Currency) {
+    currency.value = c
+  }
+
   function setDefaultTaxRate(rate: TaxRate | null) {
     const previous = defaultTaxRate.value
     defaultTaxRate.value = rate
@@ -147,7 +156,7 @@ export function useCart() {
   const afterLineDiscountsCents = computed(() => subtotalCents.value - lineDiscountsCents.value)
   const cartDiscountCents = computed(() => {
     const base = afterLineDiscountsCents.value
-    const raw = cartDiscountType.value === 'percent' ? Math.round((base * cartDiscountValue.value) / 100) : Math.round(cartDiscountValue.value * 100)
+    const raw = cartDiscountType.value === 'percent' ? Math.round((base * cartDiscountValue.value) / 100) : toMinor(cartDiscountValue.value, currency.value)
     return Math.min(Math.max(raw, 0), base)
   })
   // Combined discount (every line's own discount plus the cart-level one) —
@@ -169,6 +178,8 @@ export function useCart() {
     tableOrderLabel,
     taxRate,
     setDefaultTaxRate,
+    setCurrency,
+    currency,
     note,
     addProduct,
     incQty,

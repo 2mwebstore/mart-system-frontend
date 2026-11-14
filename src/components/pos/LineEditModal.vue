@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
 import Modal from '@/components/Modal.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import type { DiscountType } from '@/composables/useCart'
+import { useMoney } from '@/composables/useMoney'
 
 const props = defineProps<{
   title: string
@@ -11,6 +13,9 @@ const props = defineProps<{
   canDiscount: boolean
 }>()
 const emit = defineEmits<{ close: []; save: [{ discountType: DiscountType; discountValue: number; note: string }] }>()
+
+// An amount discount is typed in the company's main currency.
+const { symbol, currency } = useMoney()
 
 const form = reactive({ discountType: props.discountType, discountValue: props.discountValue, note: props.note })
 
@@ -40,10 +45,11 @@ function save() {
               :class="form.discountType === 'amount' ? 'bg-primary text-primary-ink' : 'text-muted'"
               @click="form.discountType = 'amount'"
             >
-              $
+              {{ symbol }}
             </button>
           </div>
-          <input v-model.number="form.discountValue" type="number" min="0" class="input" />
+          <MoneyInput v-if="form.discountType === 'amount'" v-model="form.discountValue" :currency="currency" data-discount-input />
+          <input v-else v-model.number="form.discountValue" type="number" min="0" max="100" step="1" class="input" data-discount-input />
         </div>
       </div>
 

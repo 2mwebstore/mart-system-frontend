@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// A cash amount box that reads like money: "$ 1,250.00" or "៛ 50,000", with
-// the thousands marks put in as you type and the caret kept where it was.
+// A cash amount box that reads like money: "1,250.00 $" or "50,000 ៛", lined
+// up on the right with the sign after the amount, the thousands marks put in
+// as you type and the caret kept where it was.
 // v-model is the plain number the page already works with: dollars (up to
 // cents) for USD, whole riel for KHR; an empty box is 0. Tablets get the
 // number keypad. Attributes (class, id, autofocus) go to the input itself.
@@ -79,19 +80,20 @@ function onBlur() {
 
 <template>
   <div class="relative">
-    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted" aria-hidden="true">{{ symbol }}</span>
     <input
       v-bind="$attrs"
       :value="text"
       type="text"
       :inputmode="decimals ? 'decimal' : 'numeric'"
       autocomplete="off"
-      class="input pl-7 font-mono"
+      class="input pr-[1.75em] text-right font-mono"
       :placeholder="decimals ? '0.00' : '0'"
       data-money-input
       @input="onInput"
       @focus="onFocus"
       @blur="onBlur"
     />
+    <!-- In em, so the sign keeps its distance at any text size. -->
+    <span class="pointer-events-none absolute inset-y-0 right-[0.75em] flex items-center text-muted" aria-hidden="true" data-money-sign>{{ symbol }}</span>
   </div>
 </template>

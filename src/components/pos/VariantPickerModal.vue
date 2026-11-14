@@ -2,8 +2,11 @@
 import Modal from '@/components/Modal.vue'
 import { useSettingsStore } from '@/stores/settings'
 import type { Product } from '@/types/domain'
-import { formatUSD } from '@/utils/format'
 import { localName } from '@/i18n'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money } = useMoney()
 
 const props = defineProps<{ product: Product; variants: Product[] }>()
 const emit = defineEmits<{ close: []; add: [Product] }>()
@@ -34,7 +37,7 @@ function pick(v: Product) {
         <span class="text-sm font-medium">{{ v.variantName }}</span>
         <span class="flex items-center gap-3 shrink-0">
           <span v-if="outOfStock(v)" class="text-xs text-danger-strong">{{ $t('stockStatus.out') }}</span>
-          <span class="font-mono text-sm">{{ formatUSD(v.priceCents) }}</span>
+          <span class="font-mono text-sm">{{ money(v.priceCents) }}</span>
         </span>
       </button>
     </div>

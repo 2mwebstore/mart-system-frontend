@@ -133,6 +133,8 @@ const router = createRouter({
         { path: 'shifts', name: 'shifts', component: () => import('@/pages/ShiftsPage.vue') },
         { path: 'inventory', name: 'inventory', redirect: sectionRedirect(inventorySections) },
         ...sectionRoutes('inventory', InventoryPage, inventorySections),
+        { path: 'inventory/purchase-orders/new', name: 'po-new', component: () => import('@/pages/PurchaseOrderEditPage.vue') },
+        { path: 'inventory/purchase-orders/:id/edit', name: 'po-edit', component: () => import('@/pages/PurchaseOrderEditPage.vue') },
         { path: 'inventory/customers', name: 'customers', component: () => import('@/pages/CustomersPage.vue') },
         { path: 'customers', redirect: { name: 'customers' } },
         { path: 'invoices', name: 'invoices', component: () => import('@/pages/InvoicesPage.vue') },
@@ -178,7 +180,13 @@ router.beforeEach(async (to) => {
   if (to.meta.platform) return { name: 'dashboard' }
 
   // Exchange rate + app settings feed every priced screen; loaded once.
-  await useSettingsStore().ensureLoaded()
+  const settings = useSettingsStore()
+  await settings.ensureLoaded()
+
+  // A company without shifts (the super admin's choice) has no Shifts page
+  // and no closing a shift at the till.
+  if (!settings.usesShifts && to.name === 'shifts') return { name: 'dashboard' }
+  if (!settings.usesShifts && to.name === 'pos-close-shift') return { name: 'pos' }
 
   // Every admin page other than Settings itself is branch-scoped — with no
   // branches at all (most drastically: right after a production reset,
@@ -211,6 +219,17 @@ router.beforeEach(async (to) => {
     await shift.refresh(auth.deviceKey)
   } catch {
     return { name: 'pos-login' }
+  }
+  // A company without shifts: the till opens one by itself, with nothing
+  // counted in the drawer, and keeps it (there's no closing it). The setting
+  // is read again here, as the super admin may have changed it since sign-in.
+  if (!shift.isOpen) {
+    try {
+      await settings.load()
+      if (!settings.usesShifts) await shift.openShift(0, 0)
+    } catch {
+      // the API client already toasted why; the Open shift page is the way in
+    }
   }
   if (!shift.isOpen && to.name !== 'pos-open-shift') return { name: 'pos-open-shift' }
   if (shift.isOpen && to.name === 'pos-open-shift') return { name: 'pos' }

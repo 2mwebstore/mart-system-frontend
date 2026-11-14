@@ -10,7 +10,8 @@ import { useCart, type DiscountType } from '@/composables/useCart'
 import * as catalogApi from '@/api/catalog'
 import { listCustomers } from '@/api/people'
 import type { Category, CreateSaleInput, Customer, Product, Sale, TableBoardEntry, TableOrder } from '@/types/domain'
-import { formatUSD, initialsOf } from '@/utils/format'
+import { initialsOf } from '@/utils/format'
+import { useMoney } from '@/composables/useMoney'
 import { useToast } from '@/composables/useToast'
 import { useFullscreen } from '@/composables/useFullscreen'
 import SearchableSelect from '@/components/SearchableSelect.vue'
@@ -28,11 +29,10 @@ import LineEditModal from '@/components/pos/LineEditModal.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
 import SaleOptionsModal, { type SaleOptions } from '@/components/pos/SaleOptionsModal.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { formatPercent, startingRate } from '@/utils/tax'
+import { startingRate, taxTitle } from '@/utils/tax'
 import { plainText } from '@/utils/richText'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { i18n, localName, t } from '@/i18n'
-import { usdCentsToRiel } from '@/utils/money'
 import { openCustomerDisplay, useCustomerDisplaySender, type CartMessage, type PaidMessage, type PaymentDraft } from '@/composables/useCustomerDisplay'
 
 const auth = useAuthStore()
@@ -41,11 +41,14 @@ const router = useRouter()
 const toast = useToast()
 const cart = useCart()
 const settings = useSettingsStore()
+// Prices and totals are in the company's main currency (cents, or riel).
+const { money, toMinor, currency } = useMoney()
 const branding = useBrandingStore()
 
 const canDiscount = auth.hasPermission('pos.discount')
 // Pay-ins and pay-outs have their own permission: without it the button is gone.
-const canMoveCash = auth.hasPermission('pos.cash_movement')
+// They only feed a shift's cash count, so a company without shifts has none.
+const canMoveCash = computed(() => auth.hasPermission('pos.cash_movement') && settings.usesShifts)
 
 // Phones: the cart is a full-screen sheet (closed by default) and the header
 // actions live in a menu. See the template.
@@ -97,11 +100,13 @@ watch(
   (rate) => cart.setDefaultTaxRate(rate),
   { immediate: true },
 )
+// Amount discounts are typed in the company's main currency.
+watch(currency, (c) => cart.setCurrency(c), { immediate: true })
 const cartTaxRateId = computed({
   get: () => cart.taxRate.value?.id ?? null,
   set: (id: number | null) => (cart.taxRate.value = rateById(id)),
 })
-const taxLabel = computed(() => (cart.taxRate.value ? `${cart.taxRate.value.name} ${formatPercent(cart.taxRate.value.percent)}` : ''))
+const taxLabel = computed(() => (cart.taxRate.value ? taxTitle(cart.taxRate.value.name, cart.taxRate.value.percent) : ''))
 
 // Edit (before Hold): the discount on the whole sale, its tax and its own
 // note (rich text, shown in the sale's details afterwards), in one popup.
@@ -173,7 +178,7 @@ function priceRangeLabel(variants: Product[]) {
   const prices = variants.map((v) => v.priceCents)
   const min = Math.min(...prices)
   const max = Math.max(...prices)
-  return min === max ? formatUSD(min) : `${formatUSD(min)}–${formatUSD(max)}`
+  return min === max ? money(min) : `${money(min)}–${money(max)}`
 }
 function isOutOfStock(p: Product) {
   if (settings.app.allowOutOfStockSale) return false
@@ -225,7 +230,7 @@ const customerOptions = computed(() => customers.value.map((c) => ({ value: c.id
 // --- Per-line discount + note, edited together in one popup (one pencil icon) ---
 function lineDiscountLabel(line: { discountType: DiscountType; discountValue: number }) {
   if (!line.discountValue) return ''
-  return line.discountType === 'percent' ? t('pos.percentOff', { v: line.discountValue }) : t('pos.amountOff', { v: formatUSD(Math.round(line.discountValue * 100)) })
+  return line.discountType === 'percent' ? t('pos.percentOff', { v: line.discountValue }) : t('pos.amountOff', { v: money(toMinor(line.discountValue)) })
 }
 const editingLineFor = ref<number | null>(null)
 const editingLine = computed(() => cart.lines.find((l) => l.productId === editingLineFor.value) ?? null)
@@ -419,7 +424,13 @@ function unlinkTableOrder() {
 // The order as it's built, then the payment result while the receipt is up.
 // See composables/useCustomerDisplay.ts.
 function displayState(): CartMessage | PaidMessage {
-  const common = { storeName: settings.app.receiptHeader || branding.shortName, tillName: auth.tillName, locale: String(i18n.global.locale.value) }
+  const common = {
+    storeName: settings.app.receiptHeader || branding.shortName,
+    tillName: auth.tillName,
+    locale: String(i18n.global.locale.value),
+    currency: currency.value,
+    rate: settings.rate,
+  }
   const sale = completedSale.value
   if (cart.lines.length === 0 && sale) {
     return {
@@ -428,7 +439,6 @@ function displayState(): CartMessage | PaidMessage {
       receiptNo: sale.receiptNo,
       method: sale.payment.method,
       totalCents: sale.totalCents,
-      totalRiel: sale.totalRiel,
       receivedUsdCents: sale.payment.receivedUsdCents,
       receivedKhrRiel: sale.payment.receivedKhrRiel,
       changeUsdCents: sale.payment.changeUsdCents,
@@ -460,7 +470,6 @@ function displayState(): CartMessage | PaidMessage {
     taxLabel: taxLabel.value,
     taxCents: cart.taxCents.value,
     totalCents: cart.totalCents.value,
-    totalRiel: usdCentsToRiel(cart.totalCents.value, settings.rate),
     customerName: customers.value.find((c) => c.id === cart.customerId.value)?.name ?? '',
     payment: showPayment.value ? paymentDraft.value : null,
   }
@@ -469,7 +478,7 @@ const customerDisplay = useCustomerDisplaySender(displayState)
 watchEffect(() => customerDisplay.send(displayState()))
 onUnmounted(() => {
   // Leaving the sale screen (close shift, back office): show the welcome screen.
-  customerDisplay.send({ ...(displayState() as CartMessage), type: 'cart', lines: [], itemCount: 0, subtotalCents: 0, lineDiscountsCents: 0, cartDiscountCents: 0, cartDiscountPercent: null, taxLabel: '', taxCents: 0, totalCents: 0, totalRiel: 0, customerName: '', payment: null })
+  customerDisplay.send({ ...(displayState() as CartMessage), type: 'cart', lines: [], itemCount: 0, subtotalCents: 0, lineDiscountsCents: 0, cartDiscountCents: 0, cartDiscountPercent: null, taxLabel: '', taxCents: 0, totalCents: 0, customerName: '', payment: null })
   customerDisplay.close()
 })
 
@@ -565,7 +574,7 @@ function goToCloseShift() {
         </button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="showRecentSales = true">{{ $t('pos.sales') }}</button>
         <button v-if="canMoveCash" type="button" class="btn-secondary text-sm px-3 py-1.5" data-pos-cash-movement @click="showCashMovement = true">{{ $t('shifts.cashMovement') }}</button>
-        <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="goToCloseShift">{{ $t('shifts.closeShift') }}</button>
+        <button v-if="settings.usesShifts" type="button" class="btn-secondary text-sm px-3 py-1.5" data-pos-close-shift @click="goToCloseShift">{{ $t('shifts.closeShift') }}</button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5" :title="$t('pos.customerDisplayHint')" @click="openCustomerDisplay">
           <Monitor :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.customerDisplay') }}
         </button>
@@ -626,7 +635,16 @@ function goToCloseShift() {
             >
               {{ $t('shifts.cashMovement') }}
             </button>
-            <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(goToCloseShift)">{{ $t('shifts.closeShift') }}</button>
+            <button
+              v-if="settings.usesShifts"
+              type="button"
+              role="menuitem"
+              class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle"
+              data-pos-close-shift-menu
+              @click="menu(goToCloseShift)"
+            >
+              {{ $t('shifts.closeShift') }}
+            </button>
             <button type="button" role="menuitem" class="hidden md:block w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(openCustomerDisplay)">{{ $t('pos.customerDisplay') }}</button>
             <RouterLink :to="{ name: 'dashboard' }" role="menuitem" class="block px-4 py-2.5 text-sm hover:bg-surface-subtle">{{ $t('pos.backOffice') }}</RouterLink>
             <button
@@ -684,9 +702,9 @@ function goToCloseShift() {
             <div class="flex items-start gap-2">
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium leading-snug line-clamp-2">{{ localName(line.nameEn, line.nameKm) }}</p>
-                <p class="text-xs text-muted font-mono">{{ $t('pos.each', { price: formatUSD(line.unitPriceCents) }) }}</p>
+                <p class="text-xs text-muted font-mono">{{ $t('pos.each', { price: money(line.unitPriceCents) }) }}</p>
               </div>
-              <p class="text-right font-mono text-sm font-medium shrink-0">{{ formatUSD(cart.lineNetCents(line)) }}</p>
+              <p class="text-right font-mono text-sm font-medium shrink-0">{{ money(cart.lineNetCents(line)) }}</p>
             </div>
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-1.5">
@@ -710,19 +728,19 @@ function goToCloseShift() {
 
             <div v-if="line.discountValue > 0 || line.note" class="flex items-center justify-between gap-2 pl-0.5 text-xs text-muted">
               <span class="truncate">{{ line.note }}</span>
-              <span v-if="line.discountValue > 0" class="shrink-0">{{ lineDiscountLabel(line) }} (-{{ formatUSD(cart.lineDiscountCents(line)) }})</span>
+              <span v-if="line.discountValue > 0" class="shrink-0">{{ lineDiscountLabel(line) }} (-{{ money(cart.lineDiscountCents(line)) }})</span>
             </div>
           </div>
         </div>
 
         <div class="border-t border-line p-4 space-y-3">
           <div class="space-y-1 text-sm">
-            <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ formatUSD(cart.subtotalCents.value) }}</span></div>
-            <div v-if="cart.discountCentsCapped.value > 0" class="flex justify-between"><span class="text-muted">{{ $t('pos.discount') }}</span><span class="font-mono">-{{ formatUSD(cart.discountCentsCapped.value) }}</span></div>
+            <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ money(cart.subtotalCents.value) }}</span></div>
+            <div v-if="cart.discountCentsCapped.value > 0" class="flex justify-between"><span class="text-muted">{{ $t('pos.discount') }}</span><span class="font-mono">-{{ money(cart.discountCentsCapped.value) }}</span></div>
             <div v-if="cart.taxRate.value" class="flex justify-between" data-tax-line>
-              <span class="text-muted">{{ $t('tax.line', { name: taxLabel }) }}</span><span class="font-mono">{{ formatUSD(cart.taxCents.value) }}</span>
+              <span class="text-muted">{{ $t('tax.line', { name: taxLabel }) }}</span><span class="font-mono">{{ money(cart.taxCents.value) }}</span>
             </div>
-            <div class="flex justify-between text-lg font-medium border-t border-line pt-2"><span>{{ $t('pos.total') }}</span><span class="font-mono">{{ formatUSD(cart.totalCents.value) }}</span></div>
+            <div class="flex justify-between text-lg font-medium border-t border-line pt-2"><span>{{ $t('pos.total') }}</span><span class="font-mono">{{ money(cart.totalCents.value) }}</span></div>
           </div>
 
           <!-- Edit: the sale's discount, tax and note, in a popup. -->
@@ -743,7 +761,7 @@ function goToCloseShift() {
             </button>
           </div>
           <button type="button" class="btn-primary w-full text-lg py-3" :disabled="cart.lines.length === 0" @click="openPayment">
-            {{ $t('pos.payAmount', { amount: formatUSD(cart.totalCents.value) }) }}
+            {{ $t('pos.payAmount', { amount: money(cart.totalCents.value) }) }}
           </button>
         </div>
       </div>
@@ -828,7 +846,7 @@ function goToCloseShift() {
                 <span class="text-sm font-medium leading-tight">{{ localName(p.nameEn, p.nameKm) }}</span>
                 <span class="text-xs text-muted font-mono">{{ p.sku }}</span>
                 <span class="font-mono font-medium">
-                  {{ p.variantCount > 0 ? priceRangeLabel(variantsByParent.get(p.id) ?? []) : formatUSD(p.priceCents) }}
+                  {{ p.variantCount > 0 ? priceRangeLabel(variantsByParent.get(p.id) ?? []) : money(p.priceCents) }}
                 </span>
                 <span v-if="p.variantCount > 0" class="text-xs text-muted">{{ $t('pos.variantsAvailable', { n: p.variantCount }, p.variantCount) }}</span>
               </span>
@@ -851,7 +869,7 @@ function goToCloseShift() {
             <ShoppingCart :stroke-width="1.8" class="w-5 h-5" />
             {{ $t('pos.itemsCount', { n: cart.itemCount.value }, cart.itemCount.value) }}
           </span>
-          <span class="font-mono text-lg">{{ formatUSD(cart.totalCents.value) }}</span>
+          <span class="font-mono text-lg">{{ money(cart.totalCents.value) }}</span>
         </button>
       </div>
     </div>

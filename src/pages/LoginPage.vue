@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useBrandingStore } from '@/stores/branding'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
+import AppFooter from '@/components/layout/AppFooter.vue'
 import PasswordInput from '@/components/PasswordInput.vue'
 import { apiErrorMessage } from '@/i18n/apiErrors'
 
@@ -64,6 +65,8 @@ async function handleSubmit() {
       <div class="flex justify-center mt-4">
         <LanguageSwitch />
       </div>
+
+      <AppFooter bare />
     </div>
   </div>
 </template>

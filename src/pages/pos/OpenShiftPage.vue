@@ -4,11 +4,14 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useShiftStore } from '@/stores/shift'
 import { formatUSD, formatKHR } from '@/utils/format'
+import { useMoney } from '@/composables/useMoney'
 import { useToast } from '@/composables/useToast'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
 import MoneyInput from '@/components/MoneyInput.vue'
 import { t } from '@/i18n'
 
+// A riel company's riel box comes first.
+const { isRiel } = useMoney()
 const auth = useAuthStore()
 const shift = useShiftStore()
 const router = useRouter()
@@ -56,11 +59,12 @@ function changeTill() {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountUsd') }}</label>
-            <MoneyInput v-model="usdAmount" currency="USD" class="text-lg" autofocus />
+            <MoneyInput v-model="usdAmount" currency="USD" class="text-lg" :autofocus="!isRiel" />
           </div>
-          <div>
+          <!-- A riel company counts riel first. -->
+          <div :class="{ 'order-first': isRiel }" data-riel-box>
             <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountKhr') }}</label>
-            <MoneyInput v-model="khrAmount" currency="KHR" class="text-lg" />
+            <MoneyInput v-model="khrAmount" currency="KHR" class="text-lg" :autofocus="isRiel" />
           </div>
         </div>
         <p class="text-xs text-muted">{{ $t('pos.openingFloat', { usd: formatUSD((usdAmount || 0) * 100), khr: formatKHR(khrAmount || 0) }) }}</p>

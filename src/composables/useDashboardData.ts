@@ -2,7 +2,7 @@ import { computed, onMounted, ref, watch, type Ref } from 'vue'
 import axios from 'axios'
 import * as reportsApi from '@/api/reports'
 import type { DashboardReport } from '@/types/domain'
-import { usdCentsToRiel } from '@/utils/money'
+import { useMoney } from '@/composables/useMoney'
 import { label } from '@/i18n'
 
 // `label` stays the English key (chart colours are keyed by it); `name` is what's shown.
@@ -10,6 +10,7 @@ const METHOD_KEYS: Record<string, string> = { CASH: 'Cash', KHQR: 'KHQR', CARD: 
 
 // Dashboard KPIs for one branch, from GET /reports/dashboard (build spec §8.1).
 export function useDashboardData(branchId: Ref<number>) {
+  const { money } = useMoney()
   const report = ref<DashboardReport | null>(null)
   const loading = ref(true)
   const noAccess = ref(false)
@@ -46,7 +47,7 @@ export function useDashboardData(branchId: Ref<number>) {
       name: label('method', m.method),
       value: m.amountCents,
       share: total ? m.amountCents / total : 0,
-      display: `$${(m.amountCents / 100).toFixed(2)}`,
+      display: money(m.amountCents),
     }))
   })
 
@@ -54,8 +55,9 @@ export function useDashboardData(branchId: Ref<number>) {
     loading,
     noAccess,
     dateLabel: computed(() => r.value?.date ?? ''),
-    todayUSDCents: computed(() => r.value?.netSalesCents ?? 0),
-    todayKHRRiel: computed(() => usdCentsToRiel(r.value?.netSalesCents ?? 0, rate.value)),
+    // In the main currency; the page shows it in the other at `rate` too.
+    netSalesCents: computed(() => r.value?.netSalesCents ?? 0),
+    rate,
     transactions: computed(() => r.value?.transactions ?? 0),
     transactionsDeltaPct,
     avgBasketCents: computed(() => r.value?.avgBasketCents ?? 0),

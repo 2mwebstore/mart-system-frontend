@@ -10,17 +10,45 @@ import SearchableSelect from '@/components/SearchableSelect.vue'
 import Pagination from '@/components/Pagination.vue'
 import { useLocalList } from '@/composables/useLocalList'
 import { useToast } from '@/composables/useToast'
+import { useBrandingStore } from '@/stores/branding'
+import { FOOTER_YEAR, footerLine } from '@/utils/footer'
 import { formatDateTime } from '@/utils/format'
 import { t } from '@/i18n'
 
 // The tools that cover every company at once, so they're the super admin's:
-// database backups, the Telegram alerts about them, and the production reset.
+// the footer under every page, database backups, the Telegram alerts about
+// them, and the production reset.
 // (Each company keeps its own alerts, numbering and retention in Settings.)
 const toast = useToast()
 
 onMounted(() => {
-  void Promise.allSettled([loadNotify(), loadBackups()])
+  void Promise.allSettled([loadFooter(), loadNotify(), loadBackups()])
 })
+
+// --- The footer under every page -----------------------------------------------
+// One line for every company (a copyright); "{year}" shows the current year.
+
+const branding = useBrandingStore()
+const footerText = ref('')
+const savingFooter = ref(false)
+const footerPreview = computed(() => footerLine(footerText.value))
+
+async function loadFooter() {
+  footerText.value = (await platformApi.getFooter()).text
+}
+async function saveFooter() {
+  savingFooter.value = true
+  try {
+    const saved = await platformApi.updateFooter(footerText.value)
+    footerText.value = saved.text
+    branding.setFooterText(saved.text)
+    toast.success(t('platform.footerSaved'))
+  } catch {
+    // the API client already toasted the reason
+  } finally {
+    savingFooter.value = false
+  }
+}
 
 // --- Telegram alerts about backups --------------------------------------------
 
@@ -251,6 +279,35 @@ async function submitReset() {
       </div>
 
       <div class="space-y-4">
+        <form class="card space-y-4" data-footer-form @submit.prevent="saveFooter">
+          <div>
+            <h2 class="font-heading text-base">{{ $t('platform.footerTitle') }}</h2>
+            <p class="text-xs text-muted mt-1">{{ $t('platform.footerIntro') }}</p>
+          </div>
+          <div>
+            <label for="footer-text" class="block text-sm text-muted mb-1">{{ $t('platform.footerText') }}</label>
+            <input
+              id="footer-text"
+              v-model="footerText"
+              type="text"
+              maxlength="200"
+              class="input"
+              :placeholder="$t('platform.footerPlaceholder', { year: FOOTER_YEAR })"
+              autocomplete="off"
+            />
+            <p class="text-xs text-muted mt-1">{{ $t('platform.footerHint', { year: FOOTER_YEAR }) }}</p>
+          </div>
+          <div>
+            <p class="text-xs text-muted mb-1">{{ $t('platform.footerPreview') }}</p>
+            <p class="rounded-control border border-line bg-page px-3 py-2 text-center text-xs" :class="footerPreview ? 'text-muted' : 'text-muted/60 italic'" data-footer-preview>
+              {{ footerPreview || $t('platform.footerNone') }}
+            </p>
+          </div>
+          <div class="flex justify-end">
+            <button type="submit" class="btn-primary" :disabled="savingFooter">{{ $t('common.save') }}</button>
+          </div>
+        </form>
+
         <div class="card space-y-4">
           <div>
             <h2 class="font-heading text-base">{{ $t('alerts.telegramTitle') }}</h2>

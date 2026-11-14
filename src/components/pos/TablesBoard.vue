@@ -6,8 +6,11 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ShoppingCart } from 'lucide-vue-next'
 import { t } from '@/i18n'
-import { formatUSD } from '@/utils/format'
 import type { TableBoardEntry, TableOrder } from '@/types/domain'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money } = useMoney()
 
 const props = defineProps<{ tables: TableBoardEntry[]; orders: TableOrder[]; cartTableOrderIds: number[]; loading?: boolean }>()
 const emit = defineEmits<{ open: [BoardTile] }>()
@@ -138,7 +141,7 @@ function stateLabel(x: BoardTile) {
           <span class="text-xs text-muted">
             {{ $t('tableBoard.orders', { n: x.orders.length }, x.orders.length) }}<template v-if="x.oldestAt"> · {{ minutes(x.oldestAt) }}</template>
           </span>
-          <span class="font-mono font-medium">{{ formatUSD(x.totalCents) }}</span>
+          <span class="font-mono font-medium">{{ money(x.totalCents) }}</span>
         </span>
         <span v-if="x.inCart" class="absolute top-2 right-2 inline-flex items-center gap-1 rounded-control bg-primary text-primary-ink text-[10px] px-1.5 py-0.5">
           <ShoppingCart class="w-3 h-3" /> {{ $t('tableBoard.inCart') }}

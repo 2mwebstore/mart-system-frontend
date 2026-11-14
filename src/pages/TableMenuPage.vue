@@ -12,14 +12,17 @@ import { useBrandingStore } from '@/stores/branding'
 import { getPublicTableOrder, getTableMenu, placeTableOrder } from '@/api/tableOrders'
 import { i18n } from '@/i18n'
 import { apiErrorMessage } from '@/i18n/apiErrors'
-import { formatKHR, formatUSD, initialsOf } from '@/utils/format'
-import { usdCentsToRiel } from '@/utils/money'
+import { initialsOf } from '@/utils/format'
+import { useMoney } from '@/composables/useMoney'
 import type { MenuItem, PublicTableOrder, TableMenu } from '@/types/domain'
 
 const route = useRoute()
 const token = String(route.params.token ?? '')
 
 const menu = ref<TableMenu | null>(null)
+// Prices are in the shop's main currency, which the menu says (dollars from
+// a server from before it did).
+const { money, other } = useMoney(computed(() => menu.value?.currency ?? 'USD'))
 const loadError = ref('')
 const loading = ref(true)
 
@@ -66,11 +69,11 @@ function cardAvailable(c: MenuItem) {
   return isFamily(c) ? familyOf(c).some((v) => v.available) : c.available
 }
 function priceLabel(c: MenuItem) {
-  if (!isFamily(c)) return formatUSD(c.priceCents)
+  if (!isFamily(c)) return money(c.priceCents)
   const prices = familyOf(c).map((v) => v.priceCents)
   const lo = Math.min(...prices)
   const hi = Math.max(...prices)
-  return lo === hi ? formatUSD(lo) : `${formatUSD(lo)}–${formatUSD(hi)}`
+  return lo === hi ? money(lo) : `${money(lo)}–${money(hi)}`
 }
 const brokenImages = ref(new Set<string>())
 function showImage(url: string) {
@@ -327,12 +330,12 @@ watch(title, (v) => (document.title = v), { immediate: true })
                 {{ it.qty }} × {{ nameOf(it) }}
                 <span v-if="it.note" class="block text-xs text-muted italic">↳ {{ it.note }}</span>
               </span>
-              <span class="font-mono shrink-0">{{ formatUSD(it.qty * it.unitPriceCents) }}</span>
+              <span class="font-mono shrink-0">{{ money(it.qty * it.unitPriceCents) }}</span>
             </li>
           </ul>
           <div class="flex justify-between border-t border-line pt-2 text-sm font-medium">
             <span>{{ $t('col.total') }}</span>
-            <span class="font-mono">{{ formatUSD(o.totalCents) }}</span>
+            <span class="font-mono">{{ money(o.totalCents) }}</span>
           </div>
         </div>
       </section>
@@ -405,7 +408,7 @@ watch(title, (v) => (document.title = v), { immediate: true })
     <div v-if="menu && itemCount > 0 && !showOrder" class="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface p-3">
       <button type="button" class="btn-primary w-full max-w-5xl mx-auto flex items-center justify-between gap-3 py-3" @click="showOrder = true">
         <span class="flex items-center gap-2"><ShoppingBag :stroke-width="1.8" class="w-5 h-5" /> {{ $t('tableMenu.viewOrder', { n: itemCount }, itemCount) }}</span>
-        <span class="font-mono text-lg">{{ formatUSD(totalCents) }}</span>
+        <span class="font-mono text-lg">{{ money(totalCents) }}</span>
       </button>
     </div>
 
@@ -419,7 +422,7 @@ watch(title, (v) => (document.title = v), { immediate: true })
         <div v-for="v in familyOf(pickerFor)" :key="v.id" class="flex items-center justify-between gap-3 py-2 border-b border-line last:border-0" :class="v.available ? '' : 'opacity-50'">
           <div class="min-w-0">
             <p class="font-medium truncate">{{ v.variantName || nameOf(v) }}</p>
-            <p class="text-sm font-mono text-muted">{{ formatUSD(v.priceCents) }}</p>
+            <p class="text-sm font-mono text-muted">{{ money(v.priceCents) }}</p>
           </div>
           <span v-if="!v.available" class="text-xs text-muted">{{ $t('tableMenu.soldOut') }}</span>
           <div v-else-if="qtyOf(v.id) > 0" class="flex items-center gap-1">
@@ -445,9 +448,9 @@ watch(title, (v) => (document.title = v), { immediate: true })
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <p class="font-medium leading-snug">{{ nameOf(itemById.get(l.productId)!) }}</p>
-                <p class="text-xs text-muted font-mono">{{ $t('pos.each', { price: formatUSD(itemById.get(l.productId)!.priceCents) }) }}</p>
+                <p class="text-xs text-muted font-mono">{{ $t('pos.each', { price: money(itemById.get(l.productId)!.priceCents) }) }}</p>
               </div>
-              <p class="font-mono shrink-0">{{ formatUSD(l.qty * itemById.get(l.productId)!.priceCents) }}</p>
+              <p class="font-mono shrink-0">{{ money(l.qty * itemById.get(l.productId)!.priceCents) }}</p>
             </div>
             <div class="flex items-center gap-2">
               <button type="button" class="w-9 h-9 rounded-control border border-line flex items-center justify-center" :aria-label="$t('pos.decreaseQty')" @click="dec(l.productId)"><Minus class="w-4 h-4" /></button>
@@ -465,8 +468,8 @@ watch(title, (v) => (document.title = v), { immediate: true })
           <div class="flex justify-between items-baseline">
             <span class="text-muted">{{ $t('col.total') }}</span>
             <span class="text-right">
-              <span class="font-mono text-2xl font-medium">{{ formatUSD(totalCents) }}</span>
-              <span v-if="rate" class="block text-sm text-muted font-mono">{{ formatKHR(usdCentsToRiel(totalCents, rate)) }}</span>
+              <span class="font-mono text-2xl font-medium">{{ money(totalCents) }}</span>
+              <span v-if="rate" class="block text-sm text-muted font-mono">{{ other(totalCents, rate) }}</span>
             </span>
           </div>
           <p class="text-xs text-muted">{{ $t('tableMenu.payHint') }}</p>

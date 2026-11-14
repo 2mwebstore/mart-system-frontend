@@ -22,9 +22,15 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import Modal from '@/components/Modal.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import { useToast } from '@/composables/useToast'
 import { label, t } from '@/i18n'
+import { useMoney } from '@/composables/useMoney'
+
+// Sales figures are in the company's main currency (cents, or whole riel);
+// the drawer is counted in dollars and riel.
+const { money, currency, isRiel } = useMoney()
 
 const auth = useAuthStore()
 const settings = useSettingsStore()
@@ -161,7 +167,7 @@ const closingKHRAmount = ref(0)
 const countedUSDCents = computed(() => Math.round((closingUSDAmount.value || 0) * 100))
 const countedKHRRiel = computed(() => Math.round(closingKHRAmount.value || 0))
 
-const statusOf = (diffUsd: number, diffKhr: number, rate = current.value?.exchangeRate ?? 4100) => drawerStatus(diffUsd, diffKhr, rate)
+const statusOf = (diffUsd: number, diffKhr: number, rate = current.value?.exchangeRate ?? 4100) => drawerStatus(diffUsd, diffKhr, rate, currency.value)
 const liveDiffUsd = computed(() => countedUSDCents.value - (current.value?.expectedUsdCents ?? 0))
 const liveDiffKhr = computed(() => countedKHRRiel.value - (current.value?.expectedKhrRiel ?? 0))
 
@@ -252,9 +258,9 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
         <div><p class="text-muted">{{ $t('shifts.cashUsd') }}</p><p class="font-mono">{{ formatUSD(current.cashUsdCents) }}</p></div>
         <div><p class="text-muted">{{ $t('shifts.cashKhr') }}</p><p class="font-mono">{{ formatKHR(current.cashKhrRiel) }}</p></div>
-        <div><p class="text-muted">{{ $t('method.KHQR') }}</p><p class="font-mono">{{ formatUSD(current.khqrCents) }}</p></div>
-        <div><p class="text-muted">{{ $t('method.CARD') }}</p><p class="font-mono">{{ formatUSD(current.cardCents) }}</p></div>
-        <div><p class="text-muted">{{ $t('shifts.voided') }}</p><p class="font-mono">{{ formatUSD(current.voidedCents) }} ({{ current.voidedCount }})</p></div>
+        <div><p class="text-muted">{{ $t('method.KHQR') }}</p><p class="font-mono">{{ money(current.khqrCents) }}</p></div>
+        <div><p class="text-muted">{{ $t('method.CARD') }}</p><p class="font-mono">{{ money(current.cardCents) }}</p></div>
+        <div><p class="text-muted">{{ $t('shifts.voided') }}</p><p class="font-mono">{{ money(current.voidedCents) }} ({{ current.voidedCount }})</p></div>
         <div><p class="text-muted">{{ $t('shifts.payouts') }}</p><p class="font-mono">{{ formatUSD(current.payoutUsdCents) }}{{ current.payoutKhrRiel ? ` + ${formatKHR(current.payoutKhrRiel)}` : '' }}</p></div>
         <div><p class="text-muted">{{ $t('shifts.transactions') }}</p><p class="font-mono">{{ current.transactions }}</p></div>
         <div><p class="text-muted">{{ $t('shifts.itemsSold') }}</p><p class="font-mono">{{ current.itemsSold }}</p></div>
@@ -293,11 +299,11 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
       <h2 class="font-heading text-lg">{{ $t('shifts.closeTitle', { till: current.deviceName }) }}</h2>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="space-y-2 text-sm">
-          <div class="flex justify-between"><span class="text-muted">{{ $t('method.KHQR') }}</span><span class="font-mono">{{ formatUSD(current.khqrCents) }}</span></div>
-          <div class="flex justify-between"><span class="text-muted">{{ $t('method.CARD') }}</span><span class="font-mono">{{ formatUSD(current.cardCents) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('method.KHQR') }}</span><span class="font-mono">{{ money(current.khqrCents) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('method.CARD') }}</span><span class="font-mono">{{ money(current.cardCents) }}</span></div>
           <div class="flex justify-between"><span class="text-muted">{{ $t('shifts.cashUsd') }}</span><span class="font-mono">{{ formatUSD(current.cashUsdCents) }}</span></div>
           <div class="flex justify-between"><span class="text-muted">{{ $t('shifts.cashKhr') }}</span><span class="font-mono">{{ formatKHR(current.cashKhrRiel) }}</span></div>
-          <div class="flex justify-between font-medium border-t border-line pt-2"><span>{{ $t('shifts.totalSales') }}</span><span class="font-mono">{{ formatUSD(current.grossSalesCents) }}</span></div>
+          <div class="flex justify-between font-medium border-t border-line pt-2"><span>{{ $t('shifts.totalSales') }}</span><span class="font-mono">{{ money(current.grossSalesCents) }}</span></div>
           <div class="flex justify-between"><span class="text-muted">{{ $t('shifts.payouts') }}</span><span class="font-mono">-{{ formatUSD(current.payoutUsdCents) }}</span></div>
           <div class="flex justify-between"><span class="text-muted">{{ $t('shifts.payins') }}</span><span class="font-mono">+{{ formatUSD(current.payinUsdCents) }}</span></div>
           <div class="flex justify-between"><span class="text-muted">{{ $t('shifts.openingFloat') }}</span><span class="font-mono">{{ formatUSD(current.openingUsdCents) }} + {{ formatKHR(current.openingKhrRiel) }}</span></div>
@@ -312,11 +318,11 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm text-muted mb-1">{{ $t('shifts.countedUsd') }}</label>
-              <input v-model.number="closingUSDAmount" type="number" min="0" step="0.01" class="input" />
+              <MoneyInput v-model="closingUSDAmount" currency="USD" />
             </div>
-            <div>
+            <div :class="{ 'order-first': isRiel }" data-riel-box>
               <label class="block text-sm text-muted mb-1">{{ $t('shifts.countedKhr') }}</label>
-              <input v-model.number="closingKHRAmount" type="number" min="0" step="100" class="input" />
+              <MoneyInput v-model="closingKHRAmount" currency="KHR" />
             </div>
           </div>
           <div v-if="expectedVisible" class="flex items-center justify-between rounded-control border border-line p-3">
@@ -349,14 +355,14 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
       <div class="border-t border-line pt-2 space-y-1">
         <div class="flex justify-between"><span>{{ $t('shifts.transactions') }}</span><span>{{ report.transactions }}</span></div>
         <div class="flex justify-between"><span>{{ $t('shifts.itemsSold') }}</span><span>{{ report.itemsSold }}</span></div>
-        <div class="flex justify-between font-medium"><span>{{ $t('shifts.grossSales') }}</span><span>{{ formatUSD(report.grossSalesCents) }}</span></div>
-        <div class="flex justify-between"><span>{{ $t('shifts.voidedCount', { n: report.voidedCount }) }}</span><span>{{ formatUSD(report.voidedCents) }}</span></div>
+        <div class="flex justify-between font-medium"><span>{{ $t('shifts.grossSales') }}</span><span>{{ money(report.grossSalesCents) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('shifts.voidedCount', { n: report.voidedCount }) }}</span><span>{{ money(report.voidedCents) }}</span></div>
       </div>
       <div class="border-t border-line pt-2 space-y-1">
         <div class="flex justify-between"><span>{{ $t('shifts.cashUsd') }}</span><span>{{ formatUSD(report.cashUsdCents) }}</span></div>
         <div class="flex justify-between"><span>{{ $t('shifts.cashKhr') }}</span><span>{{ formatKHR(report.cashKhrRiel) }}</span></div>
-        <div class="flex justify-between"><span>{{ $t('method.KHQR') }}</span><span>{{ formatUSD(report.khqrCents) }}</span></div>
-        <div class="flex justify-between"><span>{{ $t('method.CARD') }}</span><span>{{ formatUSD(report.cardCents) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('method.KHQR') }}</span><span>{{ money(report.khqrCents) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('method.CARD') }}</span><span>{{ money(report.cardCents) }}</span></div>
       </div>
       <div class="border-t border-line pt-2 space-y-1">
         <div class="flex justify-between"><span>{{ $t('shifts.expected') }}</span><span>{{ formatUSD(report.expectedUsdCents ?? 0) }} + {{ formatKHR(report.expectedKhrRiel ?? 0) }}</span></div>
@@ -406,7 +412,7 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
             <td class="py-2">{{ s.cashierName }}</td>
             <td class="py-2 font-mono text-xs">{{ formatDateTime(s.openedAt) }}</td>
             <td class="py-2 font-mono text-xs">{{ formatDateTime(s.closedAt) }}</td>
-            <td class="py-2 text-right font-mono">{{ formatUSD(s.grossSalesCents) }}</td>
+            <td class="py-2 text-right font-mono">{{ money(s.grossSalesCents) }}</td>
             <td class="py-2"><StatusBadge :tone="historyStatus(s).tone" :label="historyStatus(s).label" /></td>
           </tr>
           <tr v-if="!historyList.loading && historyList.rows.length === 0">
@@ -425,11 +431,11 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountUsd') }}</label>
-            <input v-model.number="openingUSDAmount" type="number" min="0" step="0.01" class="input" />
+            <MoneyInput v-model="openingUSDAmount" currency="USD" />
           </div>
-          <div>
+          <div :class="{ 'order-first': isRiel }" data-riel-box>
             <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountKhr') }}</label>
-            <input v-model.number="openingKHRAmount" type="number" min="0" step="100" class="input" />
+            <MoneyInput v-model="openingKHRAmount" currency="KHR" />
           </div>
         </div>
         <p class="text-xs text-muted">{{ $t('shifts.totalOpening', { usd: formatUSD(Math.round((openingUSDAmount || 0) * 100)), khr: formatKHR(openingKHRAmount || 0) }) }}</p>
@@ -448,11 +454,11 @@ function historyStatus(s: Shift): { tone: 'success' | 'warning' | 'danger'; labe
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountUsd') }}</label>
-            <input v-model.number="cashMovementForm.amountUSD" type="number" min="0" step="0.01" class="input" />
+            <MoneyInput v-model="cashMovementForm.amountUSD" currency="USD" />
           </div>
-          <div>
+          <div :class="{ 'order-first': isRiel }" data-riel-box>
             <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountKhr') }}</label>
-            <input v-model.number="cashMovementForm.amountKHR" type="number" min="0" step="100" class="input" />
+            <MoneyInput v-model="cashMovementForm.amountKHR" currency="KHR" />
           </div>
         </div>
         <div>

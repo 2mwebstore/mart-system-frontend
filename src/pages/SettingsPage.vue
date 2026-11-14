@@ -15,6 +15,7 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import Modal from '@/components/Modal.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import SearchInput from '@/components/SearchInput.vue'
 import Pagination from '@/components/Pagination.vue'
 import { useLocalList } from '@/composables/useLocalList'
@@ -249,6 +250,8 @@ async function saveReceipt() {
         defaultCustomerId: settings.app.defaultCustomerId,
         defaultCustomerName: settings.app.defaultCustomerName,
         taxDefaults: settings.app.taxDefaults,
+        mainCurrency: settings.app.mainCurrency,
+        shiftMode: settings.app.shiftMode,
       }),
     () => undefined,
   )
@@ -367,18 +370,25 @@ async function saveStockPolicy() {
   <div class="p-4 sm:p-8 space-y-6">
     <h1 class="font-heading text-2xl">{{ pageTitle }}</h1>
 
-    <div v-if="section === 'rate'" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div class="card space-y-4">
-        <h2 class="font-heading text-base">{{ $t('settings.currentRate') }}</h2>
-        <div class="flex items-end gap-3">
-          <div>
-            <label class="block text-sm text-muted mb-1">{{ $t('settings.rielPerUsd') }}</label>
-            <input v-model.number="newRate" type="number" min="1000" max="10000" step="10" class="input w-40" :disabled="!canEditRate" />
+    <div v-if="section === 'rate'" class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div class="space-y-4">
+        <div class="card space-y-4">
+          <h2 class="font-heading text-base">{{ $t('settings.currentRate') }}</h2>
+          <div class="flex items-end gap-3">
+            <div class="w-40">
+              <label class="block text-sm text-muted mb-1">{{ $t('settings.rielPerUsd') }}</label>
+              <MoneyInput v-model="newRate" currency="KHR" :disabled="!canEditRate" data-rate-input />
+            </div>
+            <button type="button" class="btn-primary" :disabled="!canEditRate" @click="saveRate">{{ $t('common.save') }}</button>
           </div>
-          <button type="button" class="btn-primary" :disabled="!canEditRate" @click="saveRate">{{ $t('common.save') }}</button>
+          <p v-if="!canEditRate" class="text-xs text-muted">{{ $t('settings.noRatePermission') }}</p>
+          <p class="text-xs text-muted">{{ $t('settings.rateNote') }}</p>
         </div>
-        <p v-if="!canEditRate" class="text-xs text-muted">{{ $t('settings.noRatePermission') }}</p>
-        <p class="text-xs text-muted">{{ $t('settings.rateNote') }}</p>
+        <div class="card space-y-1" data-main-currency>
+          <h2 class="font-heading text-base">{{ $t('settings.mainCurrencyTitle') }}</h2>
+          <p class="text-sm">{{ $t('settings.mainCurrencyLine', { currency: $t(`settings.mainCurrencyName${settings.mainCurrency}`) }) }}</p>
+          <p class="text-xs text-muted">{{ $t('settings.mainCurrencySetBy') }}</p>
+        </div>
       </div>
       <div class="card">
         <h2 class="font-heading text-base mb-3">{{ $t('settings.history') }}</h2>
@@ -561,7 +571,7 @@ async function saveStockPolicy() {
         <textarea v-model="receiptForm.footer" rows="2" class="input" />
       </div>
       <div>
-        <label class="block text-sm text-muted mb-1">{{ $t('settings.loyaltyRate') }}</label>
+        <label class="block text-sm text-muted mb-1">{{ $t('settings.loyaltyRate', { unit: settings.mainCurrency === 'KHR' ? '៛1,000' : '$1' }) }}</label>
         <input v-model.number="receiptForm.loyaltyRate" type="number" min="0" step="0.5" class="input w-32" />
       </div>
       <div class="flex justify-end">

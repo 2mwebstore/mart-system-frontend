@@ -2,10 +2,12 @@
 import { reactive, ref } from 'vue'
 import Modal from '@/components/Modal.vue'
 import MoneyInput from '@/components/MoneyInput.vue'
+import { useMoney } from '@/composables/useMoney'
 import { useShiftStore } from '@/stores/shift'
 import { useToast } from '@/composables/useToast'
 import { label, t } from '@/i18n'
 
+const { isRiel } = useMoney()
 const shift = useShiftStore()
 const toast = useToast()
 const emit = defineEmits<{ close: [] }>()
@@ -65,7 +67,8 @@ async function submit() {
           <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountUsd') }}</label>
           <MoneyInput v-model="form.amountUSD" currency="USD" />
         </div>
-        <div>
+        <!-- A riel company counts riel first. -->
+        <div :class="{ 'order-first': isRiel }" data-riel-box>
           <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountKhr') }}</label>
           <MoneyInput v-model="form.amountKHR" currency="KHR" />
         </div>

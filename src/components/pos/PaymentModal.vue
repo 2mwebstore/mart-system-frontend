@@ -3,15 +3,18 @@ import { computed, onMounted, ref, watchEffect } from 'vue'
 import Modal from '@/components/Modal.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import MoneyInput from '@/components/MoneyInput.vue'
+import BankNote from '@/components/pos/BankNote.vue'
 import { listPaymentMethods } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import { seededLabel } from '@/i18n'
-import { calculateChange, usdCentsToRiel } from '@/utils/money'
+import { calculateChangeIn, usdCentsToRiel } from '@/utils/money'
 import { formatUSD, formatKHR } from '@/utils/format'
+import { useMoney } from '@/composables/useMoney'
 import type { CreateSaleInput } from '@/types/domain'
 import type { PaymentDraft } from '@/composables/useCustomerDisplay'
 
-// taxCents / taxLabel: the tax already in totalCents, shown under the amount due.
+// totalCents / taxCents are in the company's main currency (cents, or whole
+// riel). taxLabel: the tax already in totalCents, shown under the amount due.
 const props = defineProps<{ totalCents: number; submitting?: boolean; taxCents?: number; taxLabel?: string }>()
 const emit = defineEmits<{
   close: []
@@ -22,6 +25,7 @@ const emit = defineEmits<{
 
 const settings = useSettingsStore()
 const rate = computed(() => settings.rate)
+const { money, other, cashDue, isRiel, currency } = useMoney()
 
 // Payment methods are configured in Settings; only the enabled ones the sale
 // API can book (Cash / KHQR / Card) are offered. Cash is the default.
@@ -41,6 +45,7 @@ onMounted(async () => {
 })
 const methodOptions = computed(() => methods.value.map((m) => ({ value: m.id, label: seededLabel('method', m.type, m.name) })))
 const method = computed(() => methods.value.find((m) => m.id === methodId.value)?.type ?? 'CASH')
+const cash = computed(() => method.value === 'CASH')
 
 const tenderUSD = ref(0)
 const tenderKHR = ref(0)
@@ -49,29 +54,70 @@ const note = ref('')
 const tenderUSDCents = computed(() => Math.round((tenderUSD.value || 0) * 100))
 const tenderKHRRiel = computed(() => Math.round(tenderKHR.value || 0))
 // Same maths as the server's change rule; the server recomputes on submit.
-const change = computed(() => calculateChange(props.totalCents, tenderUSDCents.value, tenderKHRRiel.value, rate.value))
-const shortfallKHRRiel = computed(() => usdCentsToRiel(change.value.shortCents, rate.value))
+// A riel company gives all change in riel; a dollar one whole dollars + riel.
+const change = computed(() => calculateChangeIn(currency.value, props.totalCents, tenderUSDCents.value, tenderKHRRiel.value, rate.value))
+const shortfallKHRRiel = computed(() => (isRiel.value ? change.value.shortCents : usdCentsToRiel(change.value.shortCents, rate.value)))
 const canConfirmCash = computed(() => change.value.shortCents === 0 && props.totalCents >= 0)
 
 watchEffect(() => {
-  const cash = method.value === 'CASH'
+  const isCash = cash.value
   emit('draft', {
     method: method.value,
-    receivedUsdCents: cash ? tenderUSDCents.value : 0,
-    receivedKhrRiel: cash ? tenderKHRRiel.value : 0,
-    changeUsdCents: cash ? change.value.usdCents : 0,
-    changeKhrRiel: cash ? change.value.khrRiel : 0,
-    shortCents: cash ? change.value.shortCents : 0,
-    shortRiel: cash ? shortfallKHRRiel.value : 0,
+    receivedUsdCents: isCash ? tenderUSDCents.value : 0,
+    receivedKhrRiel: isCash ? tenderKHRRiel.value : 0,
+    changeUsdCents: isCash ? change.value.usdCents : 0,
+    changeKhrRiel: isCash ? change.value.khrRiel : 0,
+    shortCents: isCash ? change.value.shortCents : 0,
+    shortRiel: isCash ? shortfallKHRRiel.value : 0,
   })
 })
 
+// A company that sells in riel: its box comes first, and Exact and the quick
+// amounts fill it in riel.
+const rielFirst = isRiel
+const QUICK_USD = [1, 5, 10, 20, 50, 100]
+const QUICK_KHR = [1000, 5000, 10000, 20000, 50000, 100000]
+
+// The popup opens with the amount due already tendered, as Exact puts it. That
+// amount stands for "paid exactly" until the cashier says what was handed
+// over: a note button or an amount typed in either box replaces it instead of
+// adding to it, so riel typed in doesn't sit on top of the dollars filled in.
+const filledExact = ref(false)
+
 function setExactCash() {
-  tenderUSD.value = Number((props.totalCents / 100).toFixed(2))
+  if (rielFirst.value) {
+    // The cash amount due (rounded to the ៛100 note), which pays the sale.
+    tenderKHR.value = cashDue(props.totalCents)
+    tenderUSD.value = 0
+  } else {
+    tenderUSD.value = Number((props.totalCents / 100).toFixed(2))
+    tenderKHR.value = 0
+  }
+  filledExact.value = true
+}
+setExactCash()
+
+function clearExact() {
+  if (!filledExact.value) return
+  tenderUSD.value = 0
   tenderKHR.value = 0
+  filledExact.value = false
+}
+function typedUSD(n: number) {
+  clearExact()
+  tenderUSD.value = n
+}
+function typedKHR(n: number) {
+  clearExact()
+  tenderKHR.value = n
 }
 function addQuickUSD(amount: number) {
+  clearExact()
   tenderUSD.value = Number(((tenderUSD.value || 0) + amount).toFixed(2))
+}
+function addQuickKHR(amount: number) {
+  clearExact()
+  tenderKHR.value = (tenderKHR.value || 0) + amount
 }
 
 function confirmCash() {
@@ -85,66 +131,88 @@ function confirmOther() {
 </script>
 
 <template>
-  <Modal :title="$t('pos.takePayment')" @close="emit('close')">
-    <div class="space-y-5">
-      <div class="text-center">
-        <p class="text-muted text-sm">{{ $t('pos.amountDue') }}</p>
-        <p class="font-mono text-4xl mt-1">{{ formatUSD(totalCents) }}</p>
-        <p class="text-muted text-sm font-mono">{{ formatKHR(usdCentsToRiel(totalCents, rate)) }}</p>
-        <p v-if="taxCents" class="text-muted text-xs mt-1" data-tax-line>
-          {{ $t('tax.line', { name: taxLabel ?? '' }) }} <span class="font-mono">{{ formatUSD(taxCents) }}</span>
-        </p>
-      </div>
-
-      <SearchableSelect v-model="methodId" :label="$t('pos.paymentMethod')" :options="methodOptions" :searchable="false" :clearable="false" />
-
-      <div v-if="method === 'CASH'" class="space-y-4">
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-sm text-muted mb-1">{{ $t('pos.tenderedUsd') }}</label>
-            <MoneyInput v-model="tenderUSD" currency="USD" class="text-lg" />
-          </div>
-          <div>
-            <label class="block text-sm text-muted mb-1">{{ $t('pos.tenderedKhr') }}</label>
-            <MoneyInput v-model="tenderKHR" currency="KHR" class="text-lg" />
-          </div>
+  <Modal :title="$t('pos.takePayment')" xl flush @close="emit('close')">
+    <!-- Wide screens: the payment on the left, Quick cash beside it. Narrow:
+         one column, Quick cash between the tendered boxes and the change. -->
+    <div class="grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr]">
+      <div class="px-6 pt-6 lg:px-8 lg:pt-8 space-y-5" :class="cash ? 'lg:col-start-1 lg:row-start-1' : 'lg:col-span-2'">
+        <div class="text-center">
+          <p class="text-muted text-sm">{{ $t('pos.amountDue') }}</p>
+          <!-- In riel, cash is paid to the ៛100 note. -->
+          <p class="font-heading font-bold text-4xl mt-1 tabular-nums" data-amount-due>{{ money(cash ? cashDue(totalCents) : totalCents) }}</p>
+          <p class="text-muted text-sm tabular-nums" data-amount-other>{{ other(totalCents) }}</p>
+          <p v-if="taxCents" class="text-muted text-xs mt-1" data-tax-line>
+            {{ $t('tax.line', { name: taxLabel ?? '' }) }} · <span class="tabular-nums">{{ money(taxCents) }}</span>
+          </p>
         </div>
 
-        <div class="flex flex-wrap gap-2">
-          <button type="button" class="btn-secondary px-3 py-1.5 text-sm" @click="setExactCash">{{ $t('pos.exact') }}</button>
-          <button v-for="amt in [1, 5, 10, 20, 50, 100]" :key="amt" type="button" class="btn-secondary px-3 py-1.5 text-sm" @click="addQuickUSD(amt)">
-            +${{ amt }}
+        <SearchableSelect v-model="methodId" :label="$t('pos.paymentMethod')" :options="methodOptions" :searchable="false" :clearable="false" />
+
+        <!-- The box's text size is set here, so the amount and its sign grow together. -->
+        <div v-if="cash" class="grid grid-cols-2 gap-3">
+          <div class="text-lg" data-tender-usd>
+            <label class="block text-sm text-muted mb-1">{{ $t('pos.tenderedUsd') }}</label>
+            <MoneyInput :model-value="tenderUSD" currency="USD" @update:model-value="typedUSD" />
+          </div>
+          <div class="text-lg" :class="{ 'order-first': rielFirst }" data-tender-khr>
+            <label class="block text-sm text-muted mb-1">{{ $t('pos.tenderedKhr') }}</label>
+            <MoneyInput :model-value="tenderKHR" currency="KHR" @update:model-value="typedKHR" />
+          </div>
+        </div>
+      </div>
+
+      <section v-if="cash" class="mt-5 lg:mt-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 bg-surface-subtle border-y lg:border-y-0 lg:border-l border-line p-6" data-quick-cash>
+        <h3 class="font-semibold">{{ $t('pos.quickCash') }}</h3>
+        <p class="text-xs text-muted mt-0.5">{{ rielFirst ? $t('pos.quickCashHintKhr') : $t('pos.quickCashHintUsd') }}</p>
+        <button type="button" class="btn-secondary w-full py-3 mt-4 text-sm" data-exact @click="setExactCash">{{ $t('pos.exactAmount') }}</button>
+        <div class="grid grid-cols-2 sm:grid-cols-6 lg:grid-cols-2 gap-4 mt-5">
+          <button
+            v-for="amt in rielFirst ? QUICK_KHR : QUICK_USD"
+            :key="amt"
+            type="button"
+            class="relative rounded-md border border-line bg-surface shadow-sm transition hover:shadow-md hover:-translate-y-px active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            :aria-label="$t('pos.addCashNote', { amount: rielFirst ? formatKHR(amt) : formatUSD(amt * 100) })"
+            data-quick-amount
+            @click="rielFirst ? addQuickKHR(amt) : addQuickUSD(amt)"
+          >
+            <span class="block overflow-hidden rounded-[inherit]"><BankNote :currency="rielFirst ? 'KHR' : 'USD'" :amount="amt" /></span>
+            <span class="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-surface text-sm font-bold leading-none shadow" aria-hidden="true">+</span>
           </button>
         </div>
+      </section>
 
-        <div class="rounded-control border border-line p-3 flex items-center justify-between">
-          <span class="text-sm text-muted">{{ change.shortCents > 0 ? $t('pos.remaining') : $t('pos.changeDue') }}</span>
-          <span class="font-mono text-lg text-right" :class="change.shortCents > 0 ? 'text-danger-strong' : 'text-success-text'">
-            <template v-if="change.shortCents > 0">
-              {{ formatUSD(change.shortCents) }} <span class="text-sm">({{ formatKHR(shortfallKHRRiel) }})</span>
-            </template>
-            <template v-else>
-              {{ formatUSD(change.usdCents) }}<span class="text-sm"> + {{ formatKHR(change.khrRiel) }}</span>
-            </template>
-          </span>
-        </div>
+      <div class="px-6 pb-6 pt-4 lg:px-8 lg:pb-8 space-y-4 self-start" :class="cash ? 'lg:col-start-1 lg:row-start-2' : 'lg:col-span-2'">
+        <template v-if="cash">
+          <div class="rounded-control border border-line p-3 flex items-center justify-between gap-3" data-change-line>
+            <span class="text-sm text-muted">{{ change.shortCents > 0 ? $t('pos.remaining') : $t('pos.changeDue') }}</span>
+            <span class="font-mono text-lg text-right" :class="change.shortCents > 0 ? 'text-danger-strong' : 'text-success-text'">
+              <template v-if="change.shortCents > 0">
+                {{ money(change.shortCents) }} <span class="text-sm">({{ other(change.shortCents) }})</span>
+              </template>
+              <template v-else-if="rielFirst">{{ formatKHR(change.khrRiel) }}</template>
+              <template v-else>
+                {{ formatUSD(change.usdCents) }}<span class="text-sm"> + {{ formatKHR(change.khrRiel) }}</span>
+              </template>
+            </span>
+          </div>
 
-        <button type="button" class="btn-primary w-full text-lg py-3" :disabled="!canConfirmCash || submitting" @click="confirmCash">
-          {{ $t('pos.confirmCash') }}
-        </button>
+          <button type="button" class="btn-primary w-full text-lg py-3" :disabled="!canConfirmCash || submitting" @click="confirmCash">
+            {{ $t('pos.confirmCash') }}
+          </button>
+        </template>
+
+        <template v-else>
+          <div>
+            <label class="block text-sm text-muted mb-1">{{ $t('pos.noteOptional') }}</label>
+            <input v-model="note" type="text" class="input" :placeholder="method === 'KHQR' ? $t('pos.noteHintKhqr') : $t('pos.noteHintCard')" />
+          </div>
+          <button type="button" class="btn-primary w-full text-lg py-3" :disabled="submitting" @click="confirmOther">
+            {{ method === 'KHQR' ? $t('pos.confirmKhqr') : $t('pos.confirmCard') }}
+          </button>
+        </template>
+
+        <button type="button" class="text-sm text-muted hover:text-ink block mx-auto" @click="emit('close')">{{ $t('common.cancel') }}</button>
       </div>
-
-      <div v-else class="space-y-4">
-        <div>
-          <label class="block text-sm text-muted mb-1">{{ $t('pos.noteOptional') }}</label>
-          <input v-model="note" type="text" class="input" :placeholder="method === 'KHQR' ? $t('pos.noteHintKhqr') : $t('pos.noteHintCard')" />
-        </div>
-        <button type="button" class="btn-primary w-full text-lg py-3" :disabled="submitting" @click="confirmOther">
-          {{ method === 'KHQR' ? $t('pos.confirmKhqr') : $t('pos.confirmCard') }}
-        </button>
-      </div>
-
-      <button type="button" class="text-sm text-muted hover:text-ink block mx-auto" @click="emit('close')">{{ $t('common.cancel') }}</button>
     </div>
   </Modal>
 </template>

@@ -5,12 +5,14 @@ import { i18n, t } from '@/i18n'
 import type { Sale, Shift } from '@/types/domain'
 import { useAuthStore } from '@/stores/auth'
 import { useShiftStore } from '@/stores/shift'
+import { useSettingsStore } from '@/stores/settings'
 import RecentSalesModal from './RecentSalesModal.vue'
 
 const api = vi.hoisted(() => ({
   voided: [] as [number, string][],
   refuse: false,
   pages: 0,
+  empty: false,
 }))
 const sale = {
   id: 41,
@@ -26,6 +28,7 @@ const sale = {
 vi.mock('@/api/pos', () => ({
   pageShiftSales: async () => {
     api.pages++
+    if (api.empty) return { data: [], meta: { page: 1, perPage: 8, total: 0, totalPages: 0, summary: undefined } }
     return { data: [sale], meta: { page: 1, perPage: 8, total: 1, totalPages: 1, summary: undefined } }
   },
   voidSale: async (id: number, reason: string) => {
@@ -47,10 +50,12 @@ async function settle() {
   }
 }
 
-async function open(permissions = ['pos.void']) {
+async function open(permissions = ['pos.void'], shiftMode: 'REQUIRED' | 'SKIP' = 'REQUIRED') {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().$patch({ permissions })
+  const settings = useSettingsStore()
+  settings.app = { ...settings.app, shiftMode }
   const shift = useShiftStore()
   shift.shift = { id: 7, branchId: 1 } as Shift
   shift.deviceKey = 'TK-1'
@@ -65,6 +70,7 @@ beforeEach(() => {
   api.voided = []
   api.refuse = false
   api.pages = 0
+  api.empty = false
   voidedEvents = 0
   vi.spyOn(window, 'prompt')
 })
@@ -139,5 +145,27 @@ describe('voiding a sale from this shift’s sales', () => {
     await open([])
     expect(host.textContent).toContain('INV-000041')
     expect(voidButton()).toBeNull()
+  })
+})
+
+describe('the title', () => {
+  it("is this shift's sales, or the till's for a company without shifts", async () => {
+    await open()
+    expect(document.body.textContent).toContain(t('pos.salesThisShift'))
+    app?.unmount()
+    document.body.innerHTML = ''
+    await open(['pos.void'], 'SKIP')
+    expect(document.body.textContent).toContain(t('pos.salesThisTill'))
+    expect(document.body.textContent).not.toContain(t('pos.salesThisShift'))
+  })
+
+  it("says no sale yet on the shift, or on the till for a company without shifts", async () => {
+    api.empty = true
+    await open()
+    expect(host.ownerDocument.querySelector('[data-no-sales]')!.textContent!.trim()).toBe(t('pos.noSalesYet'))
+    app?.unmount()
+    document.body.innerHTML = ''
+    await open(['pos.void'], 'SKIP')
+    expect(host.ownerDocument.querySelector('[data-no-sales]')!.textContent!.trim()).toBe(t('pos.noSalesYetTill'))
   })
 })

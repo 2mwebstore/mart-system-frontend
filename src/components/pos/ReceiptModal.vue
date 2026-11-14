@@ -7,9 +7,13 @@ import { useSettingsStore } from '@/stores/settings'
 import { useBrandingStore } from '@/stores/branding'
 import type { Sale } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
-import { formatPercent } from '@/utils/tax'
+import { taxTitle } from '@/utils/tax'
 import { clearReceiptPrint, printReceipt as printOnReceiptPaper } from '@/utils/receiptPrint'
 import { label, localName } from '@/i18n'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money, other, isRiel } = useMoney()
 
 const props = defineProps<{ sale: Sale }>()
 const emit = defineEmits<{ close: [] }>()
@@ -61,25 +65,26 @@ onUnmounted(clearReceiptPrint)
         <div v-for="item in sale.items" :key="item.productId" class="contents" data-receipt-line>
           <div class="min-w-0 break-words text-[12px] leading-tight pt-0.5" data-receipt-name>
             {{ localName(item.name, item.nameKm) }}
-            <p v-if="item.qty > 1" class="text-[10px] text-muted">{{ $t('pos.each', { price: formatUSD(item.unitPriceCents) }) }}</p>
+            <p v-if="item.qty > 1" class="text-[10px] text-muted">{{ $t('pos.each', { price: money(item.unitPriceCents) }) }}</p>
             <p v-if="item.note" class="text-[10px] text-muted font-body">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
           </div>
           <span class="text-right">{{ item.qty }}</span>
-          <span v-if="hasLineDiscount" class="text-right">{{ item.discountCents > 0 ? `-${formatUSD(item.discountCents)}` : '' }}</span>
-          <span class="text-right">{{ formatUSD(item.lineTotalCents) }}</span>
+          <span v-if="hasLineDiscount" class="text-right">{{ item.discountCents > 0 ? `-${money(item.discountCents)}` : '' }}</span>
+          <span class="text-right">{{ money(item.lineTotalCents) }}</span>
         </div>
       </div>
 
       <div class="border-t border-line pt-2 space-y-1">
-        <div class="flex justify-between"><span>{{ $t('pos.subtotal') }}</span><span>{{ formatUSD(linesTotal) }}</span></div>
+        <div class="flex justify-between"><span>{{ $t('pos.subtotal') }}</span><span>{{ money(linesTotal) }}</span></div>
         <div v-if="saleDiscount > 0" class="flex justify-between" data-sale-discount>
-          <span>{{ $t('pos.discount') }}</span><span>-{{ formatUSD(saleDiscount) }}</span>
+          <span>{{ $t('pos.discount') }}</span><span>-{{ money(saleDiscount) }}</span>
         </div>
         <div v-if="sale.taxCents > 0" class="flex justify-between" data-tax-line>
-          <span>{{ $t('tax.line', { name: `${sale.taxName} ${formatPercent(sale.taxPercent)}` }) }}</span><span>{{ formatUSD(sale.taxCents) }}</span>
+          <span>{{ $t('tax.line', { name: taxTitle(sale.taxName, sale.taxPercent) }) }}</span><span>{{ money(sale.taxCents) }}</span>
         </div>
-        <div class="flex justify-between font-medium"><span>{{ $t('pos.total') }}</span><span>{{ formatUSD(sale.totalCents) }}</span></div>
-        <div class="flex justify-between text-muted"><span></span><span>{{ formatKHR(sale.totalRiel) }}</span></div>
+        <div class="flex justify-between font-medium"><span>{{ $t('pos.total') }}</span><span>{{ money(sale.totalCents) }}</span></div>
+        <!-- The other currency at the sale's own rate. -->
+        <div class="flex justify-between text-muted"><span></span><span data-total-other>{{ other(sale.totalCents, sale.exchangeRate) }}</span></div>
       </div>
 
       <div class="border-t border-line pt-2 space-y-1">
@@ -87,11 +92,14 @@ onUnmounted(clearReceiptPrint)
         <template v-if="sale.payment.method === 'CASH'">
           <div class="flex justify-between">
             <span>{{ $t('pos.tendered') }}</span>
-            <span>{{ formatUSD(sale.payment.receivedUsdCents) }}{{ sale.payment.receivedKhrRiel ? ` + ${formatKHR(sale.payment.receivedKhrRiel)}` : '' }}</span>
+            <span v-if="isRiel">{{ [sale.payment.receivedUsdCents ? formatUSD(sale.payment.receivedUsdCents) : '', sale.payment.receivedKhrRiel ? formatKHR(sale.payment.receivedKhrRiel) : ''].filter(Boolean).join(' + ') }}</span>
+            <span v-else>{{ formatUSD(sale.payment.receivedUsdCents) }}{{ sale.payment.receivedKhrRiel ? ` + ${formatKHR(sale.payment.receivedKhrRiel)}` : '' }}</span>
           </div>
           <div class="flex justify-between">
             <span>{{ $t('pos.change') }}</span>
-            <span>{{ formatUSD(sale.payment.changeUsdCents) }} + {{ formatKHR(sale.payment.changeKhrRiel) }}</span>
+            <!-- A riel company gives all change in riel. -->
+            <span v-if="isRiel" data-change>{{ formatKHR(sale.payment.changeKhrRiel) }}</span>
+            <span v-else data-change>{{ formatUSD(sale.payment.changeUsdCents) }} + {{ formatKHR(sale.payment.changeKhrRiel) }}</span>
           </div>
         </template>
         <div v-if="sale.payment.reference" class="flex justify-between"><span>{{ $t('common.note') }}</span><span>{{ sale.payment.reference }}</span></div>

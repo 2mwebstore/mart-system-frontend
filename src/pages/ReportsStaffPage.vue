@@ -4,9 +4,10 @@ import dayjs from 'dayjs'
 import { useI18n } from 'vue-i18n'
 import { categoryName, label } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
 import { useDateRangeQuery } from '@/composables/useDateRangeQuery'
 import { useReportsStaffData } from '@/composables/useReportsStaffData'
-import { formatUSD } from '@/utils/format'
+import { useMoney } from '@/composables/useMoney'
 import { CATEGORY_COLORS } from '@/utils/chartColors'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import DailyLineChart from '@/components/charts/DailyLineChart.vue'
@@ -14,13 +15,16 @@ import SegmentedBar from '@/components/charts/SegmentedBar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 const { t, locale } = useI18n()
+const { money, toMajor, symbol } = useMoney()
 const auth = useAuthStore()
+// Without shifts (the super admin's choice) there's no shift to show per person.
+const settings = useSettingsStore()
 const branchId = computed(() => auth.activeBranchId ?? auth.branches[0]?.id ?? 1)
 const { range } = useDateRangeQuery()
 const { series, totalNetSalesCents, dailyAverageCents, categoryBreakdown, staffRows, rolesSummary } = useReportsStaffData(range, branchId)
 
 const chartLabels = computed(() => series.value.map((d) => dayjs(d.date).locale(locale.value).format('D MMM')))
-const chartValues = computed(() => series.value.map((d) => Math.round(d.netSalesCents / 100)))
+const chartValues = computed(() => series.value.map((d) => Math.round(toMajor(d.netSalesCents))))
 
 const categorySegments = computed(() =>
   categoryBreakdown.value.map((c) => ({
@@ -28,7 +32,7 @@ const categorySegments = computed(() =>
     name: categoryName(c.name, c.nameKm),
     value: c.salesCents,
     share: c.share,
-    display: formatUSD(c.salesCents),
+    display: money(c.salesCents),
     color: CATEGORY_COLORS[c.name] ?? '#5A635D',
   })),
 )
@@ -51,11 +55,11 @@ const shiftTone: Record<string, 'success' | 'neutral' | 'warning'> = { Open: 'su
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-heading text-base">{{ t('staffReport.dailySales') }}</h2>
           <div class="text-right text-sm">
-            <p class="text-muted">{{ t('staffReport.total') }} <span class="font-mono text-ink">{{ formatUSD(totalNetSalesCents) }}</span></p>
-            <p class="text-muted">{{ t('staffReport.dailyAverage') }} <span class="font-mono text-ink">{{ formatUSD(dailyAverageCents) }}</span></p>
+            <p class="text-muted">{{ t('staffReport.total') }} <span class="font-mono text-ink">{{ money(totalNetSalesCents) }}</span></p>
+            <p class="text-muted">{{ t('staffReport.dailyAverage') }} <span class="font-mono text-ink">{{ money(dailyAverageCents) }}</span></p>
           </div>
         </div>
-        <DailyLineChart :labels="chartLabels" :values="chartValues" value-prefix="$" />
+        <DailyLineChart :labels="chartLabels" :values="chartValues" :value-prefix="symbol" />
       </div>
 
       <div class="card">
@@ -73,15 +77,15 @@ const shiftTone: Record<string, 'success' | 'neutral' | 'warning'> = { Open: 'su
               <th class="py-2 font-medium">{{ t('common.name') }}</th>
               <th class="py-2 font-medium">{{ t('common.role') }}</th>
               <th class="py-2 font-medium text-right">{{ t('staffReport.salesToday') }}</th>
-              <th class="py-2 font-medium">{{ t('staffReport.shift') }}</th>
+              <th v-if="settings.usesShifts" class="py-2 font-medium">{{ t('staffReport.shift') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="s in staffRows" :key="s.id" class="border-b border-line last:border-0">
               <td class="py-2">{{ s.fullName }}</td>
               <td class="py-2 text-muted">{{ label('role', s.roleName) }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(s.salesTodayCents) }}</td>
-              <td class="py-2"><StatusBadge :tone="shiftTone[s.shiftStatus]" :label="label('shiftStatus', s.shiftStatus)" /></td>
+              <td class="py-2 text-right font-mono">{{ money(s.salesTodayCents) }}</td>
+              <td v-if="settings.usesShifts" class="py-2" data-staff-shift><StatusBadge :tone="shiftTone[s.shiftStatus]" :label="label('shiftStatus', s.shiftStatus)" /></td>
             </tr>
           </tbody>
         </table>

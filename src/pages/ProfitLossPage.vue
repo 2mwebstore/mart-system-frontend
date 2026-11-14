@@ -7,7 +7,8 @@ import { FileDown, Plus } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useDateRangeQuery } from '@/composables/useDateRangeQuery'
 import { useProfitLossData } from '@/composables/useProfitLossData'
-import { formatUSD, formatKHR } from '@/utils/format'
+import { formatMoney } from '@/utils/format'
+import { useMoney } from '@/composables/useMoney'
 import { CATEGORY_COLORS } from '@/utils/chartColors'
 import * as peopleApi from '@/api/people'
 import type { ExpenseInput } from '@/api/people'
@@ -19,6 +20,7 @@ import ExpenseForm from '@/components/expenses/ExpenseForm.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t, locale } = useI18n()
+const { money, toMajor, symbol, isRiel } = useMoney()
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -50,13 +52,13 @@ const categorySegments = computed(() =>
     name: categoryName(c.name, c.nameKm),
     value: c.profitCents,
     share: c.share,
-    display: formatUSD(c.profitCents),
+    display: money(c.profitCents),
     color: CATEGORY_COLORS[c.name] ?? '#5A635D',
   })),
 )
 
 const profitLabels = computed(() => netProfitByDay.value.map((d) => dayjs(d.date).locale(locale.value).format('D MMM')))
-const profitValues = computed(() => netProfitByDay.value.map((d) => Math.round(d.netProfitCents / 100)))
+const profitValues = computed(() => netProfitByDay.value.map((d) => Math.round(toMajor(d.netProfitCents))))
 
 const showAddExpense = ref(false)
 const savingExpense = ref(false)
@@ -96,24 +98,24 @@ async function submitExpense(body: ExpenseInput) {
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="card">
         <p class="text-sm text-muted">{{ t('pl.netSales') }}</p>
-        <p class="font-mono text-xl mt-1">{{ formatUSD(netSalesCents) }}</p>
+        <p class="font-mono text-xl mt-1">{{ money(netSalesCents) }}</p>
         <p v-if="invoiceCount > 0" class="text-xs text-muted mt-1">
-          {{ t('pl.salesSplit', { pos: formatUSD(posSalesCents), invoices: formatUSD(invoiceSalesCents), n: invoiceCount }) }}
+          {{ t('pl.salesSplit', { pos: money(posSalesCents), invoices: money(invoiceSalesCents), n: invoiceCount }) }}
         </p>
       </div>
       <div class="card">
         <p class="text-sm text-muted">{{ t('pl.grossProfit') }}</p>
-        <p class="font-mono text-xl mt-1">{{ formatUSD(grossProfitCents) }}</p>
+        <p class="font-mono text-xl mt-1">{{ money(grossProfitCents) }}</p>
         <p class="text-xs text-muted">{{ t('pl.marginPct', { pct: grossMarginPct }) }}</p>
       </div>
       <div class="card">
         <p class="text-sm text-muted">{{ t('pl.opex') }}</p>
-        <p class="font-mono text-xl mt-1">{{ formatUSD(totalOperatingExpensesCents) }}</p>
+        <p class="font-mono text-xl mt-1">{{ money(totalOperatingExpensesCents) }}</p>
         <p class="text-xs text-muted">{{ t('pl.pctOfSales', { pct: opexPctOfSales }) }}</p>
       </div>
       <div class="card border-primary/40 bg-primary-tint">
         <p class="text-sm text-primary-tint-text">{{ t('pl.netProfit') }}</p>
-        <p class="font-mono text-xl mt-1 text-primary-tint-text">{{ formatUSD(netProfitCents) }}</p>
+        <p class="font-mono text-xl mt-1 text-primary-tint-text">{{ money(netProfitCents) }}</p>
         <p class="text-xs text-primary-tint-text">{{ t('pl.marginPct', { pct: netMarginPct }) }}</p>
       </div>
     </div>
@@ -121,13 +123,13 @@ async function submitExpense(body: ExpenseInput) {
     <div v-if="tax.collectedCents || tax.paidCents" class="grid grid-cols-1 sm:grid-cols-2 gap-4" data-pl-tax>
       <div class="card">
         <p class="text-sm text-muted">{{ t('tax.collected') }}</p>
-        <p class="font-mono text-xl mt-1">{{ formatUSD(tax.collectedCents) }}</p>
-        <p class="text-xs text-muted">{{ t('tax.collectedHint', { pos: formatUSD(tax.posCents), invoice: formatUSD(tax.invoiceCents) }) }}</p>
+        <p class="font-mono text-xl mt-1">{{ money(tax.collectedCents) }}</p>
+        <p class="text-xs text-muted">{{ t('tax.collectedHint', { pos: money(tax.posCents), invoice: money(tax.invoiceCents) }) }}</p>
       </div>
       <div class="card">
         <p class="text-sm text-muted">{{ t('tax.paid') }}</p>
-        <p class="font-mono text-xl mt-1">{{ formatUSD(tax.paidCents) }}</p>
-        <p class="text-xs text-muted">{{ t('tax.paidHint', { expense: formatUSD(tax.expenseCents), purchase: formatUSD(tax.purchaseCents) }) }}</p>
+        <p class="font-mono text-xl mt-1">{{ money(tax.paidCents) }}</p>
+        <p class="text-xs text-muted">{{ t('tax.paidHint', { expense: money(tax.expenseCents), purchase: money(tax.purchaseCents) }) }}</p>
       </div>
     </div>
 
@@ -137,17 +139,17 @@ async function submitExpense(body: ExpenseInput) {
         <thead>
           <tr class="text-left text-muted border-b border-line">
             <th class="py-2 font-medium">{{ t('pl.line') }}</th>
-            <th class="py-2 font-medium text-right">{{ t('common.usd') }}</th>
+            <th class="py-2 font-medium text-right">{{ isRiel ? t('common.khr') : t('common.usd') }}</th>
             <th class="py-2 font-medium text-right">{{ t('pl.pctOfNetSales') }}</th>
-            <th class="py-2 font-medium text-right">{{ t('common.khr') }}</th>
+            <th class="py-2 font-medium text-right">{{ isRiel ? t('common.usd') : t('common.khr') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="line in statementLines" :key="line.label" class="border-b border-line last:border-0" :class="line.bold ? 'font-medium' : ''">
             <td class="py-2">{{ line.label }}</td>
-            <td class="py-2 text-right font-mono" :class="line.usdCents < 0 ? 'text-danger-strong' : ''">{{ formatUSD(line.usdCents) }}</td>
+            <td class="py-2 text-right font-mono" :class="line.amount < 0 ? 'text-danger-strong' : ''">{{ money(line.amount) }}</td>
             <td class="py-2 text-right font-mono text-muted">{{ line.pctOfNetSales }}%</td>
-            <td class="py-2 text-right font-mono text-muted">{{ formatKHR(line.riel) }}</td>
+            <td class="py-2 text-right font-mono text-muted">{{ formatMoney(line.other.amount, line.other.currency) }}</td>
           </tr>
         </tbody>
       </table>
@@ -160,7 +162,7 @@ async function submitExpense(body: ExpenseInput) {
       </div>
       <div class="card">
         <h2 class="font-heading text-base mb-3">{{ t('pl.netProfitByDay') }}</h2>
-        <DailyLineChart :labels="profitLabels" :values="profitValues" value-prefix="$" />
+        <DailyLineChart :labels="profitLabels" :values="profitValues" :value-prefix="symbol" />
       </div>
     </div>
 

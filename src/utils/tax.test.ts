@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TaxRate } from '@/types/domain'
-import { formatPercent, nameFor, percentFor, startingRate, taxCents } from './tax'
+import { formatPercent, nameFor, percentFor, startingRate, taxCents, taxTitle } from './tax'
 
 const rate = (id: number, name: string, percent: number, active = true): TaxRate =>
   ({ id, name, percent, active }) as TaxRate
@@ -69,5 +69,25 @@ describe('formatPercent', () => {
     expect(formatPercent(7.5)).toBe('7.5%')
     expect(formatPercent(0.25)).toBe('0.25%')
     expect(formatPercent(12.3456)).toBe('12.35%')
+  })
+})
+
+describe('taxTitle', () => {
+  it('adds the percent to a name', () => {
+    expect(taxTitle('VAT', 10)).toBe('VAT 10%')
+    expect(taxTitle('', 10)).toBe('10%')
+  })
+
+  it("doesn't say the percent twice when the name already does", () => {
+    expect(taxTitle('VAT 10%', 10)).toBe('VAT 10%')
+    expect(taxTitle('10% levy', 10)).toBe('10% levy')
+    expect(taxTitle('GST 7.5%', 7.5)).toBe('GST 7.5%')
+  })
+
+  it('still adds it when the name holds another percent', () => {
+    expect(taxTitle('VAT 10%', 0)).toBe('VAT 10% 0%')
+    expect(taxTitle('Old 17.5%', 7.5)).toBe('Old 17.5% 7.5%')
+    expect(taxTitle('Rate 1.5%', 5)).toBe('Rate 1.5% 5%')
+    expect(taxTitle('VAT 10%', 12)).toBe('VAT 10% 12%')
   })
 })

@@ -4,6 +4,8 @@
 // and it keeps working if the network drops. The display only ever shows
 // what it's sent; it makes no API calls of its own.
 
+import type { Currency } from '@/types/domain'
+
 const CHANNEL = 'com-mart-customer-display'
 
 export interface DisplayLine {
@@ -24,6 +26,10 @@ interface Common {
   storeName: string
   tillName: string
   locale: string
+  // What the amounts are in (the company's main currency: cents, or whole
+  // riel), and the rate for the other currency shown under the total.
+  currency: Currency
+  rate: number
 }
 
 // What the cashier has entered in the payment window so far, sent while it's
@@ -34,7 +40,7 @@ export interface PaymentDraft {
   receivedKhrRiel: number
   changeUsdCents: number
   changeKhrRiel: number
-  // Still to pay (cash short of the total), in USD and at the till's rate.
+  // Still to pay (cash short of the total), in the main currency and in riel.
   shortCents: number
   shortRiel: number
 }
@@ -51,7 +57,6 @@ export interface CartMessage extends Common {
   taxLabel: string
   taxCents: number
   totalCents: number
-  totalRiel: number
   customerName: string
   payment: PaymentDraft | null
 }
@@ -61,7 +66,6 @@ export interface PaidMessage extends Common {
   receiptNo: string
   method: string
   totalCents: number
-  totalRiel: number
   receivedUsdCents: number
   receivedKhrRiel: number
   changeUsdCents: number

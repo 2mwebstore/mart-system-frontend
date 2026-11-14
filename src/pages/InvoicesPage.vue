@@ -19,8 +19,11 @@ import SearchInput from '@/components/SearchInput.vue'
 import InvoiceDetail from '@/components/invoices/InvoiceDetail.vue'
 import InvoicePaymentForm from '@/components/invoices/InvoicePaymentForm.vue'
 import { t } from '@/i18n'
-import { formatUSD } from '@/utils/format'
 import type { Invoice, InvoicePaymentInput, InvoiceSummary, PaymentMethodRow } from '@/types/domain'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money } = useMoney()
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -122,7 +125,7 @@ async function act(fn: () => Promise<Invoice>, message: string) {
 function addPayment(input: InvoicePaymentInput) {
   const inv = detail.value
   if (!inv) return
-  void act(() => invoiceApi.addInvoicePayment(inv.id, input), t('invoices.paymentSaved', { amount: formatUSD(input.amountCents) }))
+  void act(() => invoiceApi.addInvoicePayment(inv.id, input), t('invoices.paymentSaved', { amount: money(input.amountCents) }))
 }
 function deletePayment(paymentId: number) {
   const inv = detail.value
@@ -153,7 +156,7 @@ async function savePayment(input: InvoicePaymentInput) {
   busy.value = true
   try {
     await invoiceApi.addInvoicePayment(inv.id, input)
-    toast.success(t('invoices.paymentSaved', { amount: formatUSD(input.amountCents) }))
+    toast.success(t('invoices.paymentSaved', { amount: money(input.amountCents) }))
     paying.value = null
     await list.reload()
   } catch {
@@ -194,16 +197,16 @@ function printInvoice() {
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <div class="card">
         <p class="text-sm text-muted">{{ $t('invoices.kpiInvoiced') }}</p>
-        <p class="font-mono text-2xl mt-1">{{ formatUSD(list.summary?.totalCents ?? 0) }}</p>
+        <p class="font-mono text-2xl mt-1">{{ money(list.summary?.totalCents ?? 0) }}</p>
         <p class="text-xs text-muted mt-1">{{ $t('invoices.kpiCount', { n: list.summary?.count ?? 0 }, list.summary?.count ?? 0) }}</p>
       </div>
       <div class="card">
         <p class="text-sm text-muted">{{ $t('invoices.kpiCollected') }}</p>
-        <p class="font-mono text-2xl mt-1 text-success-text">{{ formatUSD(list.summary?.paidCents ?? 0) }}</p>
+        <p class="font-mono text-2xl mt-1 text-success-text">{{ money(list.summary?.paidCents ?? 0) }}</p>
       </div>
       <div class="card">
         <p class="text-sm text-muted">{{ $t('invoices.kpiOutstanding') }}</p>
-        <p class="font-mono text-2xl mt-1">{{ formatUSD(list.summary?.balanceCents ?? 0) }}</p>
+        <p class="font-mono text-2xl mt-1">{{ money(list.summary?.balanceCents ?? 0) }}</p>
       </div>
       <div class="card">
         <p class="text-sm text-muted">{{ $t('invoices.kpiOverdue') }}</p>
@@ -253,9 +256,9 @@ function printInvoice() {
                 <p class="text-xs text-muted font-mono">{{ i.customerPhone }}</p>
               </td>
               <td class="py-2 font-mono text-xs" :class="isOverdue(i) ? 'text-danger-strong font-medium' : ''">{{ i.dueDate ?? '—' }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(i.totalCents) }}</td>
-              <td class="py-2 text-right font-mono text-success-text">{{ formatUSD(i.paidCents) }}</td>
-              <td class="py-2 text-right font-mono font-medium">{{ i.status === 'OPEN' ? formatUSD(i.balanceCents) : '—' }}</td>
+              <td class="py-2 text-right font-mono">{{ money(i.totalCents) }}</td>
+              <td class="py-2 text-right font-mono text-success-text">{{ money(i.paidCents) }}</td>
+              <td class="py-2 text-right font-mono font-medium">{{ i.status === 'OPEN' ? money(i.balanceCents) : '—' }}</td>
               <td class="py-2"><StatusBadge :tone="tone(i)" :label="statusLabel(i)" /></td>
               <td v-if="hasRowActions" class="py-2" @click.stop>
                 <div class="flex items-center justify-end gap-1">
@@ -306,9 +309,9 @@ function printInvoice() {
       <div class="space-y-4">
         <div class="rounded-control bg-surface-subtle p-3 text-sm space-y-1">
           <p class="font-medium">{{ paying.customerName }} <span class="text-muted font-mono font-normal">{{ paying.customerPhone }}</span></p>
-          <div class="flex justify-between"><span class="text-muted">{{ $t('col.total') }}</span><span class="font-mono">{{ formatUSD(paying.totalCents) }}</span></div>
-          <div class="flex justify-between"><span class="text-muted">{{ $t('invoices.paid') }}</span><span class="font-mono text-success-text">{{ formatUSD(paying.paidCents) }}</span></div>
-          <div class="flex justify-between font-medium"><span>{{ $t('invoices.balance') }}</span><span class="font-mono">{{ formatUSD(paying.balanceCents) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('col.total') }}</span><span class="font-mono">{{ money(paying.totalCents) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('invoices.paid') }}</span><span class="font-mono text-success-text">{{ money(paying.paidCents) }}</span></div>
+          <div class="flex justify-between font-medium"><span>{{ $t('invoices.balance') }}</span><span class="font-mono">{{ money(paying.balanceCents) }}</span></div>
         </div>
         <InvoicePaymentForm :balance-cents="paying.balanceCents" :reset-key="paying.paidCents" :payment-methods="paymentMethods" :busy="busy" @submit="savePayment" />
       </div>

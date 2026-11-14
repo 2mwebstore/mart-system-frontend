@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { label } from '@/i18n'
 import BrandLogo from '@/components/BrandLogo.vue'
+import AppFooter from '@/components/layout/AppFooter.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import BranchMenu from '@/components/layout/BranchMenu.vue'
 import UserMenu from '@/components/layout/UserMenu.vue'
@@ -24,6 +25,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useBrandingStore } from '@/stores/branding'
+import { useSettingsStore } from '@/stores/settings'
 import { canOpen } from '@/utils/pageAccess'
 
 const { t } = useI18n()
@@ -31,6 +33,7 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const branding = useBrandingStore()
+const settings = useSettingsStore()
 
 // Below lg, the sidebar is an off-canvas drawer instead of a permanent
 // column — closed by default, opened by the header's hamburger button,
@@ -60,7 +63,8 @@ const sections = computed<NavSection[]>(() => openable([
     key: 'operations',
     caption: t('nav.groupOperations'),
     items: [
-      { key: 'shifts', label: t('nav.shifts'), icon: Clock, route: 'shifts' },
+      // A company without shifts (the super admin's choice) has no Shifts page.
+      ...(settings.usesShifts ? [{ key: 'shifts', label: t('nav.shifts'), icon: Clock, route: 'shifts' }] : []),
       {
         key: 'inventory',
         label: t('nav.inventory'),
@@ -69,7 +73,7 @@ const sections = computed<NavSection[]>(() => openable([
           page('inventory-products', t('inventory.tabProducts')),
           page('inventory-categories', t('inventory.tabCategories')),
           page('inventory-moves', t('inventory.tabMoves')),
-          page('inventory-po', t('inventory.tabPo')),
+          page('inventory-po', t('inventory.tabPo'), ['po-new', 'po-edit']),
           page('inventory-sales', t('inventory.tabSales')),
           page('inventory-suppliers', t('inventory.tabSuppliers')),
           page('customers', t('nav.customers')),
@@ -197,6 +201,7 @@ async function handleSignOut() {
       <main class="flex-1 overflow-y-auto bg-page">
         <RouterView />
       </main>
+      <AppFooter />
     </div>
   </div>
 </template>

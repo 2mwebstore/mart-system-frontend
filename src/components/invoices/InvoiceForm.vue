@@ -13,13 +13,16 @@ import DiscountInput from '@/components/DiscountInput.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import InvoicePaymentForm from '@/components/invoices/InvoicePaymentForm.vue'
 import TaxSelect from '@/components/TaxSelect.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import type { DiscountType } from '@/composables/useCart'
 import { useSettingsStore } from '@/stores/settings'
 import { localName, t } from '@/i18n'
-import { formatKHR, formatUSD } from '@/utils/format'
-import { usdCentsToRiel } from '@/utils/money'
-import { formatPercent, nameFor, percentFor, startingRate, taxCents } from '@/utils/tax'
+import { nameFor, percentFor, startingRate, taxCents, taxTitle } from '@/utils/tax'
 import type { Customer, Invoice, InvoiceInput, InvoicePaymentInput, PaymentMethodRow, Product } from '@/types/domain'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money, other, toMinor, toMajor, symbol, currency } = useMoney()
 
 const props = defineProps<{
   invoice: Invoice | null
@@ -61,15 +64,15 @@ const lines = ref<Line[]>(
     name: localName(i.nameEn, i.nameKm),
     sku: i.sku,
     qty: i.qty,
-    priceDollars: i.unitPriceCents / 100,
+    priceDollars: toMajor(i.unitPriceCents),
     discountType: 'amount',
-    discountValue: i.discountCents / 100,
+    discountValue: toMajor(i.discountCents),
     note: i.note,
   })),
 )
 const discountType = ref<DiscountType>('amount')
-const discountValue = ref((props.invoice?.discountCents ?? 0) / 100)
-const shippingDollars = ref((props.invoice?.shippingCents ?? 0) / 100)
+const discountValue = ref(toMajor(props.invoice?.discountCents ?? 0))
+const shippingDollars = ref(toMajor(props.invoice?.shippingCents ?? 0))
 const note = ref(props.invoice?.note ?? '')
 const taxRateId = ref<number | null>(props.invoice ? props.invoice.taxRateId : startingRate(settings.app.taxDefaults?.invoice, settings.taxRates))
 
@@ -81,7 +84,7 @@ const productOptions = computed(() =>
     .map((p) => ({
       value: p.id,
       label: localName(p.nameEn, p.nameKm),
-      sub: [p.sku, formatUSD(p.priceCents), p.productType === 'SERVICE' ? '' : t('invoices.inStock', { n: p.qty })].filter(Boolean).join(' · '),
+      sub: [p.sku, money(p.priceCents), p.productType === 'SERVICE' ? '' : t('invoices.inStock', { n: p.qty })].filter(Boolean).join(' · '),
     })),
 )
 // Same as the PO form: the product picked lands on top; picking one already on
@@ -101,7 +104,7 @@ function addItem(productId: string | number) {
     name: localName(p.nameEn, p.nameKm),
     sku: p.sku,
     qty: 1,
-    priceDollars: p.priceCents / 100,
+    priceDollars: toMajor(p.priceCents),
     discountType: 'amount',
     discountValue: 0,
     note: '',
@@ -112,11 +115,11 @@ function removeLine(productId: number) {
 }
 
 function cents(dollars: number) {
-  return Math.max(0, Math.round((Number(dollars) || 0) * 100))
+  return Math.max(0, toMinor(Number(dollars) || 0))
 }
 function discountOf(base: number, type: DiscountType, value: number) {
   const v = Math.max(0, Number(value) || 0)
-  const raw = type === 'percent' ? Math.round((base * Math.min(v, 100)) / 100) : Math.round(v * 100)
+  const raw = type === 'percent' ? Math.round((base * Math.min(v, 100)) / 100) : toMinor(v)
   return Math.min(raw, base)
 }
 const gross = (l: Line) => (Number(l.qty) || 0) * cents(l.priceDollars)
@@ -142,7 +145,7 @@ const problems = computed(() => {
   if (lines.value.length === 0) out.push(t('invoices.needItems'))
   if (lines.value.some((l) => !Number.isInteger(Number(l.qty)) || Number(l.qty) < 1)) out.push(t('invoices.needQty'))
   if (dueDate.value && dueDate.value < invoiceDate.value) out.push(t('invoices.dueBeforeDate'))
-  if (total.value < paid.value) out.push(t('invoices.belowPaid', { paid: formatUSD(paid.value) }))
+  if (total.value < paid.value) out.push(t('invoices.belowPaid', { paid: money(paid.value) }))
   if (!props.invoice && payNow.value.problem) out.push(payNow.value.problem)
   return out
 })
@@ -218,15 +221,15 @@ function save() {
             <input v-model.number="l.qty" type="number" min="1" step="1" class="input" />
           </div>
           <div>
-            <label class="block text-xs text-muted mb-1">{{ $t('invoices.unitPrice') }}</label>
-            <input v-model.number="l.priceDollars" type="number" min="0" step="0.01" class="input" />
+            <label class="block text-xs text-muted mb-1">{{ $t('invoices.unitPrice', { currency: symbol }) }}</label>
+            <MoneyInput v-model="l.priceDollars" :currency="currency" />
           </div>
           <DiscountInput v-model:type="l.discountType" v-model:value="l.discountValue" class="col-span-2 sm:col-span-1" :label="$t('pos.discount')" small />
         </div>
         <input v-model="l.note" type="text" maxlength="255" class="input text-sm" :placeholder="$t('invoices.lineNoteHint')" :aria-label="$t('common.note')" />
         <p class="text-right text-sm font-mono">
-          <span v-if="lineDiscount(l)" class="text-muted line-through mr-2">{{ formatUSD(gross(l)) }}</span>
-          {{ formatUSD(gross(l) - lineDiscount(l)) }}
+          <span v-if="lineDiscount(l)" class="text-muted line-through mr-2">{{ money(gross(l)) }}</span>
+          {{ money(gross(l) - lineDiscount(l)) }}
         </p>
       </div>
     </div>
@@ -234,8 +237,8 @@ function save() {
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <DiscountInput v-model:type="discountType" v-model:value="discountValue" :label="$t('inventory.invoiceDiscount')" />
       <div>
-        <label class="block text-sm text-muted mb-1" for="inv-ship">{{ $t('invoices.shipping') }}</label>
-        <input id="inv-ship" v-model.number="shippingDollars" type="number" min="0" step="0.01" class="input" />
+        <label class="block text-sm text-muted mb-1" for="inv-ship">{{ $t('invoices.shipping', { currency: symbol }) }}</label>
+        <MoneyInput id="inv-ship" v-model="shippingDollars" :currency="currency" />
       </div>
       <TaxSelect v-model="taxRateId" :kept="invoice" />
     </div>
@@ -243,18 +246,18 @@ function save() {
     <RichTextEditor id="inv-note" v-model="note" :label="$t('common.note')" :placeholder="$t('invoices.noteHint')" />
 
     <div class="rounded-control bg-surface-subtle p-3 space-y-1 text-sm">
-      <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ formatUSD(subtotal) }}</span></div>
-      <div v-if="lineDiscounts" class="flex justify-between"><span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ formatUSD(lineDiscounts) }}</span></div>
-      <div v-if="invoiceDiscount" class="flex justify-between"><span class="text-muted">{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ formatUSD(invoiceDiscount) }}</span></div>
-      <div v-if="shipping" class="flex justify-between"><span class="text-muted">{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ formatUSD(shipping) }}</span></div>
+      <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ money(subtotal) }}</span></div>
+      <div v-if="lineDiscounts" class="flex justify-between"><span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ money(lineDiscounts) }}</span></div>
+      <div v-if="invoiceDiscount" class="flex justify-between"><span class="text-muted">{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ money(invoiceDiscount) }}</span></div>
+      <div v-if="shipping" class="flex justify-between"><span class="text-muted">{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ money(shipping) }}</span></div>
       <div v-if="taxRateId" class="flex justify-between" data-tax-line>
-        <span class="text-muted">{{ $t('tax.line', { name: `${taxName} ${formatPercent(taxPercent)}` }) }}</span><span class="font-mono">{{ formatUSD(tax) }}</span>
+        <span class="text-muted">{{ $t('tax.line', { name: taxTitle(taxName, taxPercent) }) }}</span><span class="font-mono">{{ money(tax) }}</span>
       </div>
       <div class="flex justify-between font-medium border-t border-line pt-1">
         <span>{{ $t('col.total') }}</span>
-        <span class="font-mono">{{ formatUSD(total) }} <span class="text-muted font-normal">({{ formatKHR(usdCentsToRiel(total, settings.rate)) }})</span></span>
+        <span class="font-mono">{{ money(total) }} <span class="text-muted font-normal">({{ other(total) }})</span></span>
       </div>
-      <div v-if="paid" class="flex justify-between text-muted"><span>{{ $t('invoices.alreadyPaid') }}</span><span class="font-mono">{{ formatUSD(paid) }}</span></div>
+      <div v-if="paid" class="flex justify-between text-muted"><span>{{ $t('invoices.alreadyPaid') }}</span><span class="font-mono">{{ money(paid) }}</span></div>
     </div>
 
     <section v-if="!invoice && paymentMethods?.length" class="space-y-2">

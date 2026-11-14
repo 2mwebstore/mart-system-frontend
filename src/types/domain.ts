@@ -80,7 +80,19 @@ export interface AppSettings {
   // Where each place's tax starts. Read-only here too; set from Settings ›
   // Tax rates via updateTaxDefaults.
   taxDefaults: TaxDefaults
+  // What the company prices, sells and reports in: every *Cents amount is in
+  // its minor unit (cents, or whole riel). Read-only here too; the super
+  // admin sets it on the company (platform.updateCompany).
+  mainCurrency: Currency
+  // How the till starts selling. Read-only here too; the super admin sets it
+  // on the company (platform.updateCompany).
+  shiftMode: ShiftMode
 }
+
+export type Currency = 'USD' | 'KHR'
+// REQUIRED: the cashier opens a shift, counting the float, before selling.
+// SKIP: the till opens the shift by itself, with nothing counted.
+export type ShiftMode = 'REQUIRED' | 'SKIP'
 
 // The company's name and logo (Settings > Company).
 export interface Branding {
@@ -88,6 +100,9 @@ export interface Branding {
   hasLogo: boolean
   logoLink: string // set when the logo is a web link
   logoVersion: string // set when it's an uploaded image; changes with it
+  // The line under every page, the same for every company: the super
+  // admin's (Platform > System). "{year}" is the current year; '' = none.
+  footerText: string
 }
 
 export interface ExchangeRateEntry {
@@ -545,6 +560,8 @@ export interface TableMenu {
   branch: { name: string }
   storeName: string
   exchangeRate: number
+  // What the prices are in: USD (cents) or KHR (whole riel).
+  currency: Currency
   items: MenuItem[]
 }
 
@@ -764,6 +781,11 @@ export interface Company {
   maxUsers: number | null
   // How long the company keeps its activity log. The super admin sets it.
   retentionMonths: number
+  // How its tills start selling. The super admin sets it too.
+  shiftMode: ShiftMode
+  // What it prices and sells in. Locked once it has amounts stored in it.
+  mainCurrency: Currency
+  mainCurrencyLocked: boolean
   owners: CompanyOwner[]
   createdAt: string
 }

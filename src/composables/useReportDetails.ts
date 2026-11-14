@@ -16,7 +16,7 @@ import type {
   TransactionsReport,
   VoidRefundRow,
 } from '@/types/domain'
-import { formatUSD } from '@/utils/format'
+import { useMoney } from '@/composables/useMoney'
 import { label, t } from '@/i18n'
 
 // Report ids; their names / descriptions are translated in the page
@@ -40,6 +40,7 @@ export const reportTypes = [
 // page changes. Every row-level report is paginated by the server, which also
 // sends the whole-range totals used by the cards above the table.
 export function useReportDetails(range: Ref<{ from: string; to: string }>, branchId: Ref<number>) {
+  const { money } = useMoney()
   const selected = ref(reportTypes[0])
   const cashierFilter = ref<'all' | number>('all')
   const paymentFilter = ref<'all' | string>('all')
@@ -171,28 +172,28 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
       case 'transactions':
         return [
           { label: t('reportDetails.tiles.transactions'), value: String(summary.value?.count ?? 0) },
-          { label: t('reportDetails.tiles.total'), value: formatUSD(summary.value?.totalCents ?? 0) },
-          { label: t('reportDetails.tiles.avgBasket'), value: formatUSD(summary.value?.avgBasketCents ?? 0) },
+          { label: t('reportDetails.tiles.total'), value: money(summary.value?.totalCents ?? 0) },
+          { label: t('reportDetails.tiles.avgBasket'), value: money(summary.value?.avgBasketCents ?? 0) },
           { label: t('reportDetails.tiles.refunded'), value: String(summary.value?.refunded ?? 0) },
         ]
       case 'by-product':
         return [
           { label: t('reportDetails.tiles.products'), value: String(sm.value.products ?? 0) },
           { label: t('reportDetails.tiles.unitsSold'), value: String(sm.value.units ?? 0) },
-          { label: t('reportDetails.tiles.revenue'), value: formatUSD(sm.value.revenueCents ?? 0) },
-          { label: t('reportDetails.tiles.profit'), value: formatUSD(sm.value.profitCents ?? 0) },
+          { label: t('reportDetails.tiles.revenue'), value: money(sm.value.revenueCents ?? 0) },
+          { label: t('reportDetails.tiles.profit'), value: money(sm.value.profitCents ?? 0) },
         ]
       case 'by-cashier':
         return [
           { label: t('reportDetails.tiles.cashiers'), value: String(sm.value.cashiers ?? 0) },
-          { label: t('reportDetails.tiles.totalSales'), value: formatUSD(sm.value.salesCents ?? 0) },
+          { label: t('reportDetails.tiles.totalSales'), value: money(sm.value.salesCents ?? 0) },
           { label: t('reportDetails.tiles.voids'), value: String(sm.value.voids ?? 0) },
           { label: t('reportDetails.tiles.refunds'), value: String(sm.value.refunds ?? 0) },
         ]
       case 'payment-methods':
         return [
           { label: t('reportDetails.tiles.methods'), value: String(paymentRows.value.length) },
-          { label: t('reportDetails.tiles.total'), value: formatUSD(paymentRows.value.reduce((n, r) => n + r.totalCents, 0)) },
+          { label: t('reportDetails.tiles.total'), value: money(paymentRows.value.reduce((n, r) => n + r.totalCents, 0)) },
           { label: t('reportDetails.tiles.transactions'), value: String(paymentRows.value.reduce((n, r) => n + r.count, 0)) },
           { label: t('reportDetails.tiles.topMethod'), value: paymentRows.value[0] ? label('method', paymentRows.value[0].method) : '—' },
         ]
@@ -201,7 +202,7 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
           { label: t('reportDetails.tiles.totalEvents'), value: String(sm.value.events ?? 0) },
           { label: t('reportDetails.tiles.voids'), value: String(sm.value.voids ?? 0) },
           { label: t('reportDetails.tiles.refunds'), value: String(sm.value.refunds ?? 0) },
-          { label: t('reportDetails.tiles.amount'), value: formatUSD(sm.value.amountCents ?? 0) },
+          { label: t('reportDetails.tiles.amount'), value: money(sm.value.amountCents ?? 0) },
         ]
       case 'stock-movements':
         return [
@@ -215,23 +216,23 @@ export function useReportDetails(range: Ref<{ from: string; to: string }>, branc
           { label: t('reportDetails.tiles.orders'), value: String(sm.value.totalOrders ?? 0) },
           { label: t('reportDetails.tiles.received'), value: String(sm.value.receivedOrders ?? 0) },
           { label: t('reportDetails.tiles.openOrders'), value: String(sm.value.openOrders ?? 0) },
-          { label: t('reportDetails.tiles.total'), value: formatUSD(sm.value.totalCostCents ?? 0) },
+          { label: t('reportDetails.tiles.total'), value: money(sm.value.totalCostCents ?? 0) },
         ]
       case 'invoices':
         return [
           { label: t('reportDetails.tiles.invoices'), value: String(sm.value.count ?? 0) },
-          { label: t('reportDetails.tiles.invoiced'), value: formatUSD(sm.value.totalCents ?? 0) },
-          { label: t('reportDetails.tiles.collected'), value: formatUSD(sm.value.paidCents ?? 0) },
-          { label: t('reportDetails.tiles.owed'), value: formatUSD(sm.value.balanceCents ?? 0) },
+          { label: t('reportDetails.tiles.invoiced'), value: money(sm.value.totalCents ?? 0) },
+          { label: t('reportDetails.tiles.collected'), value: money(sm.value.paidCents ?? 0) },
+          { label: t('reportDetails.tiles.owed'), value: money(sm.value.balanceCents ?? 0) },
         ]
       case 'expenses':
         return [
           { label: t('reportDetails.tiles.expenseCount'), value: String(total.value ?? 0) },
           { label: t('reportDetails.tiles.categories'), value: String(sm.value.categories ?? 0) },
-          { label: t('reportDetails.tiles.total'), value: formatUSD(sm.value.totalCents ?? 0) },
+          { label: t('reportDetails.tiles.total'), value: money(sm.value.totalCents ?? 0) },
           {
             label: t('reportDetails.tiles.average'),
-            value: formatUSD(total.value > 0 ? Math.round((sm.value.totalCents ?? 0) / total.value) : 0),
+            value: money(total.value > 0 ? Math.round((sm.value.totalCents ?? 0) / total.value) : 0),
           },
         ]
       case 'activity-log':

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from './auth'
+import { useSettingsStore } from './settings'
 
 const branding = vi.hoisted(() => ({ shown: [] as string[] }))
 vi.mock('./branding', () => ({ useBrandingStore: () => ({ useCompany: async (code: string) => void branding.shown.push(code) }) }))
@@ -44,12 +45,18 @@ describe('the auth store and companies', () => {
     expect(branding.shown).toEqual([])
   })
 
-  it('forgets both on sign-out', async () => {
+  it('forgets both on sign-out, and the company\'s settings', async () => {
     const auth = useAuthStore()
     auth.applySession({ ...session(), company: { id: 4, name: 'Demo Two', code: 'D2' } })
+    // Read at sign-in: this company works without shifts.
+    const settings = useSettingsStore()
+    settings.$patch({ loaded: true, app: { ...settings.app, shiftMode: 'SKIP' } })
     await auth.logout()
     expect(auth.company).toBeNull()
     expect(auth.isSuperAdmin).toBe(false)
+    // The next sign-in, maybe at another company, reads its own.
+    expect(settings.loaded).toBe(false)
+    expect(settings.usesShifts).toBe(true)
   })
 })
 

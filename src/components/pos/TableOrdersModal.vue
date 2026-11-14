@@ -9,8 +9,11 @@ import Modal from '@/components/Modal.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { localName, t } from '@/i18n'
-import { formatUSD } from '@/utils/format'
 import type { TableOrder } from '@/types/domain'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money } = useMoney()
 
 // title / emptyText let the Tables board reuse this for one table's orders;
 // moveTargets (the free tables) turns on "Move to table" for all of them, and
@@ -91,10 +94,10 @@ function minutesAgo(iso: string) {
       <div v-if="payAll && orders.length > 1" class="rounded-card bg-surface-subtle p-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-sm text-muted">{{ $t('tableBoard.tableTotal', { n: orders.length }, orders.length) }}</p>
-          <p class="font-mono text-2xl font-medium">{{ formatUSD(tableTotal) }}</p>
+          <p class="font-mono text-2xl font-medium">{{ money(tableTotal) }}</p>
         </div>
         <button type="button" class="btn-primary flex items-center gap-2" @click="emit('loadAll')">
-          <Receipt :stroke-width="1.8" class="w-4 h-4" /> {{ $t('tableBoard.payTable', { amount: formatUSD(tableTotal) }) }}
+          <Receipt :stroke-width="1.8" class="w-4 h-4" /> {{ $t('tableBoard.payTable', { amount: money(tableTotal) }) }}
         </button>
       </div>
       <div v-if="canMove()" class="rounded-card border border-dashed border-line p-3 space-y-2">
@@ -138,12 +141,12 @@ function minutesAgo(iso: string) {
               <span class="font-mono">{{ it.qty }}×</span> {{ localName(it.nameEn, it.nameKm) }}
               <span v-if="it.note" class="block text-xs text-muted italic">↳ {{ it.note }}</span>
             </span>
-            <span class="font-mono shrink-0">{{ formatUSD(it.qty * it.unitPriceCents) }}</span>
+            <span class="font-mono shrink-0">{{ money(it.qty * it.unitPriceCents) }}</span>
           </li>
         </ul>
         <p v-if="o.note" class="text-sm rounded-control bg-surface-subtle px-3 py-2">{{ $t('pos.customerNote', { note: o.note }) }}</p>
         <div class="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-          <span class="font-mono font-medium">{{ formatUSD(o.totalCents) }}</span>
+          <span class="font-mono font-medium">{{ money(o.totalCents) }}</span>
           <div class="flex flex-wrap gap-2">
             <button type="button" class="btn-secondary text-sm px-3 py-1.5" :disabled="busyId === o.id" @click="reject(o)">{{ $t('pos.reject') }}</button>
             <button v-if="o.status === 'NEW'" type="button" class="btn-secondary text-sm px-3 py-1.5" :disabled="busyId === o.id" @click="run(o.id, () => emit('accept', o.id))">

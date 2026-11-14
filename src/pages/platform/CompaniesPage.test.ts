@@ -11,6 +11,11 @@ const server = vi.hoisted(() => ({
   branchSwitches: [] as unknown[],
   userSwitches: [] as unknown[],
   cleared: [] as number[],
+  // How the listed company starts its shifts.
+  shiftMode: 'REQUIRED' as 'REQUIRED' | 'SKIP',
+  // What the listed company sells in, and whether it has amounts in it yet.
+  mainCurrency: 'USD' as 'USD' | 'KHR',
+  mainCurrencyLocked: false,
 }))
 const company = (): Company => ({
   id: 7,
@@ -24,6 +29,9 @@ const company = (): Company => ({
   activeUserCount: 4,
   maxUsers: null,
   retentionMonths: 2,
+  shiftMode: server.shiftMode,
+  mainCurrency: server.mainCurrency,
+  mainCurrencyLocked: server.mainCurrencyLocked,
   owners: [{ id: 70, fullName: 'Owner', username: 'gt.owner', active: true }],
   createdAt: '2026-11-01T00:00:00Z',
 })
@@ -95,6 +103,9 @@ beforeEach(() => {
   server.branchSwitches = []
   server.userSwitches = []
   server.cleared = []
+  server.shiftMode = 'REQUIRED'
+  server.mainCurrency = 'USD'
+  server.mainCurrencyLocked = false
 })
 
 afterEach(() => {
@@ -128,7 +139,7 @@ describe('CompaniesPage', () => {
     host.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
     await settle()
     expect(server.updates).toEqual([
-      { id: 7, name: 'Gotech', code: 'GT', active: true, maxBranches: null, maxUsers: 3, retentionMonths: 1 },
+      { id: 7, name: 'Gotech', code: 'GT', active: true, maxBranches: null, maxUsers: 3, retentionMonths: 1, shiftMode: 'REQUIRED', mainCurrency: 'USD' },
     ])
   })
 
@@ -228,8 +239,125 @@ describe('CompaniesPage', () => {
         ownerPassword: 'long-enough',
         maxBranches: 1,
         maxUsers: null,
+        shiftMode: 'REQUIRED',
+        mainCurrency: 'USD',
       },
     ])
+  })
+
+  it('shows what each company sells in', async () => {
+    await mount()
+    expect(host.querySelector('[data-company-currency]')!.textContent!.trim()).toBe(t('platform.mainCurrencyShortUSD'))
+  })
+
+  it('makes a company that sells in riel', async () => {
+    await mount()
+    button(t('platform.newCompany')).click()
+    await settle()
+    const form = host.querySelector<HTMLFormElement>('form')!
+    expect(form.querySelector<HTMLInputElement>('[data-main-currency-option="USD"]')!.checked).toBe(true)
+    setValue('company-name', 'Riel shop')
+    setValue('company-code', 'rs')
+    setValue('owner-name', 'Riel owner')
+    setValue('owner-username', 'riel.owner')
+    setValue('owner-password', 'long-enough')
+    form.querySelector<HTMLInputElement>('[data-main-currency-option="KHR"]')!.click()
+    await nextTick()
+    form.dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.creates).toEqual([expect.objectContaining({ code: 'RS', mainCurrency: 'KHR' })])
+  })
+
+  it("changes an empty company's currency, and shows it in the list", async () => {
+    await mount()
+    button(t('common.edit')).click()
+    await settle()
+    const form = host.querySelector<HTMLFormElement>('form')!
+    expect(form.querySelector('[data-main-currency]')!.hasAttribute('disabled')).toBe(false)
+    expect(form.querySelector('[data-main-currency-locked]')).toBeNull()
+    form.querySelector<HTMLInputElement>('[data-main-currency-option="KHR"]')!.click()
+    await nextTick()
+    form.dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.updates).toEqual([expect.objectContaining({ id: 7, mainCurrency: 'KHR' })])
+    expect(host.querySelector('[data-company-currency]')!.textContent!.trim()).toBe(t('platform.mainCurrencyShortKHR'))
+  })
+
+  it('locks the currency of a company with amounts in it, and says why', async () => {
+    server.mainCurrency = 'KHR'
+    server.mainCurrencyLocked = true
+    await mount()
+    button(t('common.edit')).click()
+    await settle()
+    const form = host.querySelector<HTMLFormElement>('form')!
+    expect(form.querySelector('[data-main-currency]')!.hasAttribute('disabled')).toBe(true)
+    expect(form.querySelector<HTMLInputElement>('[data-main-currency-option="KHR"]')!.checked).toBe(true)
+    expect(form.querySelector('[data-main-currency-locked]')!.textContent!.trim()).toBe(t('platform.mainCurrencyLocked'))
+    form.dispatchEvent(new Event('submit'))
+    await settle()
+    // It still saves the rest, with the currency as it was.
+    expect(server.updates).toEqual([expect.objectContaining({ id: 7, mainCurrency: 'KHR' })])
+  })
+
+  it('shows how each company starts its shifts', async () => {
+    await mount()
+    expect(host.querySelector('[data-company-shift-mode]')!.textContent!.trim()).toBe(t('platform.shiftModeShortREQUIRED'))
+  })
+
+  it("starts the edit form from a company's own choice", async () => {
+    server.shiftMode = 'SKIP'
+    await mount()
+    expect(host.querySelector('[data-company-shift-mode]')!.textContent!.trim()).toBe(t('platform.shiftModeShortSKIP'))
+    button(t('common.edit')).click()
+    await settle()
+    const form = host.querySelector<HTMLFormElement>('form')!
+    expect(form.querySelector<HTMLInputElement>('[data-shift-mode-option="SKIP"]')!.checked).toBe(true)
+    form.dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.updates).toEqual([expect.objectContaining({ id: 7, shiftMode: 'SKIP' })])
+  })
+
+  it('makes a company that skips opening shifts', async () => {
+    await mount()
+    button(t('platform.newCompany')).click()
+    await settle()
+    const form = host.querySelector<HTMLFormElement>('form')!
+    expect(form.querySelector<HTMLInputElement>('[data-shift-mode-option="REQUIRED"]')!.checked).toBe(true)
+    setValue('company-name', 'Quick shop')
+    setValue('company-code', 'qs')
+    setValue('owner-name', 'Quick owner')
+    setValue('owner-username', 'quick.owner')
+    setValue('owner-password', 'long-enough')
+    form.querySelector<HTMLInputElement>('[data-shift-mode-option="SKIP"]')!.click()
+    await nextTick()
+    form.dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.creates).toEqual([expect.objectContaining({ code: 'QS', shiftMode: 'SKIP' })])
+  })
+
+  it("changes a company's shifts to skipped, and back", async () => {
+    await mount()
+    button(t('common.edit')).click()
+    await settle()
+    const form = () => host.querySelector<HTMLFormElement>('form')!
+    expect(form().querySelector<HTMLInputElement>('[data-shift-mode-option="REQUIRED"]')!.checked).toBe(true)
+    form().querySelector<HTMLInputElement>('[data-shift-mode-option="SKIP"]')!.click()
+    await nextTick()
+    form().dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.updates).toEqual([expect.objectContaining({ id: 7, shiftMode: 'SKIP' })])
+    // The list shows what was saved.
+    expect(host.querySelector('[data-company-shift-mode]')!.textContent!.trim()).toBe(t('platform.shiftModeShortSKIP'))
+
+    // Opened again, the form starts from the company's choice.
+    button(t('common.edit')).click()
+    await settle()
+    expect(form().querySelector<HTMLInputElement>('[data-shift-mode-option="SKIP"]')!.checked).toBe(true)
+    form().querySelector<HTMLInputElement>('[data-shift-mode-option="REQUIRED"]')!.click()
+    await nextTick()
+    form().dispatchEvent(new Event('submit'))
+    await settle()
+    expect(server.updates[1]).toEqual(expect.objectContaining({ id: 7, shiftMode: 'REQUIRED' }))
   })
 
   it("switches a company's branches and accounts on and off", async () => {

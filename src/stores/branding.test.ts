@@ -10,7 +10,7 @@ vi.mock('@/api/settings', () => ({
   getBranding: (code: string) => new Promise<Branding>((answer) => server.pending.push({ code, answer })),
 }))
 
-const named = (companyName: string): Branding => ({ companyName, hasLogo: false, logoLink: '', logoVersion: '' })
+const named = (companyName: string, footerText = '© {year} Com Mart'): Branding => ({ companyName, hasLogo: false, logoLink: '', logoVersion: '', footerText })
 
 beforeEach(() => {
   localStorage.clear()
@@ -32,6 +32,24 @@ describe('the branding store', () => {
     expect(branding.companyName).toBe('')
     expect(branding.code).toBe('')
     expect(server.pending).toHaveLength(1)
+    // The footer is every company's, so no company keeps it too.
+    expect(branding.footerText).toBe('© {year} Com Mart')
+  })
+
+  it('shows a footer the super admin saves at once, and next visit', async () => {
+    setCompanyCode('CM')
+    const branding = useBrandingStore()
+    const loading = branding.useCompany('CM')
+    server.pending[0].answer(named('CM Shop'))
+    await loading
+    branding.setFooterText('© {year} Bee Soft')
+    expect(branding.footerText).toBe('© {year} Bee Soft')
+    expect(branding.companyName).toBe('CM Shop')
+
+    setActivePinia(createPinia())
+    const next = useBrandingStore()
+    expect(next.footerText).toBe('© {year} Bee Soft')
+    expect(next.companyName).toBe('CM Shop')
   })
 
   it('drops a late answer for a company no longer chosen', async () => {

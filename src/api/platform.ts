@@ -2,7 +2,7 @@
 // company at once (backups, their alerts, the production reset). A company's
 // own staff, its Owner included, get 403 on all of these.
 import { del, downloadFile, get, post, put } from './http'
-import type { BackupRow, BackupSettings, Company, CompanyBranch, CompanyUser, NotifySettings } from '@/types/domain'
+import type { BackupRow, BackupSettings, Company, CompanyBranch, CompanyUser, Currency, NotifySettings, ShiftMode } from '@/types/domain'
 
 // A limit of null is no limit.
 export interface CompanyLimits {
@@ -12,10 +12,13 @@ export interface CompanyLimits {
 
 export const listCompanies = () => get<Company[]>('/platform/companies')
 export const createCompany = (
-  c: { name: string; code: string; ownerFullName: string; ownerUsername: string; ownerPassword: string } & CompanyLimits,
+  c: { name: string; code: string; ownerFullName: string; ownerUsername: string; ownerPassword: string; shiftMode: ShiftMode; mainCurrency: Currency } & CompanyLimits,
 ) => post<Company>('/platform/companies', c)
 // Every field is the new value.
-export const updateCompany = (id: number, c: { name: string; code: string; active: boolean; retentionMonths: number } & CompanyLimits) =>
+export const updateCompany = (
+  id: number,
+  c: { name: string; code: string; active: boolean; retentionMonths: number; shiftMode: ShiftMode; mainCurrency: Currency } & CompanyLimits,
+) =>
   put<Company>(`/platform/companies/${id}`, c)
 // Purges the company's activity log entries older than its retention, now.
 export const clearCompanyActivityLog = (id: number) => post<{ deleted: number }>(`/platform/companies/${id}/activity-log/clear`)
@@ -34,6 +37,10 @@ export const getPlatformNotifySettings = () => get<NotifySettings>('/platform/se
 export const updatePlatformNotifySettings = (s: NotifySettings) => put<NotifySettings>('/platform/settings/notifications', s)
 export const sendPlatformTestAlert = (botToken: string, chatId: string) =>
   post<{ sent: boolean }>('/platform/settings/notifications/test', { botToken, chatId })
+
+// The line under every page, for every company. "{year}" shows the current year.
+export const getFooter = () => get<{ text: string }>('/platform/settings/footer')
+export const updateFooter = (text: string) => put<{ text: string }>('/platform/settings/footer', { text })
 
 export const listBackups = () => get<{ rows: BackupRow[]; settings: BackupSettings }>('/platform/backups')
 export const updateBackupSettings = (s: BackupSettings) => put<BackupSettings>('/platform/backups/settings', s)

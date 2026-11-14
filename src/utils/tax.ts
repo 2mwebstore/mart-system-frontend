@@ -35,6 +35,14 @@ export function formatPercent(percent: number): string {
   return `${Number(percent.toFixed(2))}%`
 }
 
+// A rate as the tax line names it: "VAT 10%". A name that already says its
+// percent ("VAT 10%") isn't given it a second time.
+export function taxTitle(name: string, percent: number): string {
+  const pct = formatPercent(percent)
+  const said = new RegExp(`(^|[^\\d.])${pct.replace('.', '\\.')}`).test(name)
+  return said ? name : `${name} ${pct}`.trim()
+}
+
 // The rate a new document starts with: its place's starting rate, when that is
 // still an active rate.
 export function startingRate(id: number | null | undefined, rates: TaxRate[]): number | null {

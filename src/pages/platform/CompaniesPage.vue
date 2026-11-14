@@ -3,8 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { KeyRound, Pencil, Plus, Power, Trash2 } from 'lucide-vue-next'
 import * as platformApi from '@/api/platform'
 import { normaliseCompanyCode } from '@/api/companyCode'
-import type { Company, CompanyBranch, CompanyUser } from '@/types/domain'
+import type { Company, CompanyBranch, CompanyUser, Currency, ShiftMode } from '@/types/domain'
 import Modal from '@/components/Modal.vue'
+import ShiftModePicker from '@/components/platform/ShiftModePicker.vue'
+import MainCurrencyPicker from '@/components/platform/MainCurrencyPicker.vue'
 import PasswordInput from '@/components/PasswordInput.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import SearchInput from '@/components/SearchInput.vue'
@@ -82,6 +84,8 @@ const emptyCreate = () => ({
   ownerPassword: '',
   maxBranches: '' as LimitField,
   maxUsers: '' as LimitField,
+  shiftMode: 'REQUIRED' as ShiftMode,
+  mainCurrency: 'USD' as Currency,
 })
 const createForm = reactive(emptyCreate())
 const createValid = computed(() => codeOk(createForm.code) && limitValid(createForm.maxBranches) && limitValid(createForm.maxUsers))
@@ -116,7 +120,16 @@ async function submitCreate() {
 const editing = ref<Company | null>(null)
 const saving = ref(false)
 const clearingLog = ref(false)
-const editForm = reactive({ name: '', code: '', active: true, maxBranches: '' as LimitField, maxUsers: '' as LimitField, retentionMonths: 3 })
+const editForm = reactive({
+  name: '',
+  code: '',
+  active: true,
+  maxBranches: '' as LimitField,
+  maxUsers: '' as LimitField,
+  retentionMonths: 3,
+  shiftMode: 'REQUIRED' as ShiftMode,
+  mainCurrency: 'USD' as Currency,
+})
 const editValid = computed(() => codeOk(editForm.code) && limitValid(editForm.maxBranches) && limitValid(editForm.maxUsers))
 // A limit below what the company has switches nothing off: say so.
 const branchesOverLimit = computed(() => {
@@ -137,6 +150,8 @@ function openEdit(c: Company) {
     maxBranches: fromLimit(c.maxBranches),
     maxUsers: fromLimit(c.maxUsers),
     retentionMonths: c.retentionMonths,
+    shiftMode: c.shiftMode,
+    mainCurrency: c.mainCurrency,
   })
 }
 async function submitEdit() {
@@ -289,6 +304,8 @@ async function submitOwner() {
               <th class="py-2 font-medium text-right pl-4">{{ $t('platform.branches') }}</th>
               <th class="py-2 font-medium text-right pl-4">{{ $t('platform.staff') }}</th>
               <th class="py-2 font-medium text-right pl-4">{{ $t('platform.logKept') }}</th>
+              <th class="py-2 font-medium pl-4">{{ $t('platform.shiftsColumn') }}</th>
+              <th class="py-2 font-medium pl-4">{{ $t('platform.currencyColumn') }}</th>
               <th class="py-2 font-medium pl-4">{{ $t('platform.owners') }}</th>
               <th class="py-2 font-medium"></th>
             </tr>
@@ -309,6 +326,8 @@ async function submitOwner() {
                 <p v-if="c.userCount > c.activeUserCount" class="text-xs text-muted">{{ $t('platform.offCount', { n: c.userCount - c.activeUserCount }) }}</p>
               </td>
               <td class="py-2.5 text-right pl-4 whitespace-nowrap">{{ $t('settings.retentionMonthsOption', { n: c.retentionMonths }, c.retentionMonths) }}</td>
+              <td class="py-2.5 pl-4 whitespace-nowrap" data-company-shift-mode>{{ $t(`platform.shiftModeShort${c.shiftMode}`) }}</td>
+              <td class="py-2.5 pl-4 whitespace-nowrap" data-company-currency>{{ $t(`platform.mainCurrencyShort${c.mainCurrency}`) }}</td>
               <td class="py-2.5 pl-4">
                 <p v-for="o in c.owners" :key="o.id" :class="o.active ? '' : 'text-muted line-through'">
                   {{ o.fullName }} <span class="text-xs text-muted font-mono">{{ o.username }}</span>
@@ -330,10 +349,10 @@ async function submitOwner() {
               </td>
             </tr>
             <tr v-if="!loading && companyList.total === 0">
-              <td colspan="8" class="py-8 text-center text-muted">{{ companies.length === 0 ? $t('platform.noCompanies') : $t('common.noMatches') }}</td>
+              <td colspan="9" class="py-8 text-center text-muted">{{ companies.length === 0 ? $t('platform.noCompanies') : $t('common.noMatches') }}</td>
             </tr>
             <tr v-if="loading">
-              <td colspan="8" class="py-8 text-center text-muted">{{ $t('common.loading') }}</td>
+              <td colspan="9" class="py-8 text-center text-muted">{{ $t('common.loading') }}</td>
             </tr>
           </tbody>
         </table>
@@ -381,6 +400,8 @@ async function submitOwner() {
             </div>
           </div>
         </fieldset>
+        <ShiftModePicker v-model="createForm.shiftMode" name="create-shift-mode" class="border-t border-line pt-4" />
+        <MainCurrencyPicker v-model="createForm.mainCurrency" name="create-main-currency" class="border-t border-line pt-4" />
         <div class="border-t border-line pt-4 space-y-4">
           <div>
             <h3 class="text-sm font-medium">{{ $t('platform.firstOwner') }}</h3>
@@ -465,6 +486,9 @@ async function submitOwner() {
           <p v-if="branchesOverLimit" class="text-xs text-warning-text">{{ $t('platform.limitBelowCount', { active: editing.activeBranchCount }) }}</p>
           <p v-if="usersOverLimit" class="text-xs text-warning-text">{{ $t('platform.limitBelowCount', { active: editing.activeUserCount }) }}</p>
         </fieldset>
+
+        <ShiftModePicker v-model="editForm.shiftMode" name="edit-shift-mode" class="border-t border-line pt-4" />
+        <MainCurrencyPicker v-model="editForm.mainCurrency" name="edit-main-currency" :locked="editing.mainCurrencyLocked" class="border-t border-line pt-4" />
 
         <div class="border-t border-line pt-4 space-y-2">
           <label for="edit-retention" class="block text-sm font-medium">{{ $t('platform.retention') }}</label>

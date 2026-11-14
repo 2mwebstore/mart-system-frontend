@@ -13,6 +13,11 @@ export function formatUSD(cents: number): string {
   return `${n < 0 ? '-' : ''}$${(Math.abs(n) / 100).toFixed(2)}`
 }
 
+// An amount in a company's main currency: cents as dollars, or whole riel.
+export function formatMoney(minor: number, currency: 'USD' | 'KHR'): string {
+  return currency === 'KHR' ? formatKHR(minor) : formatUSD(minor)
+}
+
 export function formatKHR(riel: number): string {
   // A space after the riel sign (unlike formatUSD's "$"): tested in the
   // browser, ៛ set flush against a digit in the mono/Kantumruy Pro stack

@@ -52,6 +52,7 @@ export interface PurchaseOrderSummary {
 }
 export const pagePurchaseOrders = (branchId: number, q: PageQuery & { q?: string; status?: string | null; supplierId?: number | null; dateFrom?: string | null; dateTo?: string | null }) =>
   getPaged<PurchaseOrder[], PurchaseOrderSummary>('/purchase-orders', { branchId, ...q })
+export const getPurchaseOrder = (id: number) => get<PurchaseOrder>(`/purchase-orders/${id}`)
 export const createPurchaseOrder = (po: PurchaseOrderInput) => post<PurchaseOrder>('/purchase-orders', po)
 export const updatePurchaseOrder = (id: number, po: PurchaseOrderInput) => put<PurchaseOrder>(`/purchase-orders/${id}`, po)
 export const deletePurchaseOrder = (id: number) => del(`/purchase-orders/${id}`)

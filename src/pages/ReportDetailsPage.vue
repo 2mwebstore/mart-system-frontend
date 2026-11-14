@@ -3,11 +3,13 @@ import Pagination from '@/components/Pagination.vue'
 import { computed, ref } from 'vue'
 import { Download, FileText, Printer, RotateCcw } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
 import { useDateRangeQuery } from '@/composables/useDateRangeQuery'
 import { reportTypes, useReportDetails } from '@/composables/useReportDetails'
+import { useMoney } from '@/composables/useMoney'
 import { formatDateTime, formatKHR, formatUSD } from '@/utils/format'
 import { drawerStatus } from '@/utils/money'
-import { formatPercent } from '@/utils/tax'
+import { taxTitle } from '@/utils/tax'
 import { plainText } from '@/utils/richText'
 import * as posApi from '@/api/pos'
 import * as reportsApi from '@/api/reports'
@@ -36,6 +38,11 @@ import { useToast } from '@/composables/useToast'
 import { i18n, label, localName } from '@/i18n'
 
 const auth = useAuthStore()
+// Without shifts (the super admin's choice), By cashier has no shift count,
+// no counted-cash difference and no list of a cashier's shifts.
+const settings = useSettingsStore()
+// Amounts are in the company's main currency; the till's cash stays per currency.
+const { money, other, isRiel, currency } = useMoney()
 const toast = useToast()
 const { range } = useDateRangeQuery()
 const branchId = computed(() => auth.activeBranchId ?? auth.branches[0]?.id ?? 1)
@@ -261,7 +268,7 @@ function openActivityDetail(row: ActivityLogRow) {
 
 function shiftStatus(s: Shift) {
   if (s.status === 'OPEN') return { tone: 'success' as const, label: label('shiftStatus', 'OPEN') }
-  return drawerStatus(s.diffUsdCents, s.diffKhrRiel, s.exchangeRate)
+  return drawerStatus(s.diffUsdCents, s.diffKhrRiel, s.exchangeRate, currency.value)
 }
 </script>
 
@@ -354,16 +361,16 @@ function shiftStatus(s: Shift) {
                   <td class="py-2">{{ row.till }}</td>
                   <td class="py-2 pr-4 text-right font-mono">{{ row.items }}</td>
                   <td class="py-2">{{ label('method', row.paymentMethod) }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(row.totalCents) }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(row.totalCents - row.costCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(row.totalCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(row.totalCents - row.costCents) }}</td>
                   <td class="py-2"><StatusBadge :tone="statusTone[row.status]" :label="label('saleStatus', row.status)" /></td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr class="font-medium border-t border-line">
                   <td class="py-2" colspan="6">{{ $t('common.total') }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(summary?.totalCents ?? 0) }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD((summary?.totalCents ?? 0) - (summary?.costCents ?? 0)) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(summary?.totalCents ?? 0) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money((summary?.totalCents ?? 0) - (summary?.costCents ?? 0)) }}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -386,9 +393,9 @@ function shiftStatus(s: Shift) {
                   <td class="py-2 font-mono text-xs">{{ r.sku }}</td>
                   <td class="py-2">{{ localName(r.name, r.nameKm) }}</td>
                   <td class="py-2 text-right font-mono">{{ r.qty }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(r.revenueCents) }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(r.costCents) }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(r.profitCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(r.revenueCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(r.costCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(r.profitCents) }}</td>
                   <td class="py-2 text-right font-mono">{{ r.marginPct }}%</td>
                 </tr>
               </tbody>
@@ -398,23 +405,30 @@ function shiftStatus(s: Shift) {
               <thead>
                 <tr class="text-left text-muted border-b border-line">
                   <th class="py-2 font-medium">{{ $t('col.cashier') }}</th>
-                  <th class="py-2 font-medium text-right">{{ $t('col.shifts') }}</th>
+                  <th v-if="settings.usesShifts" class="py-2 font-medium text-right">{{ $t('col.shifts') }}</th>
                   <th class="py-2 font-medium text-right">{{ $t('col.netSales') }}</th>
                   <th class="py-2 font-medium text-right">{{ $t('col.avgBasket') }}</th>
                   <th class="py-2 font-medium text-right">{{ $t('col.voids') }}</th>
                   <th class="py-2 font-medium text-right">{{ $t('col.refunds') }}</th>
-                  <th class="py-2 font-medium text-right">{{ $t('col.cashDiff') }}</th>
+                  <th v-if="settings.usesShifts" class="py-2 font-medium text-right">{{ $t('col.cashDiff') }}</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="r in byCashierRows" :key="r.id" class="border-b border-line last:border-0 cursor-pointer hover:bg-surface-subtle" @click="openCashierShifts(r)">
+                <tr
+                  v-for="r in byCashierRows"
+                  :key="r.id"
+                  class="border-b border-line last:border-0"
+                  :class="settings.usesShifts ? 'cursor-pointer hover:bg-surface-subtle' : ''"
+                  data-cashier-row
+                  @click="settings.usesShifts && openCashierShifts(r)"
+                >
                   <td class="py-2">{{ r.name }}</td>
-                  <td class="py-2 text-right font-mono">{{ r.shifts }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(r.salesCents) }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(r.avgBasketCents) }}</td>
+                  <td v-if="settings.usesShifts" class="py-2 text-right font-mono" data-cashier-shifts>{{ r.shifts }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(r.salesCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(r.avgBasketCents) }}</td>
                   <td class="py-2 text-right font-mono">{{ r.voids }}</td>
                   <td class="py-2 text-right font-mono">{{ r.refunds }}</td>
-                  <td class="py-2 text-right font-mono" :class="r.cashDiffCents < 0 ? 'text-danger-strong' : ''">{{ formatUSD(r.cashDiffCents) }}</td>
+                  <td v-if="settings.usesShifts" class="py-2 text-right font-mono" :class="r.cashDiffCents < 0 ? 'text-danger-strong' : ''">{{ money(r.cashDiffCents) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -432,7 +446,7 @@ function shiftStatus(s: Shift) {
                 <tr v-for="r in paymentRows" :key="r.method" class="border-b border-line last:border-0 cursor-pointer hover:bg-surface-subtle" @click="openMethodSales(r)">
                   <td class="py-2">{{ label('method', r.method) }}</td>
                   <td class="py-2 text-right font-mono">{{ r.count }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(r.totalCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(r.totalCents) }}</td>
                   <td class="py-2 text-right font-mono">{{ Math.round(r.share * 100) }}%</td>
                 </tr>
               </tbody>
@@ -457,7 +471,7 @@ function shiftStatus(s: Shift) {
                   <td class="py-2 font-mono text-xs">{{ r.receiptNo }}</td>
                   <td class="py-2">{{ label('voidType', r.type) }}</td>
                   <td class="py-2">{{ r.item }}</td>
-                  <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(r.amountCents) }}</td>
+                  <td class="py-2 pr-4 text-right font-mono">{{ money(r.amountCents) }}</td>
                   <td class="py-2">{{ r.cashier }}</td>
                   <td class="py-2">{{ r.approvedBy }}</td>
                   <td class="py-2 text-muted">{{ r.reason }}</td>
@@ -511,9 +525,9 @@ function shiftStatus(s: Shift) {
                   <td class="py-2 font-mono text-xs">{{ inv.invoiceDate }}</td>
                   <td class="py-2">{{ inv.customerName }}</td>
                   <td class="py-2 font-mono text-xs">{{ inv.dueDate ?? '—' }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(inv.totalCents) }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(inv.paidCents) }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(inv.balanceCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(inv.totalCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(inv.paidCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(inv.balanceCents) }}</td>
                   <td class="py-2"><StatusBadge :tone="invoiceTone(inv)" :label="invoiceStatusLabel(inv)" /></td>
                 </tr>
               </tbody>
@@ -534,7 +548,7 @@ function shiftStatus(s: Shift) {
                   <td class="py-2 font-mono text-xs">{{ po.code }}</td>
                   <td class="py-2">{{ po.supplierName }}</td>
                   <td class="py-2 text-right font-mono">{{ poItemCount(po) }}</td>
-                  <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(poTotalCostCents(po)) }}</td>
+                  <td class="py-2 pr-4 text-right font-mono">{{ money(poTotalCostCents(po)) }}</td>
                   <td class="py-2 font-mono text-xs">{{ po.createdAt }}</td>
                   <td class="py-2"><StatusBadge :tone="poStatusTone[po.status]" :label="label('poStatus', po.status)" /></td>
                 </tr>
@@ -559,9 +573,9 @@ function shiftStatus(s: Shift) {
                   <td class="py-2">{{ label('expenseCat', e.category) }}</td>
                   <td class="py-2 text-muted max-w-xs truncate" :title="plainText(e.note)">{{ plainText(e.note) }}</td>
                   <td class="py-2">{{ e.user }}</td>
-                  <td class="py-2 text-right font-mono">{{ formatUSD(e.amountCents) }}</td>
-                  <td class="py-2 text-right font-mono text-muted" :title="e.taxName">{{ e.taxCents ? formatUSD(e.taxCents) : '—' }}</td>
-                  <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(e.totalCents) }}</td>
+                  <td class="py-2 text-right font-mono">{{ money(e.amountCents) }}</td>
+                  <td class="py-2 text-right font-mono text-muted" :title="e.taxName">{{ e.taxCents ? money(e.taxCents) : '—' }}</td>
+                  <td class="py-2 pr-4 text-right font-mono">{{ money(e.totalCents) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -622,20 +636,20 @@ function shiftStatus(s: Shift) {
         <div class="border-t border-line pt-3 space-y-1">
           <div v-for="item in detailSale.items" :key="item.productId" class="flex justify-between">
             <span>{{ item.qty }}× {{ localName(item.name, item.nameKm) }}</span>
-            <span class="font-mono">{{ formatUSD(item.lineTotalCents) }}</span>
+            <span class="font-mono">{{ money(item.lineTotalCents) }}</span>
           </div>
         </div>
 
         <div class="border-t border-line pt-3 space-y-1">
-          <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ formatUSD(detailSale.subtotalCents) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ money(detailSale.subtotalCents) }}</span></div>
           <div v-if="detailSale.discountCents > 0" class="flex justify-between">
-            <span class="text-muted">{{ $t('pos.discount') }}</span><span class="font-mono">-{{ formatUSD(detailSale.discountCents) }}</span>
+            <span class="text-muted">{{ $t('pos.discount') }}</span><span class="font-mono">-{{ money(detailSale.discountCents) }}</span>
           </div>
           <div v-if="detailSale.taxCents" class="flex justify-between" data-tax-line>
-            <span class="text-muted">{{ $t('tax.line', { name: `${detailSale.taxName} ${formatPercent(detailSale.taxPercent)}` }) }}</span>
-            <span class="font-mono">{{ formatUSD(detailSale.taxCents) }}</span>
+            <span class="text-muted">{{ $t('tax.line', { name: taxTitle(detailSale.taxName, detailSale.taxPercent) }) }}</span>
+            <span class="font-mono">{{ money(detailSale.taxCents) }}</span>
           </div>
-          <div class="flex justify-between font-medium"><span>{{ $t('pos.total') }}</span><span class="font-mono">{{ formatUSD(detailSale.totalCents) }} ({{ formatKHR(detailSale.totalRiel) }})</span></div>
+          <div class="flex justify-between font-medium"><span>{{ $t('pos.total') }}</span><span class="font-mono">{{ money(detailSale.totalCents) }} ({{ other(detailSale.totalCents, detailSale.exchangeRate) }})</span></div>
         </div>
 
         <div v-if="detailSale.note" class="border-t border-line pt-3" data-sale-note>
@@ -648,11 +662,14 @@ function shiftStatus(s: Shift) {
           <template v-if="detailSale.payment.method === 'CASH'">
             <div class="flex justify-between">
               <span class="text-muted">{{ $t('pos.tendered') }}</span>
-              <span class="font-mono">{{ formatUSD(detailSale.payment.receivedUsdCents) }}{{ detailSale.payment.receivedKhrRiel ? ` + ${formatKHR(detailSale.payment.receivedKhrRiel)}` : '' }}</span>
+              <span v-if="isRiel" class="font-mono">{{ [detailSale.payment.receivedUsdCents ? formatUSD(detailSale.payment.receivedUsdCents) : '', detailSale.payment.receivedKhrRiel ? formatKHR(detailSale.payment.receivedKhrRiel) : ''].filter(Boolean).join(' + ') }}</span>
+              <span v-else class="font-mono">{{ formatUSD(detailSale.payment.receivedUsdCents) }}{{ detailSale.payment.receivedKhrRiel ? ` + ${formatKHR(detailSale.payment.receivedKhrRiel)}` : '' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-muted">{{ $t('pos.change') }}</span>
-              <span class="font-mono">{{ formatUSD(detailSale.payment.changeUsdCents) }} + {{ formatKHR(detailSale.payment.changeKhrRiel) }}</span>
+              <!-- A riel company gives all change in riel. -->
+              <span v-if="isRiel" class="font-mono">{{ formatKHR(detailSale.payment.changeKhrRiel) }}</span>
+              <span v-else class="font-mono">{{ formatUSD(detailSale.payment.changeUsdCents) }} + {{ formatKHR(detailSale.payment.changeKhrRiel) }}</span>
             </div>
           </template>
           <div v-if="detailSale.payment.reference" class="flex justify-between"><span class="text-muted">{{ $t('common.note') }}</span><span>{{ detailSale.payment.reference }}</span></div>
@@ -697,7 +714,7 @@ function shiftStatus(s: Shift) {
               <td class="py-2 font-mono text-xs">{{ row.receiptNo }}</td>
               <td class="py-2 font-mono text-xs">{{ formatDateTime(row.soldAt) }}</td>
               <td class="py-2">{{ row.cashier }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(row.totalCents) }}</td>
+              <td class="py-2 text-right font-mono">{{ money(row.totalCents) }}</td>
               <td class="py-2"><StatusBadge :tone="statusTone[row.status]" :label="label('saleStatus', row.status)" /></td>
             </tr>
           </tbody>
@@ -722,7 +739,7 @@ function shiftStatus(s: Shift) {
               <td class="py-2">{{ s.deviceName }}</td>
               <td class="py-2 font-mono text-xs">{{ formatDateTime(s.openedAt) }}</td>
               <td class="py-2 font-mono text-xs">{{ formatDateTime(s.closedAt) }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(s.grossSalesCents) }}</td>
+              <td class="py-2 text-right font-mono">{{ money(s.grossSalesCents) }}</td>
               <td class="py-2"><StatusBadge :tone="shiftStatus(s).tone" :label="shiftStatus(s).label" /></td>
             </tr>
           </tbody>
@@ -767,21 +784,21 @@ function shiftStatus(s: Shift) {
             <tr v-for="(item, idx) in detailPO.items" :key="idx" class="border-b border-line last:border-0">
               <td class="py-2">{{ localName(item.productName, item.productNameKm) }}</td>
               <td class="py-2 text-right font-mono">{{ item.qtyOrdered }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(item.unitCostCents) }}</td>
-              <td class="py-2 text-right font-mono">{{ item.discountCents ? `−${formatUSD(item.discountCents)}` : '—' }}</td>
-              <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(item.qtyOrdered * item.unitCostCents - (item.discountCents || 0)) }}</td>
+              <td class="py-2 text-right font-mono">{{ money(item.unitCostCents) }}</td>
+              <td class="py-2 text-right font-mono">{{ item.discountCents ? `−${money(item.discountCents)}` : '—' }}</td>
+              <td class="py-2 pr-1 text-right font-mono">{{ money(item.qtyOrdered * item.unitCostCents - (item.discountCents || 0)) }}</td>
             </tr>
           </tbody>
         </table>
         <RichText v-if="detailPO.note" :html="detailPO.note" class="rounded-control bg-surface-subtle px-3 py-2" />
         <div class="space-y-1 pt-2 border-t border-line">
-          <div class="flex justify-between"><span class="text-muted">{{ $t('inventory.items') }}</span><span class="font-mono">{{ formatUSD(poItemsCostCents(detailPO)) }}</span></div>
-          <div class="flex justify-between"><span class="text-muted">{{ $t('inventory.shipping') }}</span><span class="font-mono">{{ formatUSD(detailPO.shippingCents) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('inventory.items') }}</span><span class="font-mono">{{ money(poItemsCostCents(detailPO)) }}</span></div>
+          <div class="flex justify-between"><span class="text-muted">{{ $t('inventory.shipping') }}</span><span class="font-mono">{{ money(detailPO.shippingCents) }}</span></div>
           <div v-if="detailPO.taxCents" class="flex justify-between" data-tax-line>
-            <span class="text-muted">{{ $t('tax.line', { name: `${detailPO.taxName} ${formatPercent(detailPO.taxPercent)}` }) }}</span>
-            <span class="font-mono">{{ formatUSD(detailPO.taxCents) }}</span>
+            <span class="text-muted">{{ $t('tax.line', { name: taxTitle(detailPO.taxName, detailPO.taxPercent) }) }}</span>
+            <span class="font-mono">{{ money(detailPO.taxCents) }}</span>
           </div>
-          <div class="flex justify-between items-center"><span class="text-muted">{{ $t('inventory.totalCost') }}</span><span class="font-mono font-medium">{{ formatUSD(poTotalCostCents(detailPO)) }}</span></div>
+          <div class="flex justify-between items-center"><span class="text-muted">{{ $t('inventory.totalCost') }}</span><span class="font-mono font-medium">{{ money(poTotalCostCents(detailPO)) }}</span></div>
         </div>
       </div>
 
@@ -789,12 +806,12 @@ function shiftStatus(s: Shift) {
       <div v-else-if="detailMode === 'expense' && detailExpense" class="space-y-2 text-sm">
         <div class="flex justify-between"><span class="text-muted">{{ $t('col.date') }}</span><span class="font-mono">{{ detailExpense.expenseDate }}</span></div>
         <div class="flex justify-between"><span class="text-muted">{{ $t('common.category') }}</span><span>{{ label('expenseCat', detailExpense.category) }}</span></div>
-        <div class="flex justify-between"><span class="text-muted">{{ $t('tax.amountBeforeTax') }}</span><span class="font-mono">{{ formatUSD(detailExpense.amountCents) }}</span></div>
+        <div class="flex justify-between"><span class="text-muted">{{ $t('tax.amountBeforeTax') }}</span><span class="font-mono">{{ money(detailExpense.amountCents) }}</span></div>
         <div v-if="detailExpense.taxCents" class="flex justify-between" data-tax-line>
-          <span class="text-muted">{{ $t('tax.line', { name: `${detailExpense.taxName} ${formatPercent(detailExpense.taxPercent)}` }) }}</span>
-          <span class="font-mono">{{ formatUSD(detailExpense.taxCents) }}</span>
+          <span class="text-muted">{{ $t('tax.line', { name: taxTitle(detailExpense.taxName, detailExpense.taxPercent) }) }}</span>
+          <span class="font-mono">{{ money(detailExpense.taxCents) }}</span>
         </div>
-        <div class="flex justify-between font-medium"><span>{{ $t('tax.totalWithTax') }}</span><span class="font-mono">{{ formatUSD(detailExpense.totalCents) }}</span></div>
+        <div class="flex justify-between font-medium"><span>{{ $t('tax.totalWithTax') }}</span><span class="font-mono">{{ money(detailExpense.totalCents) }}</span></div>
         <div class="flex justify-between"><span class="text-muted">{{ $t('col.addedBy') }}</span><span>{{ detailExpense.user }}</span></div>
         <div v-if="detailExpense.note" class="pt-2 border-t border-line">
           <p class="text-muted">{{ $t('common.note') }}</p>

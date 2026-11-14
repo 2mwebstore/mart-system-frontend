@@ -10,14 +10,16 @@ import SearchAddInput from '@/components/SearchAddInput.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import DiscountInput from '@/components/DiscountInput.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import { listPaymentMethods } from '@/api/settings'
 import type { EditSaleInput } from '@/api/pos'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { localName, seededLabel } from '@/i18n'
-import { calculateChange, usdCentsToRiel } from '@/utils/money'
+import { calculateChangeIn } from '@/utils/money'
 import { formatKHR, formatUSD } from '@/utils/format'
-import { formatPercent, taxCents } from '@/utils/tax'
+import { useMoney } from '@/composables/useMoney'
+import { taxCents, taxTitle } from '@/utils/tax'
 import { X } from 'lucide-vue-next'
 import type { Product, Sale } from '@/types/domain'
 import type { DiscountType } from '@/composables/useCart'
@@ -29,12 +31,15 @@ const auth = useAuthStore()
 const settings = useSettingsStore()
 // The sale's own rate, as the server uses on save — not today's.
 const rate = computed(() => props.sale.exchangeRate || settings.rate)
+// Prices, discounts and totals are in the company's main currency (cents, or
+// whole riel); the tender boxes stay dollars and riel.
+const { money, other, toMinor, toMajor, currency, isRiel } = useMoney()
 const canDiscount = auth.hasPermission('pos.discount')
 
 // --- Lines -----------------------------------------------------------------
-// Discounts can be typed as % or $ (same rule as the POS cart: a line % is of
-// the line's gross, the cart % is of what's left after line discounts). The
-// server only stores cents, so a saved sale reopens in $.
+// Discounts can be typed as % or an amount (same rule as the POS cart: a line
+// % is of the line's gross, the cart % is of what's left after line
+// discounts). The server only stores amounts, so a saved sale reopens as one.
 interface EditLine {
   productId: number
   name: string
@@ -53,7 +58,7 @@ const lines = ref<EditLine[]>(
     qty: i.qty,
     unitPriceCents: i.unitPriceCents,
     discountType: 'amount' as DiscountType,
-    discountValue: i.discountCents / 100,
+    discountValue: toMajor(i.discountCents),
     note: i.note,
   })),
 )
@@ -64,7 +69,7 @@ const soldPrice = new Map(props.sale.items.map((i) => [i.productId, i.unitPriceC
 // The sale stores line and cart discounts together; the cart part is what's left.
 const lineDiscountsStored = props.sale.items.reduce((n, i) => n + i.discountCents, 0)
 const cartDiscountType = ref<DiscountType>('amount')
-const cartDiscountValue = ref(Math.max(0, props.sale.discountCents - lineDiscountsStored) / 100)
+const cartDiscountValue = ref(toMajor(Math.max(0, props.sale.discountCents - lineDiscountsStored)))
 
 const productOptions = computed(() =>
   props.products
@@ -128,10 +133,10 @@ const note = ref(props.sale.note ?? '')
 function toCents(dollars: number) {
   return Math.max(0, Math.round((Number(dollars) || 0) * 100))
 }
-// Cents off `base` for a % or $ discount, clamped to 0..base.
+// The amount off `base` for a % or amount discount, clamped to 0..base.
 function discountOf(base: number, type: DiscountType, value: number) {
   const v = Math.max(0, Number(value) || 0)
-  const raw = type === 'percent' ? Math.round((base * Math.min(v, 100)) / 100) : Math.round(v * 100)
+  const raw = type === 'percent' ? Math.round((base * Math.min(v, 100)) / 100) : toMinor(v)
   return Math.min(raw, base)
 }
 const itemsSubtotal = computed(() => lines.value.reduce((n, l) => n + l.qty * l.unitPriceCents, 0))
@@ -145,11 +150,10 @@ const beforeTaxCents = computed(() => afterLines.value - cartDiscountCents.value
 const taxPercent = props.sale.taxPercent || 0
 const saleTaxCents = computed(() => taxCents(beforeTaxCents.value, taxPercent))
 const totalCents = computed(() => beforeTaxCents.value + saleTaxCents.value)
-const totalRiel = computed(() => usdCentsToRiel(totalCents.value, rate.value))
 
 const tenderUSDCents = computed(() => toCents(tenderUSD.value))
 const tenderKHRRiel = computed(() => Math.max(0, Math.round(Number(tenderKHR.value) || 0)))
-const change = computed(() => calculateChange(totalCents.value, tenderUSDCents.value, tenderKHRRiel.value, rate.value))
+const change = computed(() => calculateChangeIn(currency.value, totalCents.value, tenderUSDCents.value, tenderKHRRiel.value, rate.value))
 const cashShort = computed(() => isCash.value && change.value.shortCents > 0)
 
 const canSave = computed(
@@ -193,7 +197,7 @@ function save() {
         <div class="flex items-start gap-2">
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium truncate">{{ line.name }}</p>
-            <p class="text-xs text-muted font-mono">{{ line.sku }} · {{ formatUSD(line.unitPriceCents) }}</p>
+            <p class="text-xs text-muted font-mono">{{ line.sku }} · {{ money(line.unitPriceCents) }}</p>
           </div>
           <button type="button" class="p-1.5 text-muted hover:text-danger-strong" :aria-label="$t('inventory.removeItem')" @click="removeLine(line.productId)">
             <X class="w-4 h-4" />
@@ -217,34 +221,34 @@ function save() {
           </div>
         </div>
         <p class="text-right text-sm font-mono">
-          <span v-if="lineDiscount(line)" class="text-muted mr-2">−{{ formatUSD(lineDiscount(line)) }}</span>
-          {{ formatUSD(line.qty * line.unitPriceCents - lineDiscount(line)) }}
+          <span v-if="lineDiscount(line)" class="text-muted mr-2">−{{ money(lineDiscount(line)) }}</span>
+          {{ money(line.qty * line.unitPriceCents - lineDiscount(line)) }}
         </p>
       </div>
     </div>
 
     <div class="max-w-xs">
       <DiscountInput v-model:type="cartDiscountType" v-model:value="cartDiscountValue" :label="$t('pos.totalDiscount')" :disabled="!canDiscount" />
-      <p v-if="cartDiscountCents" class="mt-1 text-xs text-muted font-mono">−{{ formatUSD(cartDiscountCents) }}</p>
+      <p v-if="cartDiscountCents" class="mt-1 text-xs text-muted font-mono">−{{ money(cartDiscountCents) }}</p>
       <p v-if="!canDiscount" class="mt-1 text-xs text-muted">{{ $t('inventory.discountNoPermHint') }}</p>
     </div>
 
     <div class="rounded-control bg-surface-subtle p-3 space-y-1 text-sm">
       <div class="flex justify-between">
         <span class="text-muted">{{ $t('pos.subtotal') }}</span>
-        <span class="font-mono">{{ formatUSD(itemsSubtotal) }}</span>
+        <span class="font-mono">{{ money(itemsSubtotal) }}</span>
       </div>
       <div class="flex justify-between">
         <span class="text-muted">{{ $t('pos.discount') }}</span>
-        <span class="font-mono">−{{ formatUSD(lineDiscountTotal + cartDiscountCents) }}</span>
+        <span class="font-mono">−{{ money(lineDiscountTotal + cartDiscountCents) }}</span>
       </div>
       <div v-if="taxPercent > 0" class="flex justify-between" data-tax-line>
-        <span class="text-muted">{{ $t('tax.line', { name: `${sale.taxName} ${formatPercent(taxPercent)}` }) }}</span>
-        <span class="font-mono">{{ formatUSD(saleTaxCents) }}</span>
+        <span class="text-muted">{{ $t('tax.line', { name: taxTitle(sale.taxName, taxPercent) }) }}</span>
+        <span class="font-mono">{{ money(saleTaxCents) }}</span>
       </div>
       <div class="flex justify-between font-medium">
         <span>{{ $t('col.total') }}</span>
-        <span class="font-mono">{{ formatUSD(totalCents) }} ({{ formatKHR(totalRiel) }})</span>
+        <span class="font-mono">{{ money(totalCents) }} ({{ other(totalCents, rate) }})</span>
       </div>
     </div>
 
@@ -253,14 +257,16 @@ function save() {
     <div v-if="isCash" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div>
         <label class="block text-sm text-muted mb-1">{{ $t('pos.tenderedUsd') }}</label>
-        <input v-model.number="tenderUSD" type="number" min="0" step="0.01" class="input" />
+        <MoneyInput v-model="tenderUSD" currency="USD" />
       </div>
-      <div>
+      <!-- A riel company's riel box comes first, as at the till. -->
+      <div :class="{ 'order-first': isRiel }" data-tender-khr>
         <label class="block text-sm text-muted mb-1">{{ $t('pos.tenderedKhr') }}</label>
-        <input v-model.number="tenderKHR" type="number" min="0" step="100" class="input" />
+        <MoneyInput v-model="tenderKHR" currency="KHR" />
       </div>
       <p class="sm:col-span-2 text-sm" :class="cashShort ? 'text-danger-strong' : 'text-muted'">
-        <template v-if="cashShort">{{ $t('inventory.saleStillOwed') }}: {{ formatUSD(change.shortCents) }}</template>
+        <template v-if="cashShort">{{ $t('inventory.saleStillOwed') }}: {{ money(change.shortCents) }}</template>
+        <template v-else-if="isRiel">{{ $t('pos.changeDue') }}: {{ formatKHR(change.khrRiel) }}</template>
         <template v-else>{{ $t('pos.changeDue') }}: {{ formatUSD(change.usdCents) }} · {{ formatKHR(change.khrRiel) }}</template>
       </p>
     </div>

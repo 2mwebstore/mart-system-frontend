@@ -6,21 +6,28 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useShiftStore } from '@/stores/shift'
+import { useSettingsStore } from '@/stores/settings'
 import { pageShiftSales } from '@/api/pos'
 import { usePagedList } from '@/composables/usePagedList'
 import Pagination from '@/components/Pagination.vue'
-import { formatDateTime, formatUSD } from '@/utils/format'
+import { formatDateTime } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
 import { label, t } from '@/i18n'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money } = useMoney()
 
 const auth = useAuthStore()
 const shift = useShiftStore()
+const settings = useSettingsStore()
 const toast = useToast()
 const emit = defineEmits<{ close: []; voided: [] }>()
 
 const canVoid = auth.hasPermission('pos.void')
 
-// This shift's sales, one server page at a time (newest first).
+// This shift's sales, one server page at a time (newest first). Without
+// shifts, that's the till's sales: its one shift stays open.
 const list = reactive(
   usePagedList(({ page, perPage }) => pageShiftSales(shift.branchId, shift.shift!.id, { page, perPage }), { perPage: 8 }),
 )
@@ -51,8 +58,10 @@ async function confirmVoid(reason: string) {
 </script>
 
 <template>
-  <Modal :title="$t('pos.salesThisShift')" wide @close="emit('close')">
-    <div v-if="!list.loading && list.total === 0" class="text-center text-muted py-8">{{ $t('pos.noSalesYet') }}</div>
+  <Modal :title="$t(settings.usesShifts ? 'pos.salesThisShift' : 'pos.salesThisTill')" wide @close="emit('close')">
+    <div v-if="!list.loading && list.total === 0" class="text-center text-muted py-8" data-no-sales>
+      {{ $t(settings.usesShifts ? 'pos.noSalesYet' : 'pos.noSalesYetTill') }}
+    </div>
     <div v-else class="overflow-x-auto -mx-1 px-1">
       <table class="w-full text-sm">
         <thead>
@@ -73,8 +82,8 @@ async function confirmVoid(reason: string) {
             <td class="py-2 text-right font-mono">{{ s.items.reduce((sum, i) => sum + i.qty, 0) }}</td>
             <td class="py-2">{{ label('method', s.payment.method) }}</td>
             <td class="py-2 text-right font-mono">
-              {{ formatUSD(s.totalCents) }}
-              <span v-if="s.taxCents" class="block text-xs text-muted" :title="s.taxName">{{ $t('tax.label') }} {{ formatUSD(s.taxCents) }}</span>
+              {{ money(s.totalCents) }}
+              <span v-if="s.taxCents" class="block text-xs text-muted" :title="s.taxName">{{ $t('tax.label') }} {{ money(s.taxCents) }}</span>
             </td>
             <td class="py-2"><StatusBadge :tone="s.status === 'PAID' ? 'success' : 'danger'" :label="label('saleStatus', s.status)" /></td>
             <td class="py-2">

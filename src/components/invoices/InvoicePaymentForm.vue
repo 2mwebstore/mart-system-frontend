@@ -10,11 +10,15 @@
 import { computed, ref, watch } from 'vue'
 import { ImageUp, Link2, X } from 'lucide-vue-next'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import { seededLabel, t } from '@/i18n'
-import { formatUSD } from '@/utils/format'
 import { shrinkImage } from '@/utils/image'
 import { useToast } from '@/composables/useToast'
 import type { InvoicePaymentInput, PaymentMethodRow } from '@/types/domain'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money, toMinor, toMajor, symbol, currency } = useMoney()
 
 const props = defineProps<{
   balanceCents: number // the most this payment can be
@@ -36,7 +40,7 @@ function blankForm() {
     paidOn: today,
     methodId: defaultMethod(),
     // Embedded starts at 0 (no payment unless one is entered); standalone at the full balance.
-    amountDollars: props.embedded ? 0 : props.balanceCents / 100,
+    amountDollars: props.embedded ? 0 : toMajor(props.balanceCents),
     reference: '',
     note: '',
     proofMode: 'link' as 'link' | 'image',
@@ -88,12 +92,12 @@ function onPaste(e: ClipboardEvent) {
 }
 
 // ---- Checks + output ------------------------------------------------------------------
-const amountCents = computed(() => Math.round((Number(form.value.amountDollars) || 0) * 100))
+const amountCents = computed(() => toMinor(Number(form.value.amountDollars) || 0))
 const problem = computed(() => {
   if (props.embedded && amountCents.value === 0) return ''
   if (form.value.methodId === null) return t('invoices.pickMethod')
   if (amountCents.value <= 0) return t('invoices.amountPositive')
-  if (amountCents.value > props.balanceCents) return t('invoices.overBalance', { balance: formatUSD(props.balanceCents) })
+  if (amountCents.value > props.balanceCents) return t('invoices.overBalance', { balance: money(props.balanceCents) })
   if (form.value.proofMode === 'link' && form.value.proofLink && !/^https?:\/\//.test(form.value.proofLink.trim())) return t('invoices.linkInvalid')
   return ''
 })
@@ -140,10 +144,10 @@ function submitPayment() {
         @update:model-value="(v) => (form.methodId = v === null ? null : Number(v))"
       />
       <div>
-        <label class="block text-xs text-muted mb-1" :for="`pay-amount-${uid}`">{{ $t('invoices.amount') }}</label>
-        <input :id="`pay-amount-${uid}`" v-model.number="form.amountDollars" type="number" min="0" step="0.01" class="input" data-pay-amount />
-        <button type="button" class="text-xs text-primary-text hover:underline mt-1" @click="form.amountDollars = balanceCents / 100">
-          {{ embedded ? $t('invoices.paidInFull', { amount: formatUSD(balanceCents) }) : $t('invoices.fullBalance', { amount: formatUSD(balanceCents) }) }}
+        <label class="block text-xs text-muted mb-1" :for="`pay-amount-${uid}`">{{ $t('invoices.amount', { currency: symbol }) }}</label>
+        <MoneyInput :id="`pay-amount-${uid}`" v-model="form.amountDollars" :currency="currency" data-pay-amount />
+        <button type="button" class="text-xs text-primary-text hover:underline mt-1" @click="form.amountDollars = toMajor(balanceCents)">
+          {{ embedded ? $t('invoices.paidInFull', { amount: money(balanceCents) }) : $t('invoices.fullBalance', { amount: money(balanceCents) }) }}
         </button>
       </div>
     </div>
@@ -192,7 +196,7 @@ function submitPayment() {
 
     <p v-if="problem && amountCents > 0" class="text-sm text-danger-strong">{{ problem }}</p>
     <div v-if="!embedded" class="flex justify-end">
-      <button type="submit" class="btn-primary" :disabled="busy || shrinking || !!problem">{{ $t('invoices.savePayment', { amount: formatUSD(amountCents) }) }}</button>
+      <button type="submit" class="btn-primary" :disabled="busy || shrinking || !!problem">{{ $t('invoices.savePayment', { amount: money(amountCents) }) }}</button>
     </div>
   </component>
 </template>

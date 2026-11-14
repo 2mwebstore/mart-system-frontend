@@ -2,14 +2,13 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { listProducts, type ImportResult } from '@/api/catalog'
 import * as posApi from '@/api/pos'
-import { Download, Eye, Lock, Package, PackagePlus, Pencil, Plus, Upload, X } from 'lucide-vue-next'
+import { Download, Eye, Lock, Package, PackagePlus, Pencil, Plus, Upload } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useInventoryData } from '@/composables/useInventoryData'
 import { useDebounced, usePagedList } from '@/composables/usePagedList'
 import { formatDateTime, formatKHR, formatUSD } from '@/utils/format'
-import { formatPercent, nameFor, percentFor, startingRate, taxCents } from '@/utils/tax'
-import { useSettingsStore } from '@/stores/settings'
-import TaxSelect from '@/components/TaxSelect.vue'
+import { taxTitle } from '@/utils/tax'
+import MoneyInput from '@/components/MoneyInput.vue'
 import { PRODUCT_TYPES, type Category, type Product, type ProductType, type PurchaseOrder, type Sale, type Supplier } from '@/types/domain'
 import Modal from '@/components/Modal.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -18,17 +17,19 @@ import SearchInput from '@/components/SearchInput.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import Pagination from '@/components/Pagination.vue'
 import DateRangePicker from '@/components/DateRangePicker.vue'
-import SearchAddInput from '@/components/SearchAddInput.vue'
 import SaleEditor from '@/components/SaleEditor.vue'
-import RichTextEditor from '@/components/RichTextEditor.vue'
 import RichText from '@/components/RichText.vue'
-import DiscountInput from '@/components/DiscountInput.vue'
-import type { DiscountType } from '@/composables/useCart'
 import { useToast } from '@/composables/useToast'
 import { useInUseAlert } from '@/composables/useInUseAlert'
 import { useRouteSection } from '@/composables/useRouteSection'
 import { canOpen } from '@/utils/pageAccess'
 import { categoryName, label, localName, t } from '@/i18n'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money, other, toMinor, toMajor, symbol, currency, isRiel } = useMoney()
+// Amounts in a CSV: dollars to the cent, or whole riel.
+const csvMoney = (minor: number) => (isRiel.value ? String(minor) : (minor / 100).toFixed(2))
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -91,7 +92,6 @@ const {
   poItemsDiscountCents,
   poTotalCostCents,
   poItemCount,
-  savePurchaseOrder,
   removePurchaseOrder,
   receivePurchaseOrder,
 } = useInventoryData(branchId, can)
@@ -147,16 +147,6 @@ watch(
 )
 const supplierOptions = computed(() => suppliers.value.map((s) => ({ value: s.id, label: s.name, sub: s.phone })))
 const poSupplierFilterOptions = computed(() => [{ value: 'all', label: t('inventory.allSuppliers') }, ...supplierOptions.value])
-const branchOptions = computed(() => auth.branches.map((b) => ({ value: b.id, label: b.name, sub: b.code })))
-// A purchase order orders stock, so only STANDARD products are offered here.
-const productOptions = computed(() =>
-  products.value
-    .filter((p) => p.active && p.productType !== 'SERVICE')
-    .map((p) => ({ value: p.id, label: localName(p.nameEn, p.nameKm), sub: [p.sku, p.nameEn, p.nameKm].filter(Boolean).join(' · ') })),
-)
-// RECEIVED is reached only through the Receive action (it moves stock), so
-// it isn't offered as a status to pick by hand.
-const poStatusOptions = computed(() => ['DRAFT', 'SENT', 'PARTIAL', 'CANCELLED'].map((v) => ({ value: v, label: label('poStatus', v) })))
 const poStatusFilterOptions = computed(() => [
   { value: 'all', label: t('common.allStatuses') },
   ...['DRAFT', 'SENT', 'PARTIAL', 'RECEIVED', 'CANCELLED'].map((v) => ({ value: v, label: label('poStatus', v) })),
@@ -208,8 +198,8 @@ async function exportCsv() {
       p.categoryId ?? '',
       p.categoryName ?? '',
       label('productType', p.productType),
-      (p.costCents / 100).toFixed(2),
-      (p.priceCents / 100).toFixed(2),
+      csvMoney(p.costCents),
+      csvMoney(p.priceCents),
       p.productType === 'SERVICE' ? '—' : p.qty,
       p.productType === 'SERVICE' ? '—' : p.reorderPoint,
     ]
@@ -273,12 +263,14 @@ function downloadImportSample() {
       ['Snacks', 'អាហារសម្រន់'],
     ])
   } else {
+    // Cost and price in the company's main currency: dollars, or whole riel.
+    const amt = (usd: string, khr: string) => (isRiel.value ? khr : usd)
     downloadCsv('products-sample.csv', [
       ['name_en', 'name_km', 'barcode', 'category_id', 'category', 'unit', 'type', 'cost', 'price', 'reorder_point', 'active', 'parent_sku', 'variant_name'],
-      ['Coca-Cola 330ml', 'កូកាកូឡា ៣៣០ម.ល.', '8850001234567', '', 'Drinks', 'can', 'standard', '0.35', '0.75', '24', 'true', '', ''],
-      ['Delivery fee', 'ថ្លៃដឹកជញ្ជូន', '', '', '', '', 'service', '0', '1.00', '', 'true', '', ''],
-      ['T-Shirt', '', '', '', 'Apparel', 'pcs', 'standard', '3.00', '8.00', '10', 'true', '', ''],
-      ['', '', '8850009991111', '', '', 'pcs', '', '3.20', '8.00', '10', 'true', 'TSH-001', 'Red / Large'],
+      ['Coca-Cola 330ml', 'កូកាកូឡា ៣៣០ម.ល.', '8850001234567', '', 'Drinks', 'can', 'standard', amt('0.35', '1400'), amt('0.75', '3000'), '24', 'true', '', ''],
+      ['Delivery fee', 'ថ្លៃដឹកជញ្ជូន', '', '', '', '', 'service', '0', amt('1.00', '4000'), '', 'true', '', ''],
+      ['T-Shirt', '', '', '', 'Apparel', 'pcs', 'standard', amt('3.00', '12000'), amt('8.00', '32000'), '10', 'true', '', ''],
+      ['', '', '8850009991111', '', '', 'pcs', '', amt('3.20', '13000'), amt('8.00', '32000'), '10', 'true', 'TSH-001', 'Red / Large'],
     ])
   }
 }
@@ -452,8 +444,8 @@ function newVariant(parent: Product) {
     categoryId: parent.categoryId,
     unit: parent.unit,
     productType: parent.productType,
-    costDollars: parent.costCents / 100,
-    priceDollars: parent.priceCents / 100,
+    costDollars: toMajor(parent.costCents),
+    priceDollars: toMajor(parent.priceCents),
     reorderPoint: parent.reorderPoint,
     active: true,
     imageUrl: parent.imageUrl,
@@ -473,8 +465,8 @@ function editProduct(p: Product) {
     categoryId: p.categoryId,
     unit: p.unit,
     productType: p.productType,
-    costDollars: p.costCents / 100,
-    priceDollars: p.priceCents / 100,
+    costDollars: toMajor(p.costCents),
+    priceDollars: toMajor(p.priceCents),
     reorderPoint: p.reorderPoint,
     active: p.active,
     imageUrl: p.imageUrl,
@@ -522,8 +514,8 @@ async function submitProduct() {
       categoryId: productForm.categoryId,
       unit: productForm.unit,
       productType: productForm.productType,
-      costCents: Math.round(productForm.costDollars * 100),
-      priceCents: Math.round(productForm.priceDollars * 100),
+      costCents: toMinor(productForm.costDollars),
+      priceCents: toMinor(productForm.priceDollars),
       reorderPoint: Number(productForm.reorderPoint) || 0,
       active: productForm.active,
       imageUrl: productForm.imageUrl,
@@ -616,149 +608,10 @@ async function deleteSupplier(id: number) {
   if (await removeSupplier(id)) toast.success(t('inventory.supplierDeleted'))
 }
 
-// --- Purchase orders (full CRUD, with line items) ---------------------------
+// --- Purchase orders ----------------------------------------------------------
+// New and Edit are a page of their own (PurchaseOrderEditPage.vue); the list
+// receives and deletes them here.
 
-interface PoFormItem {
-  productId: number
-  name: string
-  sku: string
-  qty: number
-  unitCostDollars: number // form-only unit; converted to unitCostCents on submit
-  // % or $ off the whole line (qty × unit cost); sent as cents.
-  discountType: DiscountType
-  discountValue: number
-}
-
-const showPoModal = ref(false)
-const editingPoId = ref<number | null>(null)
-// The order being edited: it keeps its own tax rate as it was.
-const editingPo = ref<PurchaseOrder | null>(null)
-const settingsStore = useSettingsStore()
-const poForm = reactive<{
-  supplierId: number | null
-  branchId: number | null
-  status: string
-  note: string
-  shippingDollars: number
-  taxRateId: number | null
-  items: PoFormItem[]
-}>({ supplierId: null, branchId: branchId.value, status: 'DRAFT', note: '', shippingDollars: 0, taxRateId: null, items: [] })
-
-function newPo() {
-  editingPoId.value = null
-  editingPo.value = null
-  Object.assign(poForm, {
-    supplierId: null,
-    branchId: branchId.value,
-    status: 'DRAFT',
-    note: '',
-    shippingDollars: 0,
-    taxRateId: startingRate(settingsStore.app.taxDefaults?.purchase, settingsStore.taxRates),
-    items: [],
-  })
-  void loadAllProducts() // the picker searches every product, not just one page
-  showPoModal.value = true
-}
-function editPo(po: PurchaseOrder) {
-  editingPoId.value = po.id
-  editingPo.value = po
-  Object.assign(poForm, {
-    supplierId: po.supplierId,
-    branchId: po.branchId,
-    status: po.status,
-    note: po.note,
-    shippingDollars: po.shippingCents / 100,
-    taxRateId: po.taxRateId,
-    items: po.items.map((i) => ({
-      productId: i.productId,
-      name: localName(i.productName, i.productNameKm),
-      sku: i.sku,
-      qty: i.qtyOrdered,
-      unitCostDollars: i.unitCostCents / 100,
-      discountType: 'amount' as DiscountType,
-      discountValue: (i.discountCents || 0) / 100,
-    })),
-  })
-  void loadAllProducts()
-  showPoModal.value = true
-}
-// Picked from the single search box. The product just picked always lands at
-// the top; if it's already on the order its qty goes up and it moves to the
-// top instead of being added twice. The unit cost is pre-filled with the
-// product's current cost (editable) rather than starting at 0.
-function addPoProduct(productId: string | number) {
-  const product = products.value.find((p) => p.id === productId)
-  if (!product) return
-  const idx = poForm.items.findIndex((i) => i.productId === product.id)
-  if (idx !== -1) {
-    const [existing] = poForm.items.splice(idx, 1)
-    existing.qty += 1
-    poForm.items.unshift(existing)
-  } else {
-    poForm.items.unshift({
-      productId: product.id,
-      name: localName(product.nameEn, product.nameKm),
-      sku: product.sku,
-      qty: 1,
-      unitCostDollars: product.costCents / 100,
-      discountType: 'amount',
-      discountValue: 0,
-    })
-  }
-}
-function removePoItem(productId: number) {
-  const idx = poForm.items.findIndex((i) => i.productId === productId)
-  if (idx !== -1) poForm.items.splice(idx, 1)
-}
-function poLineGrossCents(i: PoFormItem) {
-  return (Number(i.qty) || 0) * Math.round((Number(i.unitCostDollars) || 0) * 100)
-}
-// Same % / $ rule as the sale editor, clamped to the line's cost.
-function poLineDiscountCents(i: PoFormItem) {
-  const gross = poLineGrossCents(i)
-  const v = Math.max(0, Number(i.discountValue) || 0)
-  const raw = i.discountType === 'percent' ? Math.round((gross * Math.min(v, 100)) / 100) : Math.round(v * 100)
-  return Math.min(raw, gross)
-}
-const poFormDiscountCents = computed(() => poForm.items.reduce((sum, i) => sum + poLineDiscountCents(i), 0))
-const poFormItemsCents = computed(() => poForm.items.reduce((sum, i) => sum + poLineGrossCents(i) - poLineDiscountCents(i), 0))
-const poFormShippingCents = computed(() => Math.round(poForm.shippingDollars * 100))
-// Tax on the items after discounts plus shipping, as the server works it out.
-const poFormTaxPercent = computed(() => percentFor(poForm.taxRateId, settingsStore.taxRates, editingPo.value))
-const poFormTaxName = computed(() => nameFor(poForm.taxRateId, settingsStore.taxRates, editingPo.value))
-const poFormTaxCents = computed(() => taxCents(poFormItemsCents.value + poFormShippingCents.value, poFormTaxPercent.value))
-const poFormTotalCents = computed(() => poFormItemsCents.value + poFormShippingCents.value + poFormTaxCents.value)
-
-async function submitPo() {
-  if (poForm.supplierId === null || poForm.branchId === null || poForm.items.length === 0) {
-    toast.error(t('inventory.pickPoFields'))
-    return
-  }
-  const id = editingPoId.value
-  saving.value = true
-  const ok = await savePurchaseOrder(
-    {
-      supplierId: poForm.supplierId,
-      branchId: poForm.branchId,
-      status: poForm.status,
-      note: poForm.note,
-      shippingCents: poFormShippingCents.value,
-      taxRateId: poForm.taxRateId,
-      items: poForm.items.map((i) => ({
-        productId: i.productId,
-        qty: Number(i.qty),
-        unitCostCents: Math.round(i.unitCostDollars * 100),
-        discountCents: poLineDiscountCents(i),
-      })),
-    },
-    id,
-  )
-  saving.value = false
-  if (ok) {
-    toast.success(id === null ? t('inventory.poCreated') : t('inventory.poUpdated'))
-    showPoModal.value = false
-  }
-}
 async function receivePo(po: PurchaseOrder) {
   if (await receivePurchaseOrder(po.id)) toast.success(t('inventory.poReceived', { code: po.code }))
 }
@@ -918,7 +771,7 @@ function viewPoDetail(po: PurchaseOrder) {
     <div v-if="section === 'products'" class="grid grid-cols-2 sm:grid-cols-5 gap-4">
       <div class="card">
         <p class="text-sm text-muted">{{ $t('inventory.stockValue') }}</p>
-        <p class="font-mono text-xl mt-1">{{ formatUSD(summary.stockValueCents) }}</p>
+        <p class="font-mono text-xl mt-1">{{ money(summary.stockValueCents) }}</p>
       </div>
       <div class="card">
         <p class="text-sm text-muted">{{ $t('inventory.activeProducts') }}</p>
@@ -1022,8 +875,8 @@ function viewPoDetail(po: PurchaseOrder) {
               </td>
               <td class="py-2">{{ r.categoryName ? categoryName(r.categoryName, r.categoryNameKm) : '—' }}</td>
               <td class="py-2 text-muted">{{ label('productType', r.productType) }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(r.costCents) }}</td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(r.priceCents) }}</td>
+              <td class="py-2 text-right font-mono">{{ money(r.costCents) }}</td>
+              <td class="py-2 text-right font-mono">{{ money(r.priceCents) }}</td>
               <td class="py-2 text-right font-mono">{{ r.marginPct }}%</td>
               <td class="py-2 text-right font-mono">{{ r.productType === 'SERVICE' ? '—' : r.qty }}</td>
               <td class="py-2 pr-4 text-right font-mono text-muted">{{ r.productType === 'SERVICE' ? '—' : r.reorderPoint }}</td>
@@ -1174,9 +1027,9 @@ function viewPoDetail(po: PurchaseOrder) {
             <DateRangePicker v-model="poRange" clearable @clear="poRange = null" />
           </div>
         </div>
-        <button v-if="canCreatePo" type="button" class="btn-primary flex items-center gap-2" @click="newPo">
+        <RouterLink v-if="canCreatePo" :to="{ name: 'po-new' }" class="btn-primary flex items-center gap-2" data-new-po>
           <Plus :stroke-width="1.8" class="w-4 h-4" /> {{ $t('inventory.newPo') }}
-        </button>
+        </RouterLink>
       </div>
       <table class="w-full text-sm">
         <thead>
@@ -1195,7 +1048,7 @@ function viewPoDetail(po: PurchaseOrder) {
             <td class="py-2 font-mono text-xs">{{ po.code }}</td>
             <td class="py-2">{{ po.supplierName }}</td>
             <td class="py-2 text-right font-mono">{{ poItemCount(po) }}</td>
-            <td class="py-2 pr-4 text-right font-mono">{{ formatUSD(poTotalCostCents(po)) }}</td>
+            <td class="py-2 pr-4 text-right font-mono">{{ money(poTotalCostCents(po)) }}</td>
             <td class="py-2 font-mono text-xs">{{ po.createdAt }}</td>
             <td class="py-2"><StatusBadge :tone="poStatusTone[po.status]" :label="label('poStatus', po.status)" /></td>
             <td class="py-2">
@@ -1203,9 +1056,15 @@ function viewPoDetail(po: PurchaseOrder) {
                 <button type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.viewItemsAria')" @click="viewPoDetail(po)">
                   <Eye :stroke-width="1.8" class="w-4 h-4" />
                 </button>
-                <button v-if="canEditPo && po.status !== 'RECEIVED'" type="button" class="p-1.5 text-muted hover:text-ink" :aria-label="$t('inventory.editPoAria')" @click="editPo(po)">
+                <RouterLink
+                  v-if="canEditPo && po.status !== 'RECEIVED'"
+                  :to="{ name: 'po-edit', params: { id: po.id } }"
+                  class="p-1.5 text-muted hover:text-ink"
+                  :aria-label="$t('inventory.editPoAria')"
+                  data-edit-po
+                >
                   <Pencil :stroke-width="1.8" class="w-4 h-4" />
-                </button>
+                </RouterLink>
                 <button
                   v-if="poCanReceive(po)"
                   type="button"
@@ -1258,7 +1117,7 @@ function viewPoDetail(po: PurchaseOrder) {
             <td class="py-2">{{ branchName(s.branchId) }}</td>
             <td class="py-2">{{ s.cashier }}</td>
             <td class="py-2 text-right font-mono">{{ s.items.reduce((n, i) => n + i.qty, 0) }}</td>
-            <td class="py-2 text-right font-mono">{{ formatUSD(s.totalCents) }}</td>
+            <td class="py-2 text-right font-mono">{{ money(s.totalCents) }}</td>
             <td class="py-2"><StatusBadge :tone="saleStatusTone[s.status]" :label="label('saleStatus', s.status)" /></td>
             <td class="py-2" @click.stop>
               <div v-if="canVoidSale && s.status === 'PAID' && s.shiftStatus === 'OPEN'" class="flex items-center gap-1">
@@ -1329,8 +1188,8 @@ function viewPoDetail(po: PurchaseOrder) {
         <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <div><p class="text-muted text-xs">{{ $t('col.sku') }}</p><p class="font-mono">{{ previewRow.sku }}</p></div>
           <div><p class="text-muted text-xs">{{ $t('common.category') }}</p><p>{{ previewRow.categoryName ? categoryName(previewRow.categoryName, previewRow.categoryNameKm) : '—' }}</p></div>
-          <div><p class="text-muted text-xs">{{ $t('col.price') }}</p><p class="font-mono">{{ formatUSD(previewRow.priceCents) }}</p></div>
-          <div><p class="text-muted text-xs">{{ $t('col.cost') }}</p><p class="font-mono">{{ formatUSD(previewRow.costCents) }}</p></div>
+          <div><p class="text-muted text-xs">{{ $t('col.price') }}</p><p class="font-mono">{{ money(previewRow.priceCents) }}</p></div>
+          <div><p class="text-muted text-xs">{{ $t('col.cost') }}</p><p class="font-mono">{{ money(previewRow.costCents) }}</p></div>
           <div><p class="text-muted text-xs">{{ $t('inventory.productType') }}</p><p>{{ label('productType', previewRow.productType) }}</p></div>
           <template v-if="previewRow.productType === 'SERVICE'">
             <div class="col-span-2"><p class="text-muted text-xs">{{ $t('inventory.serviceHint') }}</p></div>
@@ -1442,12 +1301,12 @@ function viewPoDetail(po: PurchaseOrder) {
         </label>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-sm text-muted mb-1">{{ $t('inventory.costUsd') }}</label>
-            <input v-model.number="productForm.costDollars" type="number" min="0" step="0.01" class="input" required />
+            <label class="block text-sm text-muted mb-1">{{ $t('inventory.costUsd', { currency: symbol }) }}</label>
+            <MoneyInput v-model="productForm.costDollars" :currency="currency" />
           </div>
           <div>
-            <label class="block text-sm text-muted mb-1">{{ $t('inventory.priceUsd') }}</label>
-            <input v-model.number="productForm.priceDollars" type="number" min="0" step="0.01" class="input" required />
+            <label class="block text-sm text-muted mb-1">{{ $t('inventory.priceUsd', { currency: symbol }) }}</label>
+            <MoneyInput v-model="productForm.priceDollars" :currency="currency" />
           </div>
         </div>
 
@@ -1516,81 +1375,6 @@ function viewPoDetail(po: PurchaseOrder) {
       </form>
     </Modal>
 
-    <Modal v-if="showPoModal" :title="editingPoId === null ? $t('inventory.newPo') : $t('inventory.editPo', { code: poList.rows.find((po) => po.id === editingPoId)?.code })" wide @close="showPoModal = false">
-      <form class="space-y-4" @submit.prevent="submitPo">
-        <div class="grid grid-cols-2 gap-3">
-          <SearchableSelect v-model="poForm.supplierId" :label="$t('common.supplier')" :options="supplierOptions" required />
-          <SearchableSelect v-model="poForm.branchId" :label="$t('common.branch')" :options="branchOptions" required />
-        </div>
-        <SearchableSelect
-          v-if="editingPoId !== null"
-          v-model="poForm.status"
-          :label="$t('common.status')"
-          :options="poStatusOptions"
-          :searchable="false"
-          :clearable="false"
-        />
-
-        <div>
-          <SearchAddInput :label="$t('inventory.items')" :options="productOptions" :placeholder="$t('inventory.itemsSearchHint')" @select="addPoProduct" />
-          <div class="mt-2 space-y-2">
-            <p v-if="poForm.items.length === 0" class="rounded-control border border-dashed border-line py-4 text-center text-sm text-muted">
-              {{ $t('inventory.noItemsYet') }}
-            </p>
-            <div v-for="item in poForm.items" :key="item.productId" class="rounded-control border border-line p-3 space-y-2">
-              <div class="flex items-start gap-2">
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium truncate">{{ item.name }}</p>
-                  <p class="text-xs text-muted font-mono">{{ item.sku }}</p>
-                </div>
-                <button type="button" class="p-1.5 -m-1 text-muted hover:text-danger-strong" :aria-label="$t('inventory.removeItem')" @click="removePoItem(item.productId)">
-                  <X class="w-4 h-4" />
-                </button>
-              </div>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <div>
-                  <label class="block text-xs text-muted mb-1">{{ $t('inventory.qty') }}</label>
-                  <input v-model.number="item.qty" type="number" min="1" class="input" />
-                </div>
-                <div>
-                  <label class="block text-xs text-muted mb-1">{{ $t('inventory.unitCostUsd') }}</label>
-                  <input v-model.number="item.unitCostDollars" type="number" min="0" step="0.01" class="input" />
-                </div>
-                <DiscountInput v-model:type="item.discountType" v-model:value="item.discountValue" class="col-span-2 sm:col-span-1" :label="$t('pos.discount')" small />
-              </div>
-              <p class="text-right text-sm font-mono">
-                <span v-if="poLineDiscountCents(item)" class="text-muted line-through mr-2">{{ formatUSD(poLineGrossCents(item)) }}</span>
-                {{ formatUSD(poLineGrossCents(item) - poLineDiscountCents(item)) }}
-              </p>
-            </div>
-          </div>
-          <p v-if="poFormDiscountCents" class="text-sm text-right font-mono mt-2 text-muted">{{ $t('inventory.itemDiscounts') }}: −{{ formatUSD(poFormDiscountCents) }}</p>
-          <p class="text-sm text-right font-mono mt-2">{{ $t('inventory.itemsTotal', { amount: formatUSD(poFormItemsCents) }) }}</p>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-          <div>
-            <label class="block text-sm text-muted mb-1">{{ $t('inventory.shippingUsd') }}</label>
-            <input v-model.number="poForm.shippingDollars" type="number" min="0" step="0.01" class="input" />
-          </div>
-          <TaxSelect v-model="poForm.taxRateId" :kept="editingPo" />
-        </div>
-        <div class="space-y-1 text-right">
-          <p v-if="poForm.taxRateId" class="text-sm font-mono text-muted" data-tax-line>
-            {{ $t('tax.line', { name: `${poFormTaxName} ${formatPercent(poFormTaxPercent)}` }) }}: {{ formatUSD(poFormTaxCents) }}
-          </p>
-          <p class="text-sm font-mono font-medium">{{ $t('inventory.totalLine', { amount: formatUSD(poFormTotalCents) }) }}</p>
-        </div>
-
-        <RichTextEditor id="po-note" v-model="poForm.note" :label="$t('common.note')" :placeholder="$t('inventory.poNoteHint')" />
-
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="showPoModal = false">{{ $t('common.cancel') }}</button>
-          <button type="submit" class="btn-primary" :disabled="saving">{{ editingPoId === null ? $t('settings.create') : $t('common.save') }}</button>
-        </div>
-      </form>
-    </Modal>
-
     <Modal v-if="showPoDetailModal && detailPo" :title="$t('inventory.poItemsTitle', { code: detailPo.code })" wide @close="showPoDetailModal = false">
       <div class="space-y-4">
         <div class="flex items-center justify-between text-sm text-muted">
@@ -1617,15 +1401,15 @@ function viewPoDetail(po: PurchaseOrder) {
                 {{ item.qtyOrdered }}
                 <span v-if="item.qtyReceived" class="block text-xs text-muted">{{ $t('inventory.receivedQty', { n: item.qtyReceived }) }}</span>
               </td>
-              <td class="py-2 text-right font-mono">{{ formatUSD(item.unitCostCents) }}</td>
+              <td class="py-2 text-right font-mono">{{ money(item.unitCostCents) }}</td>
               <td class="py-2 text-right font-mono">
                 <template v-if="item.discountCents">
-                  −{{ formatUSD(item.discountCents) }}
+                  −{{ money(item.discountCents) }}
                   <span class="block text-xs text-muted">{{ percentOf(item.discountCents, item.qtyOrdered * item.unitCostCents) }}</span>
                 </template>
                 <span v-else class="text-muted">—</span>
               </td>
-              <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(item.qtyOrdered * item.unitCostCents - (item.discountCents || 0)) }}</td>
+              <td class="py-2 pr-1 text-right font-mono">{{ money(item.qtyOrdered * item.unitCostCents - (item.discountCents || 0)) }}</td>
             </tr>
           </tbody>
         </table>
@@ -1636,23 +1420,23 @@ function viewPoDetail(po: PurchaseOrder) {
         <div class="space-y-1 pt-2 border-t border-line">
           <div class="flex justify-between text-sm">
             <span class="text-muted">{{ $t('inventory.items') }}</span>
-            <span class="font-mono">{{ formatUSD(poItemsGrossCents(detailPo)) }}</span>
+            <span class="font-mono">{{ money(poItemsGrossCents(detailPo)) }}</span>
           </div>
           <div v-if="poItemsDiscountCents(detailPo)" class="flex justify-between text-sm">
             <span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span>
-            <span class="font-mono">−{{ formatUSD(poItemsDiscountCents(detailPo)) }}</span>
+            <span class="font-mono">−{{ money(poItemsDiscountCents(detailPo)) }}</span>
           </div>
           <div class="flex justify-between text-sm">
             <span class="text-muted">{{ $t('inventory.shipping') }}</span>
-            <span class="font-mono">{{ formatUSD(detailPo.shippingCents) }}</span>
+            <span class="font-mono">{{ money(detailPo.shippingCents) }}</span>
           </div>
           <div v-if="detailPo.taxCents || detailPo.taxRateId" class="flex justify-between text-sm" data-tax-line>
-            <span class="text-muted">{{ $t('tax.line', { name: `${detailPo.taxName} ${formatPercent(detailPo.taxPercent)}` }) }}</span>
-            <span class="font-mono">{{ formatUSD(detailPo.taxCents) }}</span>
+            <span class="text-muted">{{ $t('tax.line', { name: taxTitle(detailPo.taxName, detailPo.taxPercent) }) }}</span>
+            <span class="font-mono">{{ money(detailPo.taxCents) }}</span>
           </div>
           <div class="flex justify-between items-center">
             <span class="text-sm text-muted">{{ $t('inventory.totalCost') }}</span>
-            <span class="font-mono font-medium">{{ formatUSD(poTotalCostCents(detailPo)) }}</span>
+            <span class="font-mono font-medium">{{ money(poTotalCostCents(detailPo)) }}</span>
           </div>
         </div>
         <div class="flex justify-end pt-2">
@@ -1688,41 +1472,41 @@ function viewPoDetail(po: PurchaseOrder) {
                   <p v-if="item.note" class="text-xs text-muted">{{ $t('pos.itemNoteLine', { note: item.note }) }}</p>
                 </td>
                 <td class="py-2 text-right font-mono">{{ item.qty }}</td>
-                <td class="py-2 text-right font-mono">{{ formatUSD(item.unitPriceCents) }}</td>
+                <td class="py-2 text-right font-mono">{{ money(item.unitPriceCents) }}</td>
                 <td class="py-2 text-right font-mono">
                   <template v-if="item.discountCents">
-                    −{{ formatUSD(item.discountCents) }}
+                    −{{ money(item.discountCents) }}
                     <span class="block text-xs text-muted">{{ percentOf(item.discountCents, item.qty * item.unitPriceCents) }}</span>
                   </template>
                   <span v-else class="text-muted">—</span>
                 </td>
-                <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(item.lineTotalCents) }}</td>
+                <td class="py-2 pr-1 text-right font-mono">{{ money(item.lineTotalCents) }}</td>
               </tr>
             </tbody>
           </table>
           <div class="space-y-1 pt-2 border-t border-line text-sm">
             <div class="flex justify-between">
               <span class="text-muted">{{ $t('pos.subtotal') }}</span>
-              <span class="font-mono">{{ formatUSD(activeSale.subtotalCents) }}</span>
+              <span class="font-mono">{{ money(activeSale.subtotalCents) }}</span>
             </div>
             <div v-if="saleLineDiscountCents(activeSale)" class="flex justify-between">
               <span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span>
-              <span class="font-mono">−{{ formatUSD(saleLineDiscountCents(activeSale)) }}</span>
+              <span class="font-mono">−{{ money(saleLineDiscountCents(activeSale)) }}</span>
             </div>
             <div v-if="saleCartDiscountCents(activeSale)" class="flex justify-between">
               <span class="text-muted">{{ $t('inventory.invoiceDiscount') }}</span>
               <span class="font-mono">
-                −{{ formatUSD(saleCartDiscountCents(activeSale)) }}
+                −{{ money(saleCartDiscountCents(activeSale)) }}
                 <span class="text-xs text-muted">{{ percentOf(saleCartDiscountCents(activeSale), activeSale.subtotalCents - saleLineDiscountCents(activeSale)) }}</span>
               </span>
             </div>
             <div v-if="activeSale.taxCents" class="flex justify-between" data-tax-line>
-              <span class="text-muted">{{ $t('tax.line', { name: `${activeSale.taxName} ${formatPercent(activeSale.taxPercent)}` }) }}</span>
-              <span class="font-mono">{{ formatUSD(activeSale.taxCents) }}</span>
+              <span class="text-muted">{{ $t('tax.line', { name: taxTitle(activeSale.taxName, activeSale.taxPercent) }) }}</span>
+              <span class="font-mono">{{ money(activeSale.taxCents) }}</span>
             </div>
             <div class="flex justify-between font-medium">
               <span>{{ $t('col.total') }}</span>
-              <span class="font-mono">{{ formatUSD(activeSale.totalCents) }} ({{ formatKHR(activeSale.totalRiel) }})</span>
+              <span class="font-mono">{{ money(activeSale.totalCents) }} ({{ other(activeSale.totalCents, activeSale.exchangeRate) }})</span>
             </div>
           </div>
           <div v-if="activeSale.note" class="rounded-control bg-surface-subtle px-3 py-2 text-sm" data-sale-note>
@@ -1736,11 +1520,14 @@ function viewPoDetail(po: PurchaseOrder) {
           <template v-if="activeSale.payment.method === 'CASH'">
             <div class="flex justify-between text-sm text-muted">
               <span>{{ $t('pos.tendered') }}</span>
-              <span class="font-mono">{{ formatUSD(activeSale.payment.receivedUsdCents) }}{{ activeSale.payment.receivedKhrRiel ? ` + ${formatKHR(activeSale.payment.receivedKhrRiel)}` : '' }}</span>
+              <span v-if="isRiel" class="font-mono">{{ [activeSale.payment.receivedUsdCents ? formatUSD(activeSale.payment.receivedUsdCents) : '', activeSale.payment.receivedKhrRiel ? formatKHR(activeSale.payment.receivedKhrRiel) : ''].filter(Boolean).join(' + ') }}</span>
+              <span v-else class="font-mono">{{ formatUSD(activeSale.payment.receivedUsdCents) }}{{ activeSale.payment.receivedKhrRiel ? ` + ${formatKHR(activeSale.payment.receivedKhrRiel)}` : '' }}</span>
             </div>
             <div class="flex justify-between text-sm text-muted">
               <span>{{ $t('pos.change') }}</span>
-              <span class="font-mono">{{ formatUSD(activeSale.payment.changeUsdCents) }}{{ activeSale.payment.changeKhrRiel ? ` + ${formatKHR(activeSale.payment.changeKhrRiel)}` : '' }}</span>
+              <!-- A riel company gives all change in riel. -->
+              <span v-if="isRiel" class="font-mono">{{ formatKHR(activeSale.payment.changeKhrRiel) }}</span>
+              <span v-else class="font-mono">{{ formatUSD(activeSale.payment.changeUsdCents) }}{{ activeSale.payment.changeKhrRiel ? ` + ${formatKHR(activeSale.payment.changeKhrRiel)}` : '' }}</span>
             </div>
           </template>
           <div v-else-if="activeSale.payment.reference" class="flex justify-between text-sm text-muted">

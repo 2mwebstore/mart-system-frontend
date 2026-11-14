@@ -1,13 +1,15 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import * as reportsApi from '@/api/reports'
 import type { ProfitLossReport } from '@/types/domain'
-import { usdCentsToRiel } from '@/utils/money'
+import { otherFigure } from '@/utils/money'
+import { useSettingsStore } from '@/stores/settings'
 import { label, t } from '@/i18n'
 
 // Profit & Loss (build spec §8.5) from GET /reports/profit-loss. Every figure
 // is computed on the server from real sales and expenses; this only shapes
 // them for the statement table and charts.
 export function useProfitLossData(dateRange: Ref<{ from: string; to: string }>, branchId: Ref<number>) {
+  const settings = useSettingsStore()
   const report = ref<ProfitLossReport | null>(null)
   const loading = ref(true)
 
@@ -35,18 +37,20 @@ export function useProfitLossData(dateRange: Ref<{ from: string; to: string }>, 
     if (!x) return []
     const rate = x.exchangeRate
     const catLabel = (c: string) => label('expenseCat', c)
-    const lines: { label: string; usdCents: number; bold?: boolean }[] = [
-      { label: t('pl.grossSales'), usdCents: x.grossSalesCents },
-      { label: t('pl.discounts'), usdCents: -x.discountCents },
-      { label: t('pl.returns'), usdCents: -x.returnsCents },
-      { label: t('pl.netSales'), usdCents: x.netSalesCents, bold: true },
-      { label: t('pl.cogs'), usdCents: -x.cogsCents },
-      { label: t('pl.grossProfit'), usdCents: x.grossProfitCents, bold: true },
-      ...x.expensesByCategory.map((e) => ({ label: catLabel(e.category), usdCents: -e.amountCents })),
-      { label: t('pl.totalOpex'), usdCents: -x.totalExpensesCents, bold: true },
-      { label: t('pl.netProfit'), usdCents: x.netProfitCents, bold: true },
+    // `amount` is in the main currency; `other` is the same in the other
+    // currency at the report's rate.
+    const lines: { label: string; amount: number; bold?: boolean }[] = [
+      { label: t('pl.grossSales'), amount: x.grossSalesCents },
+      { label: t('pl.discounts'), amount: -x.discountCents },
+      { label: t('pl.returns'), amount: -x.returnsCents },
+      { label: t('pl.netSales'), amount: x.netSalesCents, bold: true },
+      { label: t('pl.cogs'), amount: -x.cogsCents },
+      { label: t('pl.grossProfit'), amount: x.grossProfitCents, bold: true },
+      ...x.expensesByCategory.map((e) => ({ label: catLabel(e.category), amount: -e.amountCents })),
+      { label: t('pl.totalOpex'), amount: -x.totalExpensesCents, bold: true },
+      { label: t('pl.netProfit'), amount: x.netProfitCents, bold: true },
     ]
-    return lines.map((l) => ({ ...l, pctOfNetSales: pct(l.usdCents, x.netSalesCents), riel: usdCentsToRiel(l.usdCents, rate) }))
+    return lines.map((l) => ({ ...l, pctOfNetSales: pct(l.amount, x.netSalesCents), other: otherFigure(l.amount, settings.mainCurrency, rate) }))
   })
 
   return {

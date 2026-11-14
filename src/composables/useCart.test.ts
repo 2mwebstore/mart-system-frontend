@@ -10,6 +10,7 @@ const product = (id: number, priceCents: number) => ({ id, nameEn: `P${id}`, nam
 // one with no starting tax.
 beforeEach(() => {
   const cart = useCart()
+  cart.setCurrency('USD')
   cart.setDefaultTaxRate(null)
   cart.taxRate.value = null
   cart.clear()
@@ -80,5 +81,31 @@ describe('the cart’s tax', () => {
     cart.taxRate.value = null
     cart.setDefaultTaxRate(vat20)
     expect(cart.taxRate.value).toBeNull()
+  })
+})
+
+describe('a riel company’s cart', () => {
+  it('takes amount discounts in whole riel', () => {
+    const cart = useCart()
+    cart.setCurrency('KHR')
+    cart.addProduct(product(1, 15600))
+    cart.incQty(1)
+    cart.setLineDiscount(1, 'amount', 1000) // −៛1,000 on the line
+    cart.cartDiscountValue.value = 500 // −៛500 on the cart
+    cart.taxRate.value = vat10
+
+    expect(cart.subtotalCents.value).toBe(31200)
+    expect(cart.beforeTaxCents.value).toBe(29700)
+    expect(cart.taxCents.value).toBe(2970)
+    expect(cart.totalCents.value).toBe(32670)
+    expect(cart.cartDiscountCents.value).toBe(500)
+  })
+
+  it('takes percent discounts as before', () => {
+    const cart = useCart()
+    cart.setCurrency('KHR')
+    cart.addProduct(product(1, 15600))
+    cart.setLineDiscount(1, 'percent', 10)
+    expect(cart.beforeTaxCents.value).toBe(14040)
   })
 })

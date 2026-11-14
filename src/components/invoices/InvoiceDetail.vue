@@ -9,10 +9,12 @@ import RichText from '@/components/RichText.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import { localName, seededLabel, t } from '@/i18n'
-import { formatKHR, formatUSD } from '@/utils/format'
-import { formatPercent } from '@/utils/tax'
-import { usdCentsToRiel } from '@/utils/money'
+import { taxTitle } from '@/utils/tax'
 import type { Invoice, InvoicePaymentInput, PaymentMethodRow } from '@/types/domain'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { money, other } = useMoney()
 
 // canUpdate: edit it and record payments (invoice.update); canDelete: cancel
 // it and remove payments (invoice.delete).
@@ -78,29 +80,29 @@ const statusLabel = computed(() =>
               <p v-if="it.note" class="text-xs text-muted italic">↳ {{ it.note }}</p>
             </td>
             <td class="py-2 text-right font-mono">{{ it.qty }}</td>
-            <td class="py-2 text-right font-mono">{{ formatUSD(it.unitPriceCents) }}</td>
-            <td class="py-2 text-right font-mono">{{ it.discountCents ? `−${formatUSD(it.discountCents)}` : '—' }}</td>
-            <td class="py-2 pr-1 text-right font-mono">{{ formatUSD(it.lineTotalCents) }}</td>
+            <td class="py-2 text-right font-mono">{{ money(it.unitPriceCents) }}</td>
+            <td class="py-2 text-right font-mono">{{ it.discountCents ? `−${money(it.discountCents)}` : '—' }}</td>
+            <td class="py-2 pr-1 text-right font-mono">{{ money(it.lineTotalCents) }}</td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <div class="space-y-1 text-sm border-t border-line pt-3">
-      <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ formatUSD(invoice.subtotalCents) }}</span></div>
-      <div v-if="invoice.lineDiscountCents" class="flex justify-between"><span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ formatUSD(invoice.lineDiscountCents) }}</span></div>
-      <div v-if="invoice.discountCents" class="flex justify-between"><span class="text-muted">{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ formatUSD(invoice.discountCents) }}</span></div>
-      <div v-if="invoice.shippingCents" class="flex justify-between"><span class="text-muted">{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ formatUSD(invoice.shippingCents) }}</span></div>
+      <div class="flex justify-between"><span class="text-muted">{{ $t('pos.subtotal') }}</span><span class="font-mono">{{ money(invoice.subtotalCents) }}</span></div>
+      <div v-if="invoice.lineDiscountCents" class="flex justify-between"><span class="text-muted">{{ $t('inventory.itemDiscounts') }}</span><span class="font-mono">−{{ money(invoice.lineDiscountCents) }}</span></div>
+      <div v-if="invoice.discountCents" class="flex justify-between"><span class="text-muted">{{ $t('inventory.invoiceDiscount') }}</span><span class="font-mono">−{{ money(invoice.discountCents) }}</span></div>
+      <div v-if="invoice.shippingCents" class="flex justify-between"><span class="text-muted">{{ $t('invoices.shippingLine') }}</span><span class="font-mono">{{ money(invoice.shippingCents) }}</span></div>
       <div v-if="invoice.taxCents || invoice.taxRateId" class="flex justify-between" data-tax-line>
-        <span class="text-muted">{{ $t('tax.line', { name: `${invoice.taxName} ${formatPercent(invoice.taxPercent)}` }) }}</span><span class="font-mono">{{ formatUSD(invoice.taxCents) }}</span>
+        <span class="text-muted">{{ $t('tax.line', { name: taxTitle(invoice.taxName, invoice.taxPercent) }) }}</span><span class="font-mono">{{ money(invoice.taxCents) }}</span>
       </div>
       <div class="flex justify-between font-medium">
         <span>{{ $t('col.total') }}</span>
-        <span class="font-mono">{{ formatUSD(invoice.totalCents) }} <span class="text-muted font-normal">({{ formatKHR(usdCentsToRiel(invoice.totalCents, invoice.exchangeRate || 4100)) }})</span></span>
+        <span class="font-mono">{{ money(invoice.totalCents) }} <span class="text-muted font-normal">({{ other(invoice.totalCents, invoice.exchangeRate || undefined) }})</span></span>
       </div>
-      <div class="flex justify-between text-success-text"><span>{{ $t('invoices.paid') }}</span><span class="font-mono">{{ formatUSD(invoice.paidCents) }}</span></div>
+      <div class="flex justify-between text-success-text"><span>{{ $t('invoices.paid') }}</span><span class="font-mono">{{ money(invoice.paidCents) }}</span></div>
       <div class="flex justify-between font-medium text-lg" :class="invoice.balanceCents > 0 && open ? (overdue ? 'text-danger-strong' : 'text-ink') : 'text-muted'">
-        <span>{{ $t('invoices.balance') }}</span><span class="font-mono">{{ formatUSD(invoice.balanceCents) }}</span>
+        <span>{{ $t('invoices.balance') }}</span><span class="font-mono">{{ money(invoice.balanceCents) }}</span>
       </div>
     </div>
 
@@ -113,7 +115,7 @@ const statusLabel = computed(() =>
       <div v-for="p in invoice.payments" :key="p.id" class="rounded-control border border-line p-3 flex items-start justify-between gap-3">
         <div class="min-w-0 space-y-0.5">
           <p class="text-sm">
-            <span class="font-mono font-medium">{{ formatUSD(p.amountCents) }}</span>
+            <span class="font-mono font-medium">{{ money(p.amountCents) }}</span>
             · {{ seededLabel('method', p.methodType, p.methodName) }} · <span class="font-mono text-muted">{{ p.paidOn }}</span>
           </p>
           <p v-if="p.reference" class="text-xs text-muted">{{ $t('col.reference') }}: {{ p.reference }}</p>
@@ -127,7 +129,7 @@ const statusLabel = computed(() =>
           <a v-else-if="p.attachment" :href="p.attachment" target="_blank" rel="noopener noreferrer" class="p-1.5 text-primary-text hover:underline text-xs flex items-center gap-1">
             <ExternalLink class="w-3.5 h-3.5" /> {{ $t('invoices.viewProof') }}
           </a>
-          <ConfirmDelete v-if="canDelete && open" :item-label="$t('invoices.payment')" :item-name="formatUSD(p.amountCents)" @confirm="emit('deletePayment', p.id)" />
+          <ConfirmDelete v-if="canDelete && open" :item-label="$t('invoices.payment')" :item-name="money(p.amountCents)" @confirm="emit('deletePayment', p.id)" />
         </div>
       </div>
 

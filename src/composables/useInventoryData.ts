@@ -1,6 +1,6 @@
 import { computed, onMounted, reactive, ref, type Ref } from 'vue'
 import * as catalogApi from '@/api/catalog'
-import type { Category, Product, ProductInput, ProductType, PurchaseOrder, PurchaseOrderInput, Supplier } from '@/types/domain'
+import type { Category, Product, ProductInput, ProductType, PurchaseOrder, Supplier } from '@/types/domain'
 import { initialsOf } from '@/utils/format'
 import { useDebounced, usePagedList } from '@/composables/usePagedList'
 import { inUseFrom, type InUseInfo } from '@/utils/inUse'
@@ -233,8 +233,6 @@ export function useInventoryData(branchId: Ref<number>, can: (key: string) => bo
   }
 
   // --- Purchase orders -------------------------------------------------------------
-  const savePurchaseOrder = (data: PurchaseOrderInput, id: number | null) =>
-    attempt(() => (id === null ? catalogApi.createPurchaseOrder(data) : catalogApi.updatePurchaseOrder(id, data)), [poList.reload])
   const removePurchaseOrder = (id: number) => attempt(() => catalogApi.deletePurchaseOrder(id), [poList.reload])
   const receivePurchaseOrder = (id: number) =>
     attempt(() => catalogApi.receivePurchaseOrder(id), [poList.reload, refreshProducts, moveList.reload])
@@ -316,7 +314,6 @@ export function useInventoryData(branchId: Ref<number>, can: (key: string) => bo
     poItemsCostCents,
     poTotalCostCents,
     poItemCount,
-    savePurchaseOrder,
     removePurchaseOrder,
     receivePurchaseOrder,
   }

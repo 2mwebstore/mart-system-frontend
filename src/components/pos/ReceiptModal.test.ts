@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { i18n, setLocale, t } from '@/i18n'
-import type { Sale } from '@/types/domain'
+import type { Currency, Sale } from '@/types/domain'
+import { useSettingsStore } from '@/stores/settings'
 import { formatKHR } from '@/utils/format'
 import ReceiptModal from './ReceiptModal.vue'
 
@@ -70,10 +71,13 @@ afterEach(() => {
   setLocale('en')
 })
 
-async function showReceipt(of: Sale) {
+async function showReceipt(of: Sale, mainCurrency: Currency = 'USD') {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  useSettingsStore().app.mainCurrency = mainCurrency
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp({ render: () => h(ReceiptModal, { sale: of }) }).use(createPinia()).use(i18n)
+  app = createApp({ render: () => h(ReceiptModal, { sale: of }) }).use(pinia).use(i18n)
   app.mount(host)
   await nextTick()
 }
@@ -83,6 +87,22 @@ const lines = () => [...host.querySelectorAll('[data-receipt-line]')].map(cells)
 // The totals under the items, as "label value".
 const totals = () =>
   [...host.querySelectorAll('[data-receipt-items] + div > div')].map((d) => [...d.children].map((c) => c.textContent?.trim()).join(' ').trim())
+// The cash lines under the totals, as "label value".
+const cashLines = () =>
+  [...host.querySelectorAll('[data-receipt-items] + div + div > div')].map((d) => [...d.children].map((c) => c.textContent?.trim()).join(' ').trim())
+
+// A riel company's sale: ៛13,500 at ៛4,100, paid with a $5 note.
+const rielSale: Sale = {
+  ...sale,
+  subtotalCents: 13500,
+  totalCents: 13500,
+  totalRiel: 13500,
+  items: [
+    { productId: 3, name: 'Dish soap 750ml', nameKm: '', sku: 'HHD-001', qty: 1, unitPriceCents: 7800, discountCents: 0, note: '', lineTotalCents: 7800 },
+    { productId: 2, name: 'Toothpaste 150g', nameKm: '', sku: 'PSC-001', qty: 1, unitPriceCents: 5700, discountCents: 0, note: '', lineTotalCents: 5700 },
+  ],
+  payment: { method: 'CASH', receivedUsdCents: 500, receivedKhrRiel: 0, changeUsdCents: 0, changeKhrRiel: 7000, reference: '' },
+}
 
 describe('the receipt after a sale', () => {
   it('lists the items under Item, Qty and Total when nothing is discounted', async () => {
@@ -171,5 +191,29 @@ describe('the receipt after a sale', () => {
     app!.unmount()
     app = null
     expect(printed.cleared).toBe(1)
+  })
+})
+
+describe('the receipt of a riel company', () => {
+  it('shows riel, with dollars as the second figure', async () => {
+    await showReceipt(rielSale, 'KHR')
+    expect(lines()).toEqual([
+      ['Dish soap 750ml', '1', '៛ 7,800'],
+      ['Toothpaste 150g', '1', '៛ 5,700'],
+    ])
+    // ៛13,500 at the sale's ៛4,100.
+    expect(totals()).toEqual(['Subtotal ៛ 13,500', 'Total ៛ 13,500', '$3.29'])
+  })
+
+  it('shows the notes handed over, and all the change in riel', async () => {
+    await showReceipt(rielSale, 'KHR')
+    expect(cashLines()).toEqual(['Paid by Cash', 'Tendered $5.00', 'Change ៛ 7,000'])
+    await showReceipt({ ...rielSale, payment: { ...rielSale.payment, receivedUsdCents: 200, receivedKhrRiel: 5000, changeKhrRiel: 0 } }, 'KHR')
+    expect(cashLines()).toEqual(['Paid by Cash', 'Tendered $2.00 + ៛ 5,000', 'Change ៛ 0'])
+  })
+
+  it('keeps dollars and riel change for a dollar company', async () => {
+    await showReceipt({ ...sale, payment: { ...sale.payment, receivedUsdCents: 500, changeUsdCents: 100, changeKhrRiel: 2700 } })
+    expect(cashLines()).toEqual(['Paid by Cash', 'Tendered $5.00', 'Change $1.00 + ៛ 2,700'])
   })
 })

@@ -45,7 +45,8 @@ export const deleteTaxRate = (id: number) => del(`/tax-rates/${id}`)
 // Every place's starting rate at once (null: no tax).
 export const updateTaxDefaults = (d: TaxDefaults) => put<TaxDefaults>('/tax-rates/defaults', d)
 
-export const getSettings = () => get<AppSettings>('/settings')
+// silent: a background re-check, whose failure shows nothing.
+export const getSettings = (opts?: { silent?: boolean }) => get<AppSettings>('/settings', undefined, opts)
 
 // Company name + logo. Public — the sign-in pages show them too, for the
 // company whose code is given (none: the app's own). `logo` left out keeps

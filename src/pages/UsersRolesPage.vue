@@ -20,6 +20,7 @@ import ConfirmDelete from '@/components/ConfirmDelete.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import Pagination from '@/components/Pagination.vue'
 import PermissionPanel from '@/components/PermissionPanel.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import SearchInput from '@/components/SearchInput.vue'
 import ResetPinDialog from '@/components/users/ResetPinDialog.vue'
 import { useDebounced, usePagedList } from '@/composables/usePagedList'
@@ -28,6 +29,10 @@ import { useToast } from '@/composables/useToast'
 import { useRouteSection } from '@/composables/useRouteSection'
 import { canOpen } from '@/utils/pageAccess'
 import { label, roleDescription, t } from '@/i18n'
+import { useMoney } from '@/composables/useMoney'
+
+// Amounts are in the company's main currency (cents, or whole riel).
+const { toMinor, toMajor, symbol, currency } = useMoney()
 
 const toast = useToast()
 const auth = useAuthStore()
@@ -431,15 +436,13 @@ async function deleteRole() {
               <input v-model.number="draft.maxDiscountPercent" type="number" min="0" max="100" class="input" :disabled="roleReadOnly" />
             </div>
             <div>
-              <label class="block text-xs text-muted mb-1">{{ $t('users.refundLimit') }}</label>
-              <input
-                :value="(draft.refundWithoutApprovalCents / 100).toFixed(2)"
-                type="number"
-                min="0"
-                step="0.01"
-                class="input"
+              <label class="block text-xs text-muted mb-1">{{ $t('users.refundLimit', { currency: symbol }) }}</label>
+              <MoneyInput
+                :model-value="toMajor(draft.refundWithoutApprovalCents)"
+                :currency="currency"
                 :disabled="roleReadOnly"
-                @input="draft.refundWithoutApprovalCents = Math.round(Number(($event.target as HTMLInputElement).value) * 100)"
+                data-refund-limit
+                @update:model-value="(v) => (draft.refundWithoutApprovalCents = toMinor(v))"
               />
             </div>
           </div>

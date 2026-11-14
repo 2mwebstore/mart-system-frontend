@@ -13,8 +13,9 @@ import type { Branding } from '@/types/domain'
 //
 // Each company has its own: this is the company this browser works for (see
 // api/companyCode.ts), and the app's own name and no logo when there's none.
+// The footer line comes with them; it's the super admin's, the same for all.
 const CACHE_KEY = 'com-mart-branding'
-const empty: Branding = { companyName: '', hasLogo: false, logoLink: '', logoVersion: '' }
+const empty: Branding = { companyName: '', hasLogo: false, logoLink: '', logoVersion: '', footerText: '' }
 
 function readCache(): Branding {
   try {
@@ -64,6 +65,7 @@ export const useBrandingStore = defineStore('branding', {
       this.hasLogo = b.hasLogo
       this.logoLink = b.logoLink
       this.logoVersion = b.logoVersion
+      this.footerText = b.footerText ?? ''
       applyToDocument(b)
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(b))
@@ -101,11 +103,17 @@ export const useBrandingStore = defineStore('branding', {
       if (code === this.code && this.loaded) return
       if (!code) {
         this.code = ''
-        this.set({ ...empty })
+        // No company's name or logo; the footer is everyone's, so it stays.
+        this.set({ ...empty, footerText: this.footerText })
         this.loaded = true
         return
       }
       await this.refresh()
+    },
+    // The super admin saved a new footer: shown at once, here and next visit.
+    setFooterText(footerText: string) {
+      const { companyName, hasLogo, logoLink, logoVersion } = this
+      this.set({ companyName, hasLogo, logoLink, logoVersion, footerText })
     },
     async save(companyName: string, logo?: string) {
       this.set(await settingsApi.updateBranding(logo === undefined ? { companyName } : { companyName, logo }))

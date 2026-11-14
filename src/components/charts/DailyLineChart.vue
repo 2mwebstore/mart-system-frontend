@@ -7,7 +7,7 @@ import { t } from '@/i18n'
 
 const props = defineProps<{
   labels: string[]
-  values: number[] // already-formatted display units (e.g. dollars, not cents)
+  values: number[] // whole display units of the main currency (dollars or riel, not cents)
   valuePrefix?: string
 }>()
 

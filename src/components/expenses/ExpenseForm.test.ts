@@ -11,18 +11,21 @@ import { formatUSD } from '@/utils/format'
 import ExpenseForm from './ExpenseForm.vue'
 
 // The real editor is Tiptap, which needs a browser layout; a textarea stands in
-// for it with the same v-model (HTML).
+// for it with the same v-model (HTML), under its label as the real one shows it.
 vi.mock('@/components/RichTextEditor.vue', () => ({
   default: defineComponent({
     props: { modelValue: { type: String, default: '' }, label: String, id: String },
     emits: ['update:modelValue'],
     setup(props, { emit }) {
       return () =>
-        h('textarea', {
-          'data-rich-note': '',
-          value: props.modelValue,
-          onInput: (e: Event) => emit('update:modelValue', (e.target as HTMLTextAreaElement).value),
-        })
+        h('div', [
+          h('span', { 'data-rich-label': '' }, props.label),
+          h('textarea', {
+            'data-rich-note': '',
+            value: props.modelValue,
+            onInput: (e: Event) => emit('update:modelValue', (e.target as HTMLTextAreaElement).value),
+          }),
+        ])
     },
   }),
 }))
@@ -44,13 +47,13 @@ async function settle() {
   }
 }
 
-async function mount(expense: Expense | null = null) {
+async function mount(expense: Expense | null = null, mainCurrency: 'USD' | 'KHR' = 'USD') {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().$patch({ branches: [{ id: 1, code: 'TK', name: 'Toul Kork' }] as never, activeBranchId: 1 })
   const settings = useSettingsStore()
   settings.taxRates = rates
-  settings.app = { ...settings.app, taxDefaults: { pos: null, invoice: null, purchase: null, expense: 1 } }
+  settings.app = { ...settings.app, mainCurrency, taxDefaults: { pos: null, invoice: null, purchase: null, expense: 1 } }
 
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -106,6 +109,33 @@ describe('the expense form', () => {
     await submit()
 
     expect(saved).toEqual([expect.objectContaining({ amountCents: 505, taxRateId: 1, branchId: 1, note: '<p>Fuel <strong>van</strong></p>' })])
+  })
+
+  it('takes a riel company’s expense in whole riel', async () => {
+    await mount(null, 'KHR')
+    const input = host.querySelector<HTMLInputElement>('#expense-amount')!
+    typeAmount('15600')
+    await settle()
+    // Typed as money: grouped, with the riel sign beside it.
+    expect(input.value).toBe('15,600')
+    expect(input.parentElement!.querySelector('[data-money-sign]')!.textContent).toBe('៛')
+    expect(totals()).toContain('៛ 1,560')
+    expect(totals()).toContain('៛ 17,160')
+    await submit()
+    expect(saved).toEqual([expect.objectContaining({ amountCents: 15600, taxRateId: 1 })])
+  })
+
+  it('labels the note once, and types the amount as money', async () => {
+    await mount()
+    const labels = [...host.querySelectorAll('label, span')].filter((el) => el.children.length === 0 && el.textContent?.trim() === t('common.note'))
+    expect(labels).toHaveLength(1)
+    const input = host.querySelector<HTMLInputElement>('#expense-amount')!
+    typeAmount('1250.5')
+    await settle()
+    expect(input.value).toBe('1,250.5')
+    expect(input.parentElement!.querySelector('[data-money-sign]')!.textContent).toBe('$')
+    await submit()
+    expect(saved[0]).toMatchObject({ amountCents: 125050 })
   })
 
   it('sends no rate for No tax, and the total is the amount', async () => {

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ShoppingCart, AlertTriangle } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardData } from '@/composables/useDashboardData'
-import { formatUSD, formatKHR } from '@/utils/format'
+import { useMoney } from '@/composables/useMoney'
 import KpiCard from '@/components/KpiCard.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 import HourlyBarChart from '@/components/charts/HourlyBarChart.vue'
@@ -14,6 +14,7 @@ import { PAYMENT_METHOD_COLORS } from '@/utils/chartColors'
 import { localName } from '@/i18n'
 
 const { t } = useI18n()
+const { money, other } = useMoney()
 const auth = useAuthStore()
 
 const branchId = computed({
@@ -25,8 +26,8 @@ const branchOptions = computed(() => auth.branches.map((b) => ({ value: b.id, la
 const {
   noAccess,
   dateLabel,
-  todayUSDCents,
-  todayKHRRiel,
+  netSalesCents,
+  rate,
   transactions,
   transactionsDeltaPct,
   avgBasketCents,
@@ -61,14 +62,14 @@ const paymentSegmentsWithColor = computed(() =>
     <div v-if="noAccess" class="card text-sm text-muted">{{ t('dashboard.noAccess') }}</div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <KpiCard :label="t('dashboard.salesToday')" :value="formatUSD(todayUSDCents)" :subvalue="formatKHR(todayKHRRiel)" />
+      <KpiCard :label="t('dashboard.salesToday')" :value="money(netSalesCents)" :subvalue="other(netSalesCents, rate)" />
       <KpiCard
         :label="t('dashboard.transactions')"
         :value="String(transactions)"
         :delta="transactionsDeltaPct"
         :delta-label="t('dashboard.vsLastWeek')"
       />
-      <KpiCard :label="t('dashboard.avgBasket')" :value="formatUSD(avgBasketCents)" />
+      <KpiCard :label="t('dashboard.avgBasket')" :value="money(avgBasketCents)" />
       <KpiCard :label="t('dashboard.lowStock')" :value="String(lowStockCount)" :subvalue="t('dashboard.items')" :to="{ name: 'inventory-products' }" />
     </div>
 
@@ -116,7 +117,7 @@ const paymentSegmentsWithColor = computed(() =>
               <tr v-for="p in topProducts" :key="p.productId" class="border-b border-line last:border-0">
                 <td class="py-2">{{ localName(p.name, p.nameKm) }}</td>
                 <td class="py-2 text-right font-mono">{{ p.qty }}</td>
-                <td class="py-2 text-right font-mono">{{ formatUSD(p.revenueCents) }}</td>
+                <td class="py-2 text-right font-mono">{{ money(p.revenueCents) }}</td>
               </tr>
             </tbody>
           </table>

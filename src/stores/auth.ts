@@ -4,6 +4,7 @@ import { clearTokens, getRefreshToken, setTokens } from '@/api/tokens'
 import { ACTIVE_BRANCH_KEY } from '@/api/activeBranch'
 import { setCompanyCode } from '@/api/companyCode'
 import { useBrandingStore } from './branding'
+import { useSettingsStore } from './settings'
 
 interface AuthState {
   user: authApi.UserSummary | null
@@ -173,6 +174,9 @@ export const useAuthStore = defineStore('auth', {
         clearTokens()
         localStorage.removeItem(VIA_PIN_LOGIN_KEY)
         this.$reset()
+        // The next sign-in, maybe at another company, reads its own settings
+        // (its shift mode among them) rather than keeping these.
+        useSettingsStore().$reset()
       }
     },
   },
