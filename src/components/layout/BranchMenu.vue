@@ -52,21 +52,21 @@ watch(() => route.fullPath, close)
   <div v-if="canSwitch" ref="root" class="relative min-w-0" @keydown.esc="close">
     <button
       type="button"
-      class="inline-flex h-9 min-w-0 max-w-[9rem] items-center gap-2 rounded-[9px] border border-line bg-surface px-2.5 text-xs font-semibold text-ink transition hover:bg-surface-subtle sm:max-w-[14rem]"
-      :class="{ 'bg-surface-subtle': open }"
+      class="inline-flex h-9 min-w-0 max-w-[9rem] items-center gap-2 rounded-[9px] border border-white/15 bg-white/10 px-2.5 text-xs font-semibold text-white transition hover:bg-white/20 sm:max-w-[14rem]"
+      :class="{ 'bg-white/20': open }"
       aria-haspopup="menu"
       :aria-expanded="open"
       :aria-label="t('nav.changeBranch', { branch: current?.name ?? '' })"
       @click="toggle"
     >
-      <Building2 :stroke-width="1.9" class="h-4 w-4 shrink-0 text-muted" />
+      <Building2 :stroke-width="1.9" class="h-4 w-4 shrink-0 text-white/70" />
       <span class="truncate">{{ current?.name }}</span>
-      <ChevronDown :stroke-width="2" class="h-4 w-4 shrink-0 text-muted transition-transform" :class="{ 'rotate-180': open }" />
+      <ChevronDown :stroke-width="2" class="h-4 w-4 shrink-0 text-white/70 transition-transform" :class="{ 'rotate-180': open }" />
     </button>
 
     <div
       v-if="open"
-      class="z-40 rounded-xl border border-line bg-surface p-2 shadow-[0_14px_34px_rgb(23_32_27/0.16)] max-sm:fixed max-sm:inset-x-3 max-sm:top-[4.5rem] sm:absolute sm:right-0 sm:top-[calc(100%+8px)] sm:w-[17rem]"
+      class="z-40 rounded-xl border border-line bg-surface p-2 text-ink shadow-[0_14px_34px_rgb(9_20_52/0.16)] max-sm:fixed max-sm:inset-x-3 max-sm:top-[4.5rem] sm:absolute sm:right-0 sm:top-[calc(100%+8px)] sm:w-[17rem]"
       role="menu"
       :aria-label="t('nav.branch')"
     >
@@ -101,9 +101,9 @@ watch(() => route.fullPath, close)
 
   <span
     v-else-if="current"
-    class="inline-flex h-9 min-w-0 max-w-[9rem] items-center gap-2 rounded-[9px] border border-line bg-surface px-2.5 text-xs font-semibold text-ink sm:max-w-[14rem]"
+    class="inline-flex h-9 min-w-0 max-w-[9rem] items-center gap-2 rounded-[9px] border border-white/15 bg-white/10 px-2.5 text-xs font-semibold text-white sm:max-w-[14rem]"
   >
-    <Building2 :stroke-width="1.9" class="h-4 w-4 shrink-0 text-muted" />
+    <Building2 :stroke-width="1.9" class="h-4 w-4 shrink-0 text-white/70" />
     <span class="truncate">{{ current.name }}</span>
   </span>
 </template>

@@ -9,7 +9,7 @@ import { useDateRangeQuery } from '@/composables/useDateRangeQuery'
 import { useProfitLossData } from '@/composables/useProfitLossData'
 import { formatMoney } from '@/utils/format'
 import { useMoney } from '@/composables/useMoney'
-import { CATEGORY_COLORS } from '@/utils/chartColors'
+import { CATEGORY_COLORS, CHART_MUTED } from '@/utils/chartColors'
 import * as peopleApi from '@/api/people'
 import type { ExpenseInput } from '@/api/people'
 import DateRangePicker from '@/components/DateRangePicker.vue'
@@ -53,7 +53,7 @@ const categorySegments = computed(() =>
     value: c.profitCents,
     share: c.share,
     display: money(c.profitCents),
-    color: CATEGORY_COLORS[c.name] ?? '#5A635D',
+    color: CATEGORY_COLORS[c.name] ?? CHART_MUTED,
   })),
 )
 
@@ -96,24 +96,24 @@ async function submitExpense(body: ExpenseInput) {
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ t('pl.netSales') }}</p>
         <p class="font-mono text-xl mt-1">{{ money(netSalesCents) }}</p>
         <p v-if="invoiceCount > 0" class="text-xs text-muted mt-1">
           {{ t('pl.salesSplit', { pos: money(posSalesCents), invoices: money(invoiceSalesCents), n: invoiceCount }) }}
         </p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ t('pl.grossProfit') }}</p>
         <p class="font-mono text-xl mt-1">{{ money(grossProfitCents) }}</p>
         <p class="text-xs text-muted">{{ t('pl.marginPct', { pct: grossMarginPct }) }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ t('pl.opex') }}</p>
         <p class="font-mono text-xl mt-1">{{ money(totalOperatingExpensesCents) }}</p>
         <p class="text-xs text-muted">{{ t('pl.pctOfSales', { pct: opexPctOfSales }) }}</p>
       </div>
-      <div class="card border-primary/40 bg-primary-tint">
+      <div class="card card-stat border-primary/40 bg-primary-tint">
         <p class="text-sm text-primary-tint-text">{{ t('pl.netProfit') }}</p>
         <p class="font-mono text-xl mt-1 text-primary-tint-text">{{ money(netProfitCents) }}</p>
         <p class="text-xs text-primary-tint-text">{{ t('pl.marginPct', { pct: netMarginPct }) }}</p>
@@ -121,12 +121,12 @@ async function submitExpense(body: ExpenseInput) {
     </div>
 
     <div v-if="tax.collectedCents || tax.paidCents" class="grid grid-cols-1 sm:grid-cols-2 gap-4" data-pl-tax>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ t('tax.collected') }}</p>
         <p class="font-mono text-xl mt-1">{{ money(tax.collectedCents) }}</p>
         <p class="text-xs text-muted">{{ t('tax.collectedHint', { pos: money(tax.posCents), invoice: money(tax.invoiceCents) }) }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ t('tax.paid') }}</p>
         <p class="font-mono text-xl mt-1">{{ money(tax.paidCents) }}</p>
         <p class="text-xs text-muted">{{ t('tax.paidHint', { expense: money(tax.expenseCents), purchase: money(tax.purchaseCents) }) }}</p>

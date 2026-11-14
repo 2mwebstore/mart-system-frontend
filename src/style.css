@@ -12,23 +12,55 @@
   :lang(km) {
     @apply font-body;
   }
+  ::selection {
+    @apply bg-primary-tint text-primary-tint-text;
+  }
 }
 
 @layer components {
   .card {
     @apply bg-surface border border-line rounded-card p-5;
   }
+  /* The sign-in screens: a navy band across the top, lit with the brand
+     blue, over the page colour. Text on the band is white; a logo on it sits
+     on a white tile. */
+  .brand-backdrop {
+    background-color: theme('colors.page');
+    background-image:
+      radial-gradient(70% 90% at 12% 0%, rgb(37 147 210 / 0.45) 0%, rgb(37 147 210 / 0) 62%),
+      radial-gradient(55% 80% at 100% 100%, rgb(37 147 210 / 0.22) 0%, rgb(37 147 210 / 0) 60%),
+      linear-gradient(theme('colors.sidebar'), theme('colors.sidebar'));
+    background-size: 100% max(46vh, 16rem);
+    background-repeat: no-repeat;
+  }
+  /* A figure tile (sales today, stock value, …): a blue line along the top. */
+  .card-stat {
+    border-top: 3px solid theme('colors.primary.DEFAULT');
+  }
+  /* The navy bar across the top of every screen. */
+  .topbar {
+    @apply bg-sidebar text-white;
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.06), 0 4px 14px rgb(9 20 52 / 0.12);
+  }
+  /* A card floating over the page (the sign-in forms). */
+  .card-raised {
+    box-shadow: 0 18px 40px rgb(9 20 52 / 0.14);
+  }
   .btn-primary {
-    @apply bg-primary text-primary-ink rounded-control px-4 py-2 font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-primary text-primary-ink rounded-control px-4 py-2 font-semibold hover:bg-primary-hover transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary;
   }
   .btn-secondary {
     @apply bg-surface border border-line text-ink rounded-control px-4 py-2 font-medium hover:bg-surface-subtle transition;
+  }
+  /* A secondary button on a navy bar (the POS and customer display top bars). */
+  .btn-dark {
+    @apply bg-white/10 border border-white/15 text-white rounded-control px-4 py-2 font-medium hover:bg-white/20 transition;
   }
   .btn-danger {
     @apply bg-danger-strong text-white rounded-control px-4 py-2 font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .input {
-    @apply w-full rounded-control border border-input-border bg-surface px-3 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/40;
+    @apply w-full rounded-control border border-input-border bg-surface px-3 py-2 text-ink placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30;
   }
   .badge-success {
     @apply bg-success text-success-text rounded-control px-2 py-0.5 text-xs font-medium;

@@ -47,14 +47,14 @@ function changeTill() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-page px-4">
+  <div class="brand-backdrop min-h-screen flex items-center justify-center px-4 py-10">
     <div class="w-full max-w-md space-y-4">
       <div class="text-center">
-        <h1 class="font-heading text-2xl text-ink">{{ auth.tillName }}</h1>
-        <p class="text-muted text-sm mt-1">{{ $t('pos.noShiftOpen', { name: auth.user?.full_name }) }}</p>
+        <h1 class="font-heading text-2xl text-white">{{ auth.tillName }}</h1>
+        <p class="text-white/70 text-sm mt-1">{{ $t('pos.noShiftOpen', { name: auth.user?.full_name }) }}</p>
       </div>
 
-      <div class="card space-y-4">
+      <div class="card card-raised space-y-4">
         <h2 class="font-heading text-lg">{{ $t('shifts.openShift') }}</h2>
         <div class="grid grid-cols-2 gap-3">
           <div>

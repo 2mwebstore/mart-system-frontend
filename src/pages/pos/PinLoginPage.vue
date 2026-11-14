@@ -194,16 +194,16 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-page px-4">
+  <div class="brand-backdrop min-h-screen flex items-center justify-center px-4 py-10">
     <div class="w-full max-w-sm space-y-5">
       <div class="text-center">
-        <BrandLogo class="h-16 max-w-[12rem] mb-2" />
-        <h1 class="font-heading text-2xl text-ink">{{ $t('pos.signInTitle', { brand: branding.shortName }) }}</h1>
-        <p class="text-muted text-sm mt-1">{{ sessionMode ? $t('pos.chooseTillSubtitle') : $t('pos.signInSubtitle') }}</p>
+        <BrandLogo tile class="h-16 max-w-[12rem] mb-2" />
+        <h1 class="font-heading text-2xl text-white">{{ $t('pos.signInTitle', { brand: branding.shortName }) }}</h1>
+        <p class="text-white/70 text-sm mt-1">{{ sessionMode ? $t('pos.chooseTillSubtitle') : $t('pos.signInSubtitle') }}</p>
       </div>
 
       <!-- First time at this till (or after "Change company"): which company -->
-      <form v-if="askCode" class="card space-y-4" @submit.prevent="submitCode">
+      <form v-if="askCode" class="card card-raised space-y-4" @submit.prevent="submitCode">
         <div>
           <label for="company-code" class="block text-sm text-muted mb-1">{{ $t('pos.companyCode') }}</label>
           <input
@@ -223,7 +223,7 @@ async function handleSubmit() {
       </form>
 
       <!-- Signed in already: pick a till and go -->
-      <div v-else-if="sessionMode" class="card space-y-4">
+      <div v-else-if="sessionMode" class="card card-raised space-y-4">
         <p class="text-sm">{{ $t('pos.signedInAs', { name: auth.user?.full_name }) }}</p>
         <SearchableSelect
           v-if="canPickBranch"
@@ -254,7 +254,7 @@ async function handleSubmit() {
       </div>
 
       <!-- Cashier PIN sign-in -->
-      <form v-else-if="companyCode" class="card space-y-4" @submit.prevent="handleSubmit">
+      <form v-else-if="companyCode" class="card card-raised space-y-4" @submit.prevent="handleSubmit">
         <SearchableSelect
           :model-value="deviceKey || null"
           :label="$t('common.till')"
@@ -292,7 +292,7 @@ async function handleSubmit() {
         </button>
         <p class="text-xs text-muted text-center">
           {{ $t('pos.companyCodeShown', { code: companyCode }) }}
-          <button type="button" class="text-primary hover:underline ml-1" @click="changeCompany">{{ $t('pos.changeCompany') }}</button>
+          <button type="button" class="text-primary-text hover:text-primary-text-hover hover:underline ml-1" @click="changeCompany">{{ $t('pos.changeCompany') }}</button>
         </p>
       </form>
 

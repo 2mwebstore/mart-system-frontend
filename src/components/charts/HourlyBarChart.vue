@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Bar } from 'vue-chartjs'
 import type { ChartOptions, TooltipItem } from 'chart.js'
-import { CHART_PRIMARY, CHART_PRIMARY_TINT } from '@/utils/chartColors'
+import { CHART_GRID, CHART_PRIMARY, CHART_PRIMARY_TINT, CHART_TOOLTIP_BG } from '@/utils/chartColors'
 import { t } from '@/i18n'
 
 const props = defineProps<{ data: { hour: number; qty: number }[] }>()
@@ -28,7 +28,7 @@ const options = computed<ChartOptions<'bar'>>(() => ({
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#17201B',
+      backgroundColor: CHART_TOOLTIP_BG,
       titleFont: { family: "'Kantumruy Pro', sans-serif" },
       bodyFont: { family: "'JetBrains Mono', monospace" },
       callbacks: {
@@ -38,7 +38,7 @@ const options = computed<ChartOptions<'bar'>>(() => ({
   },
   scales: {
     x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-    y: { beginAtZero: true, grid: { color: '#E2DED3' }, ticks: { precision: 0 } },
+    y: { beginAtZero: true, grid: { color: CHART_GRID }, ticks: { precision: 0 } },
   },
 }))
 </script>

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Line } from 'vue-chartjs'
 import type { ChartOptions, TooltipItem } from 'chart.js'
-import { CHART_PRIMARY } from '@/utils/chartColors'
+import { CHART_GRID, CHART_PRIMARY, CHART_PRIMARY_FILL, CHART_TOOLTIP_BG } from '@/utils/chartColors'
 import { t } from '@/i18n'
 
 const props = defineProps<{
@@ -18,7 +18,7 @@ const chartData = computed(() => ({
       label: t('charts.netSales'),
       data: props.values,
       borderColor: CHART_PRIMARY,
-      backgroundColor: 'rgba(255,109,41,0.12)',
+      backgroundColor: CHART_PRIMARY_FILL,
       pointRadius: 0,
       pointHoverRadius: 4,
       borderWidth: 2,
@@ -34,7 +34,7 @@ const options = computed<ChartOptions<'line'>>(() => ({
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#17201B',
+      backgroundColor: CHART_TOOLTIP_BG,
       bodyFont: { family: "'JetBrains Mono', monospace" },
       callbacks: {
         label: (ctx: TooltipItem<'line'>) => `${props.valuePrefix ?? ''}${(ctx.parsed.y ?? 0).toLocaleString()}`,
@@ -43,7 +43,7 @@ const options = computed<ChartOptions<'line'>>(() => ({
   },
   scales: {
     x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 10 } } },
-    y: { beginAtZero: true, grid: { color: '#E2DED3' } },
+    y: { beginAtZero: true, grid: { color: CHART_GRID } },
   },
 }))
 </script>

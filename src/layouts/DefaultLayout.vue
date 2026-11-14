@@ -156,7 +156,7 @@ async function handleSignOut() {
       <template #brand>
         <RouterLink :to="{ name: 'dashboard' }" class="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70">
           <BrandLogo v-if="branding.logoUrl" tile class="h-10 max-w-[5.5rem]" />
-          <span v-else class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-gradient-to-br from-[#ff8a4c] to-primary text-primary-ink shadow-[0_6px_13px_rgb(0_0_0/0.25)]">
+          <span v-else class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-gradient-to-br from-primary-light to-primary text-primary-ink shadow-[0_6px_14px_rgb(37_147_210/0.35)]">
             <Store :stroke-width="2.2" class="h-[21px] w-[21px]" />
           </span>
           <span class="flex min-w-0 flex-col gap-1">
@@ -168,22 +168,22 @@ async function handleSignOut() {
     </AppSidebar>
 
     <div class="flex min-h-screen min-w-0 flex-1 flex-col">
-      <header class="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur sm:gap-4 sm:px-6">
+      <header class="topbar sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 px-4 sm:gap-4 sm:px-6">
         <div class="flex min-w-0 items-center gap-2.5 lg:hidden">
-          <button type="button" class="-ml-1.5 shrink-0 rounded-lg p-1.5 text-ink hover:bg-surface-subtle" :aria-label="$t('common.openMenu')" @click="mobileMenuOpen = true">
+          <button type="button" class="-ml-1.5 shrink-0 rounded-lg p-1.5 text-white hover:bg-white/10" :aria-label="$t('common.openMenu')" @click="mobileMenuOpen = true">
             <Menu :stroke-width="1.8" class="h-5 w-5" />
           </button>
-          <BrandLogo class="h-8 max-w-[4.5rem]" />
+          <BrandLogo tile class="h-8 max-w-[4.5rem]" />
           <p class="truncate font-heading text-base">{{ branding.name }}</p>
         </div>
 
         <nav v-if="trail" class="hidden min-w-0 items-center gap-1.5 text-sm lg:flex" :aria-label="t('nav.breadcrumb')">
           <template v-if="trail.link">
-            <span class="shrink-0 text-muted">{{ trail.item.label }}</span>
-            <ChevronRight :stroke-width="2" class="h-3.5 w-3.5 shrink-0 text-muted/60" />
-            <span class="truncate font-semibold text-ink" aria-current="page">{{ trail.link.label }}</span>
+            <span class="shrink-0 text-white/60">{{ trail.item.label }}</span>
+            <ChevronRight :stroke-width="2" class="h-3.5 w-3.5 shrink-0 text-white/40" />
+            <span class="truncate font-semibold text-white" aria-current="page">{{ trail.link.label }}</span>
           </template>
-          <span v-else class="truncate font-semibold text-ink" aria-current="page">{{ trail.item.label }}</span>
+          <span v-else class="truncate font-semibold text-white" aria-current="page">{{ trail.item.label }}</span>
         </nav>
 
         <div class="flex-1" />

@@ -769,23 +769,23 @@ function viewPoDetail(po: PurchaseOrder) {
 
     <!-- The stock summary belongs with the products it counts. -->
     <div v-if="section === 'products'" class="grid grid-cols-2 sm:grid-cols-5 gap-4">
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('inventory.stockValue') }}</p>
         <p class="font-mono text-xl mt-1">{{ money(summary.stockValueCents) }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('inventory.activeProducts') }}</p>
         <p class="font-mono text-xl mt-1">{{ summary.activeProducts }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('inventory.belowReorder') }}</p>
         <p class="font-mono text-xl mt-1 text-warning-text">{{ summary.belowReorder }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('inventory.outOfStock') }}</p>
         <p class="font-mono text-xl mt-1 text-danger-strong">{{ summary.outOfStock }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('inventory.openPos') }}</p>
         <p class="font-mono text-xl mt-1">{{ summary.openPurchaseOrders }}</p>
       </div>

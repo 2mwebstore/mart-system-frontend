@@ -87,14 +87,14 @@ onUnmounted(() => {
 
 <template>
   <div class="h-screen flex flex-col bg-page text-ink select-none">
-    <header class="h-16 shrink-0 flex items-center justify-between gap-4 border-b border-line bg-surface px-6">
+    <header class="topbar h-16 shrink-0 flex items-center justify-between gap-4 px-6">
       <div class="flex items-center gap-3 min-w-0">
-        <BrandLogo class="h-11 max-w-[6rem]" />
+        <BrandLogo tile class="h-11 max-w-[6rem]" />
         <p class="font-heading text-2xl truncate">{{ storeName }}</p>
       </div>
       <div class="flex items-center gap-4">
-        <span v-if="state?.tillName" class="text-muted">{{ state.tillName }}</span>
-        <button v-if="!isFullscreen" type="button" class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5" @click="enterFullscreen">
+        <span v-if="state?.tillName" class="text-white/60">{{ state.tillName }}</span>
+        <button v-if="!isFullscreen" type="button" class="btn-dark text-sm px-3 py-1.5 flex items-center gap-1.5" @click="enterFullscreen">
           <Maximize :stroke-width="1.8" class="w-4 h-4" /> {{ $t('customerDisplay.fullScreen') }}
         </button>
       </div>
@@ -213,10 +213,10 @@ onUnmounted(() => {
             <span class="font-mono">{{ money(cart.taxCents) }}</span>
           </div>
         </div>
-        <div class="mt-auto border-t border-line pt-4">
-          <p class="text-muted text-lg">{{ cart.payment ? $t('pos.amountDue') : $t('col.total') }}</p>
+        <div class="mt-auto rounded-card bg-sidebar px-5 py-4 text-white">
+          <p class="text-white/70 text-lg">{{ cart.payment ? $t('pos.amountDue') : $t('col.total') }}</p>
           <p class="font-mono text-5xl font-medium">{{ money(cart.totalCents) }}</p>
-          <p class="font-mono text-2xl text-muted mt-1">{{ other(cart.totalCents) }}</p>
+          <p class="font-mono text-2xl text-primary-light mt-1">{{ other(cart.totalCents) }}</p>
         </div>
 
         <!-- Live while the cashier is taking payment -->

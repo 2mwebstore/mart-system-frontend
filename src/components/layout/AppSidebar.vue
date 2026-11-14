@@ -122,8 +122,11 @@ function toggle(item: NavItem) {
 
 <style scoped>
 .app-sidebar {
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.07) 0%, rgb(255 255 255 / 0) 50%);
-  box-shadow: 5px 0 20px rgb(0 0 0 / 0.08);
+  /* Navy, lifted at the top with a faint glow of the brand blue. */
+  background-image:
+    radial-gradient(120% 40% at 0% 0%, rgb(37 147 210 / 0.16) 0%, rgb(37 147 210 / 0) 70%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.05) 0%, rgb(255 255 255 / 0) 50%);
+  box-shadow: 5px 0 20px rgb(9 20 52 / 0.12);
 }
 
 /* Khmer has no capitals, and letter-spacing pulls its stacked marks apart. */
@@ -148,9 +151,8 @@ function toggle(item: NavItem) {
 }
 /* The page being shown. */
 .nav-link.is-active {
-  @apply font-semibold text-primary-ink;
-  background-image: linear-gradient(100deg, #ff8a4c, theme('colors.primary.DEFAULT'));
-  box-shadow: 0 5px 12px rgb(0 0 0 / 0.28);
+  @apply bg-primary font-semibold text-white;
+  box-shadow: 0 6px 14px rgb(37 147 210 / 0.3);
 }
 
 .nav-chevron {
@@ -179,7 +181,7 @@ function toggle(item: NavItem) {
   @apply bg-white/[0.06] text-white;
 }
 .nav-sublink.is-active {
-  @apply bg-primary/15 font-semibold text-primary;
+  @apply bg-primary/15 font-semibold text-primary-light;
 }
 /* Marks the guide line next to the page being shown. */
 .nav-sublink.is-active::before {

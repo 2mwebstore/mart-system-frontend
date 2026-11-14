@@ -11,6 +11,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js'
+import { CHART_GRID, CHART_MUTED } from '@/utils/chartColors'
 
 ChartJS.register(
   BarController,
@@ -26,5 +27,5 @@ ChartJS.register(
 )
 
 ChartJS.defaults.font.family = "'Kantumruy Pro', sans-serif"
-ChartJS.defaults.color = '#5A635D'
-ChartJS.defaults.borderColor = '#E2DED3'
+ChartJS.defaults.color = CHART_MUTED
+ChartJS.defaults.borderColor = CHART_GRID

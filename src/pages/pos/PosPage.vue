@@ -552,37 +552,37 @@ function goToCloseShift() {
 
 <template>
   <div class="h-screen h-dvh flex flex-col">
-    <header class="h-14 shrink-0 flex items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-4">
+    <header class="topbar h-14 shrink-0 flex items-center justify-between gap-3 px-3 sm:px-4">
       <div class="flex items-center gap-3 min-w-0">
-        <BrandLogo class="h-8 max-w-[4.5rem]" />
+        <BrandLogo tile class="h-8 max-w-[4.5rem]" />
         <p class="font-heading text-lg truncate">{{ settings.app.receiptHeader || branding.shortName }}</p>
-        <span class="hidden sm:inline text-muted text-sm truncate">{{ auth.tillName }} · {{ auth.user?.full_name }}</span>
+        <span class="hidden sm:inline text-white/60 text-sm truncate">{{ auth.tillName }} · {{ auth.user?.full_name }}</span>
       </div>
       <!-- Wide screens: every action inline -->
       <div class="hidden xl:flex items-center gap-2 shrink-0">
-        <LanguageSwitch class="mr-2" />
-        <button type="button" class="btn-secondary text-sm px-3 py-1.5 relative" @click="showHeldSales = true">
+        <LanguageSwitch dark class="mr-2" />
+        <button type="button" class="btn-dark text-sm px-3 py-1.5 relative" @click="showHeldSales = true">
           {{ $t('pos.heldSales') }}<span v-if="shift.heldSales.length" class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-ink text-[10px]">
             {{ shift.heldSales.length }}
           </span>
         </button>
-        <button type="button" class="btn-secondary text-sm px-3 py-1.5 relative flex items-center gap-1.5" @click="showTableOrders = true">
+        <button type="button" class="btn-dark text-sm px-3 py-1.5 relative flex items-center gap-1.5" @click="showTableOrders = true">
           <UtensilsCrossed :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.tableOrders') }}
           <span v-if="tableOrders.newCount.value" class="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-danger-strong text-white text-[10px]">
             {{ tableOrders.newCount.value }}
           </span>
         </button>
-        <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="showRecentSales = true">{{ $t('pos.sales') }}</button>
-        <button v-if="canMoveCash" type="button" class="btn-secondary text-sm px-3 py-1.5" data-pos-cash-movement @click="showCashMovement = true">{{ $t('shifts.cashMovement') }}</button>
-        <button v-if="settings.usesShifts" type="button" class="btn-secondary text-sm px-3 py-1.5" data-pos-close-shift @click="goToCloseShift">{{ $t('shifts.closeShift') }}</button>
-        <button type="button" class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5" :title="$t('pos.customerDisplayHint')" @click="openCustomerDisplay">
+        <button type="button" class="btn-dark text-sm px-3 py-1.5" @click="showRecentSales = true">{{ $t('pos.sales') }}</button>
+        <button v-if="canMoveCash" type="button" class="btn-dark text-sm px-3 py-1.5" data-pos-cash-movement @click="showCashMovement = true">{{ $t('shifts.cashMovement') }}</button>
+        <button v-if="settings.usesShifts" type="button" class="btn-dark text-sm px-3 py-1.5" data-pos-close-shift @click="goToCloseShift">{{ $t('shifts.closeShift') }}</button>
+        <button type="button" class="btn-dark text-sm px-3 py-1.5 flex items-center gap-1.5" :title="$t('pos.customerDisplayHint')" @click="openCustomerDisplay">
           <Monitor :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.customerDisplay') }}
         </button>
-        <RouterLink :to="{ name: 'dashboard' }" class="btn-secondary text-sm px-3 py-1.5">{{ $t('pos.backOffice') }}</RouterLink>
+        <RouterLink :to="{ name: 'dashboard' }" class="btn-dark text-sm px-3 py-1.5">{{ $t('pos.backOffice') }}</RouterLink>
         <button
           v-if="fullscreen.supported"
           type="button"
-          class="btn-secondary px-2 py-1.5"
+          class="btn-dark px-2 py-1.5"
           :aria-label="fullscreenLabel"
           :title="fullscreenLabel"
           data-pos-fullscreen
@@ -595,7 +595,7 @@ function goToCloseShift() {
       <div class="flex xl:hidden items-center gap-2 shrink-0">
         <button
           type="button"
-          class="btn-secondary text-sm px-2.5 sm:px-3 py-1.5 relative flex items-center gap-1.5"
+          class="btn-dark text-sm px-2.5 sm:px-3 py-1.5 relative flex items-center gap-1.5"
           :aria-label="$t('pos.tableOrders')"
           @click="showTableOrders = true"
         >
@@ -607,7 +607,7 @@ function goToCloseShift() {
             {{ tableOrders.newCount.value }}
           </span>
         </button>
-        <button type="button" class="btn-secondary text-sm px-3 py-1.5 relative" @click="showHeldSales = true">
+        <button type="button" class="btn-dark text-sm px-3 py-1.5 relative" @click="showHeldSales = true">
           {{ $t('pos.heldSales') }}<span v-if="shift.heldSales.length" class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-ink text-[10px]">
             {{ shift.heldSales.length }}
           </span>
@@ -615,14 +615,14 @@ function goToCloseShift() {
         <div ref="menuRef" class="relative">
           <button
             type="button"
-            class="btn-secondary p-2"
+            class="btn-dark p-2"
             :aria-label="$t('pos.moreActions')"
             :aria-expanded="showMenu"
             @click="showMenu = !showMenu"
           >
             <MoreVertical :stroke-width="1.8" class="w-5 h-5" />
           </button>
-          <div v-if="showMenu" class="absolute right-0 top-full mt-2 z-40 w-60 rounded-card border border-line bg-surface shadow-lg py-1" role="menu">
+          <div v-if="showMenu" class="absolute right-0 top-full mt-2 z-40 w-60 rounded-card border border-line bg-surface text-ink shadow-lg py-1" role="menu">
             <p class="sm:hidden px-4 py-2 text-xs text-muted border-b border-line">{{ auth.tillName }} · {{ auth.user?.full_name }}</p>
             <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(() => (showRecentSales = true))">{{ $t('pos.sales') }}</button>
             <button

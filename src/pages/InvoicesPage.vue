@@ -195,20 +195,20 @@ function printInvoice() {
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('invoices.kpiInvoiced') }}</p>
         <p class="font-mono text-2xl mt-1">{{ money(list.summary?.totalCents ?? 0) }}</p>
         <p class="text-xs text-muted mt-1">{{ $t('invoices.kpiCount', { n: list.summary?.count ?? 0 }, list.summary?.count ?? 0) }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('invoices.kpiCollected') }}</p>
         <p class="font-mono text-2xl mt-1 text-success-text">{{ money(list.summary?.paidCents ?? 0) }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('invoices.kpiOutstanding') }}</p>
         <p class="font-mono text-2xl mt-1">{{ money(list.summary?.balanceCents ?? 0) }}</p>
       </div>
-      <div class="card">
+      <div class="card card-stat">
         <p class="text-sm text-muted">{{ $t('invoices.kpiOverdue') }}</p>
         <p class="font-mono text-2xl mt-1" :class="(list.summary?.overdue ?? 0) > 0 ? 'text-danger-strong' : ''">{{ list.summary?.overdue ?? 0 }}</p>
       </div>

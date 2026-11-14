@@ -311,7 +311,7 @@ function shiftStatus(s: Shift) {
 
       <div class="lg:col-span-3 space-y-4">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div v-for="tile in totalsByReport" :key="tile.label" class="card py-3">
+          <div v-for="tile in totalsByReport" :key="tile.label" class="card card-stat py-3">
             <p class="text-xs text-muted">{{ tile.label }}</p>
             <p class="font-mono text-lg mt-1">{{ tile.value }}</p>
           </div>

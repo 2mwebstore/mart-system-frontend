@@ -8,7 +8,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useDateRangeQuery } from '@/composables/useDateRangeQuery'
 import { useReportsStaffData } from '@/composables/useReportsStaffData'
 import { useMoney } from '@/composables/useMoney'
-import { CATEGORY_COLORS } from '@/utils/chartColors'
+import { CATEGORY_COLORS, CHART_MUTED } from '@/utils/chartColors'
 import DateRangePicker from '@/components/DateRangePicker.vue'
 import DailyLineChart from '@/components/charts/DailyLineChart.vue'
 import SegmentedBar from '@/components/charts/SegmentedBar.vue'
@@ -33,7 +33,7 @@ const categorySegments = computed(() =>
     value: c.salesCents,
     share: c.share,
     display: money(c.salesCents),
-    color: CATEGORY_COLORS[c.name] ?? '#5A635D',
+    color: CATEGORY_COLORS[c.name] ?? CHART_MUTED,
   })),
 )
 

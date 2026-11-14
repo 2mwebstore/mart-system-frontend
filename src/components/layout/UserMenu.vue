@@ -22,8 +22,8 @@ watch(() => route.fullPath, () => (open.value = false))
   <div ref="root" class="relative min-w-0" @keydown.esc="open = false">
     <button
       type="button"
-      class="group flex min-w-0 items-center gap-2.5 rounded-[10px] p-0.5 text-left transition hover:bg-surface-subtle xl:py-1 xl:pl-1 xl:pr-2"
-      :class="{ 'bg-surface-subtle': open }"
+      class="group flex min-w-0 items-center gap-2.5 rounded-[10px] p-0.5 text-left transition hover:bg-white/10 xl:py-1 xl:pl-1 xl:pr-2"
+      :class="{ 'bg-white/10': open }"
       aria-haspopup="menu"
       :aria-expanded="open"
       :aria-label="t('nav.account')"
@@ -33,15 +33,15 @@ watch(() => route.fullPath, () => (open.value = false))
         {{ initialsOf(name ?? '') }}
       </span>
       <span class="hidden min-w-0 flex-col gap-0.5 xl:flex">
-        <strong class="max-w-[9rem] truncate text-xs font-bold text-ink">{{ name }}</strong>
-        <small class="max-w-[9rem] truncate text-[10.5px] text-muted">{{ role }}</small>
+        <strong class="max-w-[9rem] truncate text-xs font-bold text-white">{{ name }}</strong>
+        <small class="max-w-[9rem] truncate text-[10.5px] text-white/60">{{ role }}</small>
       </span>
-      <ChevronDown :stroke-width="2" class="hidden h-4 w-4 shrink-0 text-muted transition-transform xl:block" :class="{ 'rotate-180': open }" />
+      <ChevronDown :stroke-width="2" class="hidden h-4 w-4 shrink-0 text-white/60 transition-transform xl:block" :class="{ 'rotate-180': open }" />
     </button>
 
     <div
       v-if="open"
-      class="absolute right-0 top-[calc(100%+8px)] z-40 w-60 max-w-[calc(100vw-1.5rem)] rounded-xl border border-line bg-surface p-2 shadow-[0_14px_34px_rgb(23_32_27/0.16)]"
+      class="absolute right-0 top-[calc(100%+8px)] z-40 w-60 max-w-[calc(100vw-1.5rem)] rounded-xl border border-line bg-surface p-2 text-ink shadow-[0_14px_34px_rgb(9_20_52/0.16)]"
       role="menu"
       :aria-label="t('nav.account')"
     >

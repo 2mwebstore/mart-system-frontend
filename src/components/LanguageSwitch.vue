@@ -9,7 +9,7 @@ defineProps<{ dark?: boolean }>()
   <div class="flex items-center gap-2 text-xs">
     <button
       type="button"
-      :class="i18n.global.locale.value === 'en' ? 'text-primary font-medium' : dark ? 'text-white/70 hover:text-white' : 'text-muted hover:text-ink'"
+      :class="i18n.global.locale.value === 'en' ? (dark ? 'text-primary-light font-medium' : 'text-primary-text font-medium') : dark ? 'text-white/70 hover:text-white' : 'text-muted hover:text-ink'"
       @click="setLocale('en')"
     >
       English
@@ -17,7 +17,7 @@ defineProps<{ dark?: boolean }>()
     <span :class="dark ? 'text-white/30' : 'text-line'">·</span>
     <button
       type="button"
-      :class="i18n.global.locale.value === 'km' ? 'text-primary font-medium' : dark ? 'text-white/70 hover:text-white' : 'text-muted hover:text-ink'"
+      :class="i18n.global.locale.value === 'km' ? (dark ? 'text-primary-light font-medium' : 'text-primary-text font-medium') : dark ? 'text-white/70 hover:text-white' : 'text-muted hover:text-ink'"
       @click="setLocale('km')"
     >
       ខ្មែរ

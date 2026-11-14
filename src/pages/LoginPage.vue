@@ -35,14 +35,14 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-page px-4">
+  <div class="brand-backdrop min-h-screen flex items-center justify-center px-4 py-10">
     <div class="w-full max-w-sm">
       <div class="text-center mb-6">
-        <BrandLogo class="h-20 max-w-[14rem] mb-3" />
-        <h1 class="font-heading text-2xl text-ink">{{ branding.name }}</h1>
+        <BrandLogo tile class="h-20 max-w-[14rem] mb-3" />
+        <h1 class="font-heading text-2xl text-white">{{ branding.name }}</h1>
       </div>
 
-      <form class="card space-y-4" @submit.prevent="handleSubmit">
+      <form class="card card-raised space-y-4" @submit.prevent="handleSubmit">
         <h2 class="font-heading text-lg">{{ t('auth.signIn') }}</h2>
 
         <div>

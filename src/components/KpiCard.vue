@@ -10,7 +10,7 @@ defineProps<{
 </script>
 
 <template>
-  <component :is="to ? 'RouterLink' : 'div'" :to="to" class="card flex flex-col gap-1 hover:border-primary/40 transition">
+  <component :is="to ? 'RouterLink' : 'div'" :to="to" class="card card-stat flex flex-col gap-1 hover:border-primary/40 transition">
     <span class="text-sm text-muted">{{ label }}</span>
     <div class="flex items-baseline gap-2">
       <span class="font-mono text-2xl text-ink">{{ value }}</span>

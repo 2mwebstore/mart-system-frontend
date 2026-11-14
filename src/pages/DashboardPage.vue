@@ -10,7 +10,7 @@ import ProgressBar from '@/components/ProgressBar.vue'
 import HourlyBarChart from '@/components/charts/HourlyBarChart.vue'
 import SegmentedBar from '@/components/charts/SegmentedBar.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
-import { PAYMENT_METHOD_COLORS } from '@/utils/chartColors'
+import { CHART_MUTED, PAYMENT_METHOD_COLORS } from '@/utils/chartColors'
 import { localName } from '@/i18n'
 
 const { t } = useI18n()
@@ -39,7 +39,7 @@ const {
 } = useDashboardData(branchId)
 
 const paymentSegmentsWithColor = computed(() =>
-  paymentSegments.value.map((s) => ({ ...s, color: PAYMENT_METHOD_COLORS[s.label] ?? '#5A635D' })),
+  paymentSegments.value.map((s) => ({ ...s, color: PAYMENT_METHOD_COLORS[s.label] ?? CHART_MUTED })),
 )
 </script>
 
