@@ -53,7 +53,7 @@ export const PERMISSION_MENU: PermissionMenuSection[] = [
         key: 'pos',
         labelKey: 'nav.pos',
         icon: ShoppingCart,
-        keys: ['pos.sell', 'pos.discount', 'pos.edit_sale', 'pos.void', 'pos.refund', 'pos.open_drawer'],
+        keys: ['pos.sell', 'pos.discount', 'pos.edit_sale', 'pos.void', 'pos.refund', 'pos.open_drawer', 'pos.cash_movement'],
       },
       {
         key: 'shifts',

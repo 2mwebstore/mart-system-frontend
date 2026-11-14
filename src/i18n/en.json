@@ -842,7 +842,8 @@
       "void": "Void a sale",
       "edit_sale": "Edit a sale's items (still-open shift only)",
       "refund": "Refund a sale",
-      "open_drawer": "Open the cash drawer without a sale"
+      "open_drawer": "Open the cash drawer without a sale",
+      "cash_movement": "Record cash pay-ins and pay-outs"
     },
     "shift": {
       "own": "Open/close own shift",

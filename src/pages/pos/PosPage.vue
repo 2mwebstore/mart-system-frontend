@@ -44,6 +44,8 @@ const settings = useSettingsStore()
 const branding = useBrandingStore()
 
 const canDiscount = auth.hasPermission('pos.discount')
+// Pay-ins and pay-outs have their own permission: without it the button is gone.
+const canMoveCash = auth.hasPermission('pos.cash_movement')
 
 // Phones: the cart is a full-screen sheet (closed by default) and the header
 // actions live in a menu. See the template.
@@ -562,7 +564,7 @@ function goToCloseShift() {
           </span>
         </button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="showRecentSales = true">{{ $t('pos.sales') }}</button>
-        <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="showCashMovement = true">{{ $t('shifts.cashMovement') }}</button>
+        <button v-if="canMoveCash" type="button" class="btn-secondary text-sm px-3 py-1.5" data-pos-cash-movement @click="showCashMovement = true">{{ $t('shifts.cashMovement') }}</button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5" @click="goToCloseShift">{{ $t('shifts.closeShift') }}</button>
         <button type="button" class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1.5" :title="$t('pos.customerDisplayHint')" @click="openCustomerDisplay">
           <Monitor :stroke-width="1.8" class="w-4 h-4" /> {{ $t('pos.customerDisplay') }}
@@ -614,7 +616,16 @@ function goToCloseShift() {
           <div v-if="showMenu" class="absolute right-0 top-full mt-2 z-40 w-60 rounded-card border border-line bg-surface shadow-lg py-1" role="menu">
             <p class="sm:hidden px-4 py-2 text-xs text-muted border-b border-line">{{ auth.tillName }} · {{ auth.user?.full_name }}</p>
             <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(() => (showRecentSales = true))">{{ $t('pos.sales') }}</button>
-            <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(() => (showCashMovement = true))">{{ $t('shifts.cashMovement') }}</button>
+            <button
+              v-if="canMoveCash"
+              type="button"
+              role="menuitem"
+              class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle"
+              data-pos-cash-movement-menu
+              @click="menu(() => (showCashMovement = true))"
+            >
+              {{ $t('shifts.cashMovement') }}
+            </button>
             <button type="button" role="menuitem" class="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(goToCloseShift)">{{ $t('shifts.closeShift') }}</button>
             <button type="button" role="menuitem" class="hidden md:block w-full text-left px-4 py-2.5 text-sm hover:bg-surface-subtle" @click="menu(openCustomerDisplay)">{{ $t('pos.customerDisplay') }}</button>
             <RouterLink :to="{ name: 'dashboard' }" role="menuitem" class="block px-4 py-2.5 text-sm hover:bg-surface-subtle">{{ $t('pos.backOffice') }}</RouterLink>
@@ -891,7 +902,7 @@ function goToCloseShift() {
       @close="confirmingClear = false"
       @confirm="clearCurrentSale"
     />
-    <CashMovementModal v-if="showCashMovement" @close="showCashMovement = false" />
+    <CashMovementModal v-if="showCashMovement && canMoveCash" @close="showCashMovement = false" />
     <RecentSalesModal v-if="showRecentSales" @close="showRecentSales = false" @voided="loadProducts" />
     <HeldSalesModal v-if="showHeldSales" @close="showHeldSales = false" @resume="onResumeHeld" />
     <TableOrdersModal
