@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watchEffect } from 'vue'
 import Modal from '@/components/Modal.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import { listPaymentMethods } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import { seededLabel } from '@/i18n'
@@ -101,11 +102,11 @@ function confirmOther() {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm text-muted mb-1">{{ $t('pos.tenderedUsd') }}</label>
-            <input v-model.number="tenderUSD" type="number" min="0" step="0.01" class="input text-lg" />
+            <MoneyInput v-model="tenderUSD" currency="USD" class="text-lg" />
           </div>
           <div>
             <label class="block text-sm text-muted mb-1">{{ $t('pos.tenderedKhr') }}</label>
-            <input v-model.number="tenderKHR" type="number" min="0" step="100" class="input text-lg" />
+            <MoneyInput v-model="tenderKHR" currency="KHR" class="text-lg" />
           </div>
         </div>
 

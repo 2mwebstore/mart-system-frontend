@@ -6,6 +6,7 @@ import { useShiftStore } from '@/stores/shift'
 import { formatUSD, formatKHR } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import { t } from '@/i18n'
 
 const auth = useAuthStore()
@@ -55,11 +56,11 @@ function changeTill() {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountUsd') }}</label>
-            <input v-model.number="usdAmount" type="number" min="0" step="0.01" class="input text-lg" autofocus />
+            <MoneyInput v-model="usdAmount" currency="USD" class="text-lg" autofocus />
           </div>
           <div>
             <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountKhr') }}</label>
-            <input v-model.number="khrAmount" type="number" min="0" step="100" class="input text-lg" />
+            <MoneyInput v-model="khrAmount" currency="KHR" class="text-lg" />
           </div>
         </div>
         <p class="text-xs text-muted">{{ $t('pos.openingFloat', { usd: formatUSD((usdAmount || 0) * 100), khr: formatKHR(khrAmount || 0) }) }}</p>

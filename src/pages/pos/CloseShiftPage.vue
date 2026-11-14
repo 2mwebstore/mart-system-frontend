@@ -7,6 +7,7 @@ import { useShiftStore } from '@/stores/shift'
 import { useSettingsStore } from '@/stores/settings'
 import { useBrandingStore } from '@/stores/branding'
 import BrandLogo from '@/components/BrandLogo.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import type { Shift } from '@/types/domain'
 import { formatUSD, formatKHR, formatDateTime } from '@/utils/format'
 import { drawerStatus } from '@/utils/money'
@@ -98,11 +99,11 @@ onUnmounted(clearReceiptPrint)
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-sm text-muted mb-1">{{ $t('shifts.countedUsd') }}</label>
-              <input v-model.number="countedUSD" type="number" min="0" step="0.01" class="input text-lg" />
+              <MoneyInput v-model="countedUSD" currency="USD" class="text-lg" />
             </div>
             <div>
               <label class="block text-sm text-muted mb-1">{{ $t('shifts.countedKhr') }}</label>
-              <input v-model.number="countedKHR" type="number" min="0" step="100" class="input text-lg" />
+              <MoneyInput v-model="countedKHR" currency="KHR" class="text-lg" />
             </div>
           </div>
 

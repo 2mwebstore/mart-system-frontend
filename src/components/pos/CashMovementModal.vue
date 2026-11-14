@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import Modal from '@/components/Modal.vue'
+import MoneyInput from '@/components/MoneyInput.vue'
 import { useShiftStore } from '@/stores/shift'
 import { useToast } from '@/composables/useToast'
 import { label, t } from '@/i18n'
@@ -62,11 +63,11 @@ async function submit() {
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountUsd') }}</label>
-          <input v-model.number="form.amountUSD" type="number" min="0" step="0.01" class="input" />
+          <MoneyInput v-model="form.amountUSD" currency="USD" />
         </div>
         <div>
           <label class="block text-sm text-muted mb-1">{{ $t('shifts.amountKhr') }}</label>
-          <input v-model.number="form.amountKHR" type="number" min="0" step="100" class="input" />
+          <MoneyInput v-model="form.amountKHR" currency="KHR" />
         </div>
       </div>
       <div>
