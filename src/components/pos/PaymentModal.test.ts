@@ -140,28 +140,21 @@ describe('the cash payment', () => {
     expect([value('USD'), value('KHR')]).toEqual(['5', ''])
     // $5 counts as ៛20,500 at the rate: ៛7,600 back, all in riel.
     expect(changeLine()).toBe('Change due ៛ 7,600')
-    await click(document.querySelector<HTMLElement>('[data-exact]')!)
-    expect([value('USD'), value('KHR')]).toEqual(['', '12,900'])
   })
 
-  it('shows photos of the dollar notes, and draws the riel ones', async () => {
+  it('shows photos of the dollar notes, and of the riel notes at a riel company', async () => {
+    const shown = (currency: string) =>
+      [...document.querySelectorAll<HTMLImageElement>('[data-quick-amount] img[data-note-photo]')].map(
+        (i) => i.getAttribute('src')!.match(new RegExp(`${currency}-(\\d+)\\.jpg`))![1],
+      )
     await open('USD')
-    const photos = [...document.querySelectorAll<HTMLImageElement>('[data-quick-amount] img[data-note-photo]')]
-    expect(photos.map((i) => i.getAttribute('src')!.match(/usd-(\d+)\.jpg/)![1])).toEqual(['1', '5', '10', '20', '50', '100'])
+    expect(shown('usd')).toEqual(['1', '5', '10', '20', '50', '100'])
     expect(document.querySelector('[data-note-drawn]')).toBeNull()
     app!.unmount()
     document.body.innerHTML = ''
     await open('KHR')
-    expect(document.querySelector('[data-note-photo]')).toBeNull()
-    // Each drawn note shows its value in the middle.
-    expect([...document.querySelectorAll('[data-note-drawn] .rounded-full')].map((n) => n.textContent!.trim())).toEqual([
-      '៛1,000',
-      '៛5,000',
-      '៛10,000',
-      '៛20,000',
-      '៛50,000',
-      '៛100,000',
-    ])
+    expect(shown('khr')).toEqual(['1000', '5000', '10000', '20000', '50000', '100000'])
+    expect(document.querySelector('[data-note-drawn]')).toBeNull()
   })
 
   it('gives a riel company all its change in riel when paid in dollars', async () => {
@@ -209,14 +202,54 @@ describe('the cash payment', () => {
     expect(paid).toEqual([{ method: 'CARD', receivedUsdCents: 0, receivedKhrRiel: 0, reference: '' }])
   })
 
-  it('puts the amount due back with Exact', async () => {
+  it('empties both boxes with Clear amount, and the notes tapped next add up from zero', async () => {
     await open('USD')
     await click(document.querySelectorAll<HTMLButtonElement>('[data-quick-amount]')[3])
     await type('KHR', '4000')
     expect([value('USD'), value('KHR')]).toEqual(['20.00', '4,000'])
-    await click(document.querySelector<HTMLElement>('[data-exact]')!)
-    expect([value('USD'), value('KHR')]).toEqual(['3.15', ''])
+    await click(document.querySelector<HTMLElement>('[data-clear-tendered]')!)
+    expect([value('USD'), value('KHR')]).toEqual(['', ''])
+    expect(changeLine()).toBe('Remaining $3.15 (៛ 12,900)')
+    expect(confirm().disabled).toBe(true)
     await click(document.querySelectorAll<HTMLButtonElement>('[data-quick-amount]')[1])
-    expect([value('USD'), value('KHR')]).toEqual(['5.00', ''])
+    await click(document.querySelectorAll<HTMLButtonElement>('[data-quick-amount]')[0])
+    expect([value('USD'), value('KHR')]).toEqual(['6.00', ''])
+  })
+
+  it('counts the taps on each note on its badge, from zero after Clear amount or typing', async () => {
+    const counts = () =>
+      [...document.querySelectorAll<HTMLButtonElement>('[data-quick-amount]')].map((b) => b.querySelector('[data-note-count]')?.textContent!.trim() ?? '')
+    await open('KHR')
+    const notes = () => document.querySelectorAll<HTMLButtonElement>('[data-quick-amount]')
+    // Opened with the amount due filled in: no note tapped yet, no badge.
+    expect(counts()).toEqual(['', '', '', '', '', ''])
+    await click(notes()[2])
+    await click(notes()[2])
+    await click(notes()[0])
+    expect(counts()).toEqual(['×1', '', '×2', '', '', ''])
+    expect(value('KHR')).toBe('21,000')
+    expect(notes()[2].getAttribute('aria-label')).toBe('Add ៛ 10,000 (2 added)')
+    expect(notes()[2].className).toContain('border-primary')
+    expect(notes()[1].className).toContain('border-line')
+    // Dollars typed in leave the riel notes counted.
+    await type('USD', '1')
+    expect(counts()).toEqual(['×1', '', '×2', '', '', ''])
+    await click(document.querySelector<HTMLElement>('[data-clear-tendered]')!)
+    expect(counts()).toEqual(['', '', '', '', '', ''])
+    await click(notes()[5])
+    expect(counts()).toEqual(['', '', '', '', '', '×1'])
+    // Riel typed in: the box no longer matches the notes, so the count starts again.
+    await type('KHR', '5000')
+    expect(counts()).toEqual(['', '', '', '', '', ''])
+  })
+
+  it('has no hint line and no Exact amount button in Quick cash, and Clear amount sits under the notes', async () => {
+    await open('KHR')
+    const panel = document.querySelector('[data-quick-cash]')!
+    expect(panel.querySelector('p')).toBeNull()
+    expect(panel.textContent).not.toContain('Exact amount')
+    const last = panel.lastElementChild as HTMLElement
+    expect(last.matches('[data-clear-tendered]')).toBe(true)
+    expect(last.textContent!.trim()).toBe('Clear amount')
   })
 })

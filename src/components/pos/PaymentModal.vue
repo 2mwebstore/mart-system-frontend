@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watchEffect } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Eraser } from 'lucide-vue-next'
 import Modal from '@/components/Modal.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import MoneyInput from '@/components/MoneyInput.vue'
@@ -23,6 +25,7 @@ const emit = defineEmits<{
   draft: [PaymentDraft]
 }>()
 
+const { t } = useI18n()
 const settings = useSettingsStore()
 const rate = computed(() => settings.rate)
 const { money, other, cashDue, isRiel, currency } = useMoney()
@@ -72,16 +75,16 @@ watchEffect(() => {
   })
 })
 
-// A company that sells in riel: its box comes first, and Exact and the quick
-// amounts fill it in riel.
+// A company that sells in riel: its box comes first, and the amount due and
+// the quick amounts fill it in riel.
 const rielFirst = isRiel
 const QUICK_USD = [1, 5, 10, 20, 50, 100]
 const QUICK_KHR = [1000, 5000, 10000, 20000, 50000, 100000]
 
-// The popup opens with the amount due already tendered, as Exact puts it. That
-// amount stands for "paid exactly" until the cashier says what was handed
-// over: a note button or an amount typed in either box replaces it instead of
-// adding to it, so riel typed in doesn't sit on top of the dollars filled in.
+// The popup opens with the amount due already tendered. That amount stands
+// for "paid exactly" until the cashier says what was handed over: a note
+// button or an amount typed in either box replaces it instead of adding to it,
+// so riel typed in doesn't sit on top of the dollars filled in.
 const filledExact = ref(false)
 
 function setExactCash() {
@@ -97,27 +100,48 @@ function setExactCash() {
 }
 setExactCash()
 
-function clearExact() {
-  if (!filledExact.value) return
+// How many times each note was tapped, shown on its badge ("×2"). It counts
+// from the last time the notes' box was set another way: opened, cleared or
+// typed in.
+const tapped = ref<Record<number, number>>({})
+function countTap(amount: number) {
+  tapped.value[amount] = (tapped.value[amount] ?? 0) + 1
+}
+
+// Clear amount: nothing tendered, so the notes tapped next add up from zero.
+function clearTendered() {
   tenderUSD.value = 0
   tenderKHR.value = 0
   filledExact.value = false
+  tapped.value = {}
+}
+function clearExact() {
+  if (filledExact.value) clearTendered()
 }
 function typedUSD(n: number) {
   clearExact()
   tenderUSD.value = n
+  if (!rielFirst.value) tapped.value = {}
 }
 function typedKHR(n: number) {
   clearExact()
   tenderKHR.value = n
+  if (rielFirst.value) tapped.value = {}
 }
 function addQuickUSD(amount: number) {
   clearExact()
   tenderUSD.value = Number(((tenderUSD.value || 0) + amount).toFixed(2))
+  countTap(amount)
 }
 function addQuickKHR(amount: number) {
   clearExact()
   tenderKHR.value = (tenderKHR.value || 0) + amount
+  countTap(amount)
+}
+function noteLabel(amount: number) {
+  const shown = rielFirst.value ? formatKHR(amount) : formatUSD(amount * 100)
+  const n = tapped.value[amount]
+  return n ? t('pos.addCashNoteCount', { amount: shown, n }) : t('pos.addCashNote', { amount: shown })
 }
 
 function confirmCash() {
@@ -163,22 +187,34 @@ function confirmOther() {
 
       <section v-if="cash" class="mt-5 lg:mt-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 bg-surface-subtle border-y lg:border-y-0 lg:border-l border-line p-6" data-quick-cash>
         <h3 class="font-semibold">{{ $t('pos.quickCash') }}</h3>
-        <p class="text-xs text-muted mt-0.5">{{ rielFirst ? $t('pos.quickCashHintKhr') : $t('pos.quickCashHintUsd') }}</p>
-        <button type="button" class="btn-secondary w-full py-3 mt-4 text-sm" data-exact @click="setExactCash">{{ $t('pos.exactAmount') }}</button>
-        <div class="grid grid-cols-2 sm:grid-cols-6 lg:grid-cols-2 gap-4 mt-5">
+        <div class="grid grid-cols-2 sm:grid-cols-6 lg:grid-cols-2 gap-4 mt-4">
           <button
             v-for="amt in rielFirst ? QUICK_KHR : QUICK_USD"
             :key="amt"
             type="button"
-            class="relative rounded-md border border-line bg-surface shadow-sm transition hover:shadow-md hover:-translate-y-px active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-            :aria-label="$t('pos.addCashNote', { amount: rielFirst ? formatKHR(amt) : formatUSD(amt * 100) })"
+            class="relative rounded-md border bg-surface shadow-sm transition hover:shadow-md hover:-translate-y-px active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            :class="tapped[amt] ? 'border-primary ring-1 ring-primary' : 'border-line'"
+            :aria-label="noteLabel(amt)"
             data-quick-amount
             @click="rielFirst ? addQuickKHR(amt) : addQuickUSD(amt)"
           >
             <span class="block overflow-hidden rounded-[inherit]"><BankNote :currency="rielFirst ? 'KHR' : 'USD'" :amount="amt" /></span>
-            <span class="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-surface text-sm font-bold leading-none shadow" aria-hidden="true">+</span>
+            <!-- How many of this note were tapped: blue, with white text (4.5:1). -->
+            <span
+              v-if="tapped[amt]"
+              :key="tapped[amt]"
+              class="note-count absolute -top-2.5 -right-2.5 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-primary-hover px-1.5 text-sm font-bold leading-none text-white tabular-nums ring-2 ring-surface shadow-md"
+              aria-hidden="true"
+              data-note-count
+            >
+              ×{{ tapped[amt] }}
+            </span>
           </button>
         </div>
+        <button type="button" class="btn-secondary w-full py-3 mt-5 text-sm flex items-center justify-center gap-2" data-clear-tendered @click="clearTendered">
+          <Eraser :stroke-width="1.8" class="w-4 h-4" aria-hidden="true" />
+          {{ $t('pos.clearAmount') }}
+        </button>
       </section>
 
       <div class="px-6 pb-6 pt-4 lg:px-8 lg:pb-8 space-y-4 self-start" :class="cash ? 'lg:col-start-1 lg:row-start-2' : 'lg:col-span-2'">
@@ -216,3 +252,23 @@ function confirmOther() {
     </div>
   </Modal>
 </template>
+
+<style scoped>
+/* The count pops in on each tap. */
+@media (prefers-reduced-motion: no-preference) {
+  .note-count {
+    animation: note-pop 180ms ease-out;
+  }
+}
+@keyframes note-pop {
+  from {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+</style>

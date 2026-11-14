@@ -13,6 +13,12 @@ government), taken from Wikimedia Commons and shrunk to 360 px wide:
 | usd-50.jpg | File:50 USD Series 2004 Note Front.jpg |
 | usd-100.jpg | File:Obverse of the series 2009 $100 Federal Reserve Note.jpg |
 
-They are shown small and one-sided, well under the real notes' size. Riel
-notes are drawn instead: Commons has no ៛100,000 photo, and the other riel
-photos there are back sides under a share-alike licence.
+They are shown small and one-sided, well under the real notes' size.
+
+## Riel notes
+
+The fronts of the riel notes (`khr-1000.jpg` to `khr-100000.jpg`) are photos
+the shop's owner supplied in November 2026, shrunk to 360 px wide. Riel notes
+are a little taller than dollar notes, so BankNote shows them at 11 by 5
+rather than 47 by 20. The ៛1,000 photo still carries the mark of the site it
+came from (www.cgb.fr), in its bottom-right corner.
