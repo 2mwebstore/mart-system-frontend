@@ -27,6 +27,7 @@ import VariantPickerModal from '@/components/pos/VariantPickerModal.vue'
 import LineEditModal from '@/components/pos/LineEditModal.vue'
 import LanguageSwitch from '@/components/LanguageSwitch.vue'
 import SaleOptionsModal, { type SaleOptions } from '@/components/pos/SaleOptionsModal.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { formatPercent, startingRate } from '@/utils/tax'
 import { plainText } from '@/utils/richText'
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -497,11 +498,14 @@ function holdCurrentSale() {
   toast.success(t('pos.saleHeld'))
 }
 
+// Clear: a popup asks first, since the cart's items are lost.
+const confirmingClear = ref(false)
 function voidCurrentSale() {
-  if (cart.lines.length === 0) return
-  if (window.confirm(t('pos.confirmClear'))) {
-    cart.clear()
-  }
+  if (cart.lines.length > 0) confirmingClear.value = true
+}
+function clearCurrentSale() {
+  cart.clear()
+  confirmingClear.value = false
 }
 
 function onResumeHeld(held: HeldSale) {
@@ -878,6 +882,14 @@ function goToCloseShift() {
       :can-discount="canDiscount"
       @close="showSaleOptions = false"
       @save="saveSaleOptions"
+    />
+    <ConfirmDialog
+      v-if="confirmingClear"
+      :title="$t('pos.clearTitle')"
+      :message="$t('pos.clearMessage')"
+      :confirm-label="$t('pos.clear')"
+      @close="confirmingClear = false"
+      @confirm="clearCurrentSale"
     />
     <CashMovementModal v-if="showCashMovement" @close="showCashMovement = false" />
     <RecentSalesModal v-if="showRecentSales" @close="showRecentSales = false" @voided="loadProducts" />

@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Trash2 } from 'lucide-vue-next'
 import Modal from '@/components/Modal.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useShiftStore, type HeldSale, type HeldItem } from '@/stores/shift'
 import { formatUSD } from '@/utils/format'
 import { t } from '@/i18n'
@@ -30,10 +32,11 @@ function resume(h: HeldSale) {
   const resumed = shift.resumeHeldSale(h.id)
   if (resumed) emit('resume', resumed)
 }
-function discard(h: HeldSale) {
-  if (window.confirm(t('pos.confirmDiscard', { label: summaryOf(h) }))) {
-    shift.discardHeldSale(h.id)
-  }
+// Discard: a popup asks first, since a discarded held sale can't come back.
+const discarding = ref<HeldSale | null>(null)
+function confirmDiscard() {
+  if (discarding.value) shift.discardHeldSale(discarding.value.id)
+  discarding.value = null
 }
 </script>
 
@@ -53,11 +56,19 @@ function discard(h: HeldSale) {
         <div class="flex items-center gap-3">
           <span class="font-mono">{{ formatUSD(lineTotal(h)) }}</span>
           <button type="button" class="btn-primary px-4 py-1.5 text-sm" @click="resume(h)">{{ $t('pos.resume') }}</button>
-          <button type="button" class="p-2 text-muted hover:text-danger-strong" :aria-label="$t('pos.discardAria')" @click="discard(h)">
+          <button type="button" class="p-2 text-muted hover:text-danger-strong" :aria-label="$t('pos.discardAria')" @click="discarding = h">
             <Trash2 :stroke-width="1.8" class="w-4 h-4" />
           </button>
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      v-if="discarding"
+      :title="$t('pos.discardTitle')"
+      :message="$t('pos.discardMessage', { label: summaryOf(discarding) })"
+      :confirm-label="$t('pos.discardConfirm')"
+      @close="discarding = null"
+      @confirm="confirmDiscard"
+    />
   </Modal>
 </template>

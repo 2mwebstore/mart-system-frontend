@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { Ban } from 'lucide-vue-next'
 import Modal from '@/components/Modal.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useShiftStore } from '@/stores/shift'
@@ -24,17 +25,27 @@ const list = reactive(
   usePagedList(({ page, perPage }) => pageShiftSales(shift.branchId, shift.shift!.id, { page, perPage }), { perPage: 8 }),
 )
 
-async function voidSale(id: number, receiptNo: string) {
-  if (!canVoid) return
-  const reason = window.prompt(t('pos.voidPrompt', { receipt: receiptNo }))
-  if (reason === null) return
+// Void: a popup asks to confirm, with an optional reason, before the sale is
+// voided. It stays open if the server refuses, to try again or cancel.
+const voiding = ref<{ id: number; receiptNo: string } | null>(null)
+const voidBusy = ref(false)
+function askVoid(id: number, receiptNo: string) {
+  if (canVoid) voiding.value = { id, receiptNo }
+}
+async function confirmVoid(reason: string) {
+  const sale = voiding.value
+  if (!sale) return
+  voidBusy.value = true
   try {
-    await shift.voidSale(id, reason || t('pos.noReason'))
-    toast.success(t('pos.voidedToast', { receipt: receiptNo }))
+    await shift.voidSale(sale.id, reason || t('pos.noReason'))
+    voiding.value = null
+    toast.success(t('pos.voidedToast', { receipt: sale.receiptNo }))
     await list.reload()
     emit('voided')
   } catch {
     // the API client already toasted the reason
+  } finally {
+    voidBusy.value = false
   }
 }
 </script>
@@ -72,7 +83,7 @@ async function voidSale(id: number, receiptNo: string) {
                 type="button"
                 class="p-1.5 text-muted hover:text-danger-strong"
                 :aria-label="$t('pos.voidSaleAria')"
-                @click="voidSale(s.id, s.receiptNo)"
+                @click="askVoid(s.id, s.receiptNo)"
               >
                 <Ban :stroke-width="1.8" class="w-4 h-4" />
               </button>
@@ -82,5 +93,16 @@ async function voidSale(id: number, receiptNo: string) {
       </table>
     </div>
     <Pagination v-model:page="list.page" :total-pages="list.totalPages" :total="list.total" :per-page="list.perPage" :noun="$t('pos.sales').toLowerCase()" />
+    <ConfirmDialog
+      v-if="voiding"
+      :title="$t('pos.voidTitle', { receipt: voiding.receiptNo })"
+      :message="$t('pos.voidMessage')"
+      :confirm-label="$t('pos.voidSaleAria')"
+      :reason-label="$t('common.reason')"
+      :reason-placeholder="$t('pos.voidReasonPlaceholder')"
+      :busy="voidBusy"
+      @close="voiding = null"
+      @confirm="confirmVoid"
+    />
   </Modal>
 </template>
